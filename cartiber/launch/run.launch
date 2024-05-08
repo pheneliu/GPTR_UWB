@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <arg name="autorun" default = "false" />
+
+  <node required="true" pkg="cartiber" type="cartiber" name="cartiber" output="screen">
+        <param name="xyzypr_W_L0" type="yaml"
+               value="[0,           0,          1.0,  045, 0, 0,
+                      -0.35355339, -0.35355339, 0.5, -135, 0, 0]" />
+  </node>
+
+  <!-- Visualize -->
+  <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required = "true" args="-d $(find cartiber)/launch/cartiber.rviz" />
+
+</launch>
