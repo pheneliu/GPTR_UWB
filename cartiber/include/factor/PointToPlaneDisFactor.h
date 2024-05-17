@@ -33,6 +33,9 @@
 
 #include "../utility.h"
 
+#ifndef POINTTOPLANDISFACTOR_H
+#define POINTTOPLANDISFACTOR_H
+
 class Point2PlaneDisFactor : public ceres::SizedCostFunction<1, 7>
 {
 public:
@@ -74,3 +77,5 @@ private:
     
     double sqrt_info_static_;
 };
+
+#endif

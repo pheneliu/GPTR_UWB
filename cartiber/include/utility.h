@@ -254,8 +254,8 @@ typedef pcl::KdTreeFLANN<PointXYZI> KdFLANN;
 typedef pcl::KdTreeFLANN<PointXYZI>::Ptr KdFLANNPtr;
 
 typedef vector<PointXYZI, Eigen::aligned_allocator<PointXYZI>> ikdtPointVec;
-// typedef KD_TREE<PointXYZI> ikdtree;
-// typedef boost::shared_ptr<ikdtree> ikdtreePtr;
+typedef KD_TREE<PointXYZI> ikdtree;
+typedef boost::shared_ptr<ikdtree> ikdtreePtr;
 
 /* #endregion  Custom point type definition -------------------------------------------------------------------------*/
 
@@ -405,6 +405,12 @@ struct myTf
                      pose.pose.position.z;
     }
 
+    myTf(const Sophus::SE3<T> se3)
+    {
+        this->rot = se3.unit_quaternion();
+        this->pos = se3.translation();
+    }
+
     myTf(Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform)
     {
         this->rot = Eigen::Quaternion<T>{transform.linear()}.normalized();
@@ -478,6 +484,13 @@ struct myTf
         p.intensity = -1;
 
         return p;
+    }
+
+    myTf<T> slerp(double s, myTf<T> tfend)
+    {
+        Quaternion<T> qs = this->rot.slerp(s, tfend.rot);
+        Eigen::Matrix<T, 3, 1> ps = (1-s)*(this->pos) + s*(tfend.pos);
+        return myTf<T>(qs, ps);
     }
 
     template <typename Tout = double>
@@ -916,6 +929,16 @@ namespace Util
         po.z = pos.z();
 
         return po;
+    }
+
+    template <typename PointT>
+    void transform_point(const mytf &tf, const PointT &pi, PointT &po)
+    {
+        Vector3d pos = tf.rot * Vector3d(pi.x, pi.y, pi.z) + tf.pos;
+        
+        po.x = pos.x();
+        po.y = pos.y();
+        po.z = pos.z();
     }
 
     inline PointPose transform_point(const mytf &tf, const PointPose &pi)

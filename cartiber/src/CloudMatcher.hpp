@@ -47,6 +47,9 @@
 #include "PoseLocalParameterization.h"
 #include "factor/PointToPlaneDisFactor.h"
 
+#ifndef CLOUDMATCHER_HPP
+#define CLOUDMATCHER_HPP
+
 using namespace std;
 using namespace Eigen;
 using namespace pcl;
@@ -830,3 +833,5 @@ public:
     }
 
 };
+
+#endif CLOUDMATCHER_HPP
