@@ -267,7 +267,6 @@ public:
                    const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW,
                    vector<LidarCoef> &Coef)
     {
-        int totalFeature = 0;
         if (priormap->size() > knnSize)
         {
             int pointsCount = cloudInW->points.size();
@@ -370,15 +369,14 @@ public:
             
             // Copy the coefficients to the buffer
             Coef.clear();
-            
+            int totalFeature = 0;
             for(int pidx = 0; pidx < pointsCount; pidx++)
             {
                 LidarCoef &coef = Coef_[pidx];
                 if (coef.t >= 0)
                 {
-                    Coef.push_back(coef);
                     totalFeature++;
-                    // printf("Feature %d admitted.\n", features.size());
+                    Coef.push_back(coef);
                 }
             }
         }
