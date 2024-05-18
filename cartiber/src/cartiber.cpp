@@ -60,6 +60,10 @@ int sw_shift = 5;
 // ikdtree of the priormap
 ikdtreePtr ikdtPM;
 
+// Noise of the angular and linear velocities
+double UW_NOISE = 10.0;
+double UV_NOISE = 10.0;
+
 // Define the posespline
 using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
 // typedef Matrix<double, 12, 12> MatrixNd;
@@ -197,7 +201,7 @@ void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
 {
     // Calculate the trajectory by sim  ple iekf first, before refining with spline
     StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    EKFLO ekflo(Xhat0, 0.1, 0.1, 0.5*0.5, 0.1);
+    EKFLO ekflo(Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1);
 
     poseprior->resize(clouds.size());
     poseprior->points[0] = myTf(Xhat0.Rot.matrix(), Xhat0.Pos).Pose6D(Xhat0.tcurr);
@@ -252,7 +256,7 @@ int main(int argc, char **argv)
     int Nlidar = pc_topics.size();
     
     vector<double> xyzypr_W_L0(Nlidar*6, 0.0);
-    if( nh.getParam("xyzypr_W_L0", xyzypr_W_L0) )
+    if( nh_ptr->getParam("xyzypr_W_L0", xyzypr_W_L0) )
     {
         if (xyzypr_W_L0.size() < Nlidar*6)
         {
@@ -273,6 +277,11 @@ int main(int argc, char **argv)
         printf("Failed to get xyzypr_W_L0. Setting all to zeros\n");
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
+
+    // Noise
+    nh_ptr->getParam("UW_NOISE", UW_NOISE);
+    nh_ptr->getParam("UV_NOISE", UV_NOISE);
+    printf("Proccess noise: %f, %f\n", UW_NOISE, UV_NOISE);
 
     // Load the priormap
     CloudXYZIPtr priormap(new CloudXYZI());

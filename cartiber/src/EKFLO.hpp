@@ -97,7 +97,7 @@ public:
         SO3d Qcinv = Qc.inverse();
         
         // Predict the state 
-        SO3d Qn = Qc*dQ;
+        SO3d     Qn = Qc*dQ;
         Vector3d Pn = Pc + Vc*dt;
         Vector3d Wn = Wc;
         Vector3d Vn = Vc;
@@ -187,6 +187,7 @@ public:
         J = MatrixNd::Identity();
         J.block<3, 3>(0, 0) = rightJacobianInvSO3(Phi);
 
+        // MatrixNd W = Eigen::LLT<Eigen::Matrix<double, 6, 6>>(Xbar.Cov.inverse()).matrixL().transpose();
         return r;
     }
     
@@ -212,7 +213,7 @@ private:
     double minKnnNbrDis = 0.1;
 
     // Max iterations
-    int MAX_ITER = 5;
+    int MAX_ITER = 10;
     double lambda = 0.0;
 
 public:
@@ -239,6 +240,7 @@ public:
                 double tc, double dt)
     {
         int Npoint = cloud->size();
+        cloudDeskewedInW->clear();
         cloudDeskewedInW->resize(Npoint);
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int pidx = 0; pidx < Npoint; pidx++)
@@ -263,13 +265,14 @@ public:
 
     void Associate(const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
                    const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW,
-                   deque<Vector3d> &features, deque<Vector4d> &coefficients)
+                   vector<LidarCoef> &Coef)
     {
         int totalFeature = 0;
         if (priormap->size() > knnSize)
         {
             int pointsCount = cloudInW->points.size();
-            vector<LidarCoef> Coef; Coef.reserve(pointsCount);
+            vector<LidarCoef> Coef_;
+            Coef_.resize(pointsCount);
             
             #pragma omp parallel for num_threads(MAX_THREADS)
             for (int pidx = 0; pidx < pointsCount; pidx++)
@@ -277,8 +280,8 @@ public:
                 PointXYZI pointInW = cloudInW->points[pidx];
                 PointXYZI pointInB = cloudInB->points[pidx];
                 
-                Coef[pidx].n = Vector4d(0, 0, 0, 0);
-                Coef[pidx].t = -1;
+                Coef_[pidx].n = Vector4d(0, 0, 0, 0);
+                Coef_[pidx].t = -1;
 
                 if(!Util::PointIsValid(pointInB))
                 {
@@ -351,10 +354,11 @@ public:
 
                         if (score > 0)
                         {
-                            Coef[pidx].t    = 0;
-                            Coef[pidx].f    = Vector3d(pointInB.x, pointInB.y, pointInB.z);
-                            Coef[pidx].fdsk = Vector3d(pointInB.x, pointInB.y, pointInB.z);
-                            Coef[pidx].n    = Vector4d(score * pa, score * pb, score * pc, score * pd);
+                            Coef_[pidx].t      = 0;
+                            Coef_[pidx].f      = Vector3d(pointInB.x, pointInB.y, pointInB.z);
+                            Coef_[pidx].fdsk   = Vector3d(pointInB.x, pointInB.y, pointInB.z);
+                            Coef_[pidx].n      = Vector4d(pa, pb, pc, pd);
+                            Coef_[pidx].plnrty = score;
 
                             // printf("Pidx %d admitted. Score: %f.\n", pidx, score);
                         }
@@ -365,16 +369,14 @@ public:
             }
             
             // Copy the coefficients to the buffer
-            features.clear();
-            coefficients.clear();
+            Coef.clear();
             
             for(int pidx = 0; pidx < pointsCount; pidx++)
             {
-                LidarCoef &coef = Coef[pidx];
+                LidarCoef &coef = Coef_[pidx];
                 if (coef.t >= 0)
                 {
-                    features.push_back(coef.f);
-                    coefficients.push_back(coef.n);
+                    Coef.push_back(coef);
                     totalFeature++;
                     // printf("Feature %d admitted.\n", features.size());
                 }
@@ -382,23 +384,24 @@ public:
         }
     }
 
-    void EvaluateLidar(const StateWithCov &Xpred, const deque<Vector3d> &features, const deque<Vector4d> &coefficients,
+    void EvaluateLidar(const StateWithCov &Xpred, const vector<LidarCoef> &Coef,
                        VectorXd &RESIDUAL, MatrixXd &JACOBIAN)
     {
-        int Nf = features.size();
+        int Nf = Coef.size();
 
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int fidx = 0; fidx < Nf; fidx++)
         {
-            Vector3d f = features[fidx];
-            Vector3d n = coefficients[fidx].head<3>();
-            double   w = coefficients[fidx].w();
+            Vector3d f = Coef[fidx].fdsk;
+            Vector3d n = Coef[fidx].n.head<3>();
+            double   m = Coef[fidx].n.w();
+            double   w = Coef[fidx].plnrty;
             MatrixXd R = Xpred.Rot.matrix();
             Vector3d p = Xpred.Pos;
 
-            RESIDUAL(fidx) = n.dot(R*f + p) + w;
-            JACOBIAN.block(fidx, 0, 1, 12) << -n.transpose()*R*Util::skewSymmetric(f)
-                                              ,n.transpose()
+            RESIDUAL(fidx) = w*(n.dot(R*f + p) + m);
+            JACOBIAN.block(fidx, 0, 1, 12) << -w*n.transpose()*R*Util::skewSymmetric(f)
+                                              ,w*n.transpose()
                                               ,0, 0, 0, 0, 0, 0;
         }
     }
@@ -423,6 +426,8 @@ public:
             // Step 1: Predict the trajectory, use this as the prior
             StateWithCov Xprior = Xhat.boxplusf(tn, Rm);
 
+            nh_ptr->getParam("MAX_ITER", MAX_ITER);
+
             // Step 2: Iterative update with internal deskew and association
             StateWithCov Xpred = Xprior;
             for (int iidx = 0; iidx < MAX_ITER; iidx++)
@@ -435,47 +440,58 @@ public:
                 myTf tf_Be_W = tf_W_Be.inverse();
 
                 // Step 2: Deskew the pointcloud, transform all points to
-                CloudXYZIPtr cloudDeskewedInB(new CloudXYZI());
-                CloudXYZIPtr cloudDeskewedInW(new CloudXYZI());
-                Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
-                pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
+                static CloudXYZIPtr cloudDeskewedInB(new CloudXYZI());
+                static CloudXYZIPtr cloudDeskewedInW(new CloudXYZI());
+
+                if (iidx == 0)
+                {
+                    Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
+                    pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
+                }
 
                 // Step 3: Associate pointcloud with map
-                deque<Vector3d> features;
-                deque<Vector4d> coefficients;
-                Associate(kdTreeMap, priormap, cloudDeskewedInB, cloudDeskewedInW, features, coefficients);
+                vector<LidarCoef> Coef;
+                Associate(kdTreeMap, priormap, cloudDeskewedInB, cloudDeskewedInW, Coef);
 
                 static ros::Publisher cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/clouddsk_inW", 1);
                 Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
                 // Step 4: Update the state with the detected features
-                int Nf = features.size();
+                int Nf = Coef.size();
                 VectorXd RESIDUAL(Nf, 1);
                 MatrixXd JACOBIAN(Nf, 12);
 
-                EvaluateLidar(Xpred, features, coefficients, RESIDUAL, JACOBIAN);
+                EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
 
                 // Solve for best increment
-                bool solver_failed; VectorNd dX; MatrixNd Cov;
+                bool solver_failed;
+                VectorNd dX;
+                MatrixNd G = Xpred.Cov;
+                // MatrixNd Ginv = Xpred.Cov.inverse();
+                MatrixNd Gpinv = Xprior.Cov.inverse();
+
                 // Sparsify the matrices for easy calculation
-                SparseMatrix<double> J    = JACOBIAN.sparseView(); J.makeCompressed();
-                SparseMatrix<double> Jtp  = J.transpose();
-                SparseMatrix<double> Jp   = Jprior.sparseView(); Jp.makeCompressed();
-                SparseMatrix<double> Jptp = Jp.transpose();
-                MatrixXd B = -Jtp*RESIDUAL - Jptp*Xprior.Cov*rprior;
-                SparseMatrix<double> H = Jtp*J + Jptp*Xprior.Cov*Jp;
-                // Solve using solver and LM method
-                SparseMatrix<double> I(H.cols(), H.cols()); I.setIdentity();
-                SparseMatrix<double> S = H + lambda/pow(2, (MAX_ITER - 1) - iidx)*I;
-                // Factorize
-                Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-                solver.analyzePattern(S);
-                solver.factorize(S);
+                typedef SparseMatrix<double> SparseMat;
+                SparseMat J    = JACOBIAN.sparseView(); J.makeCompressed();
+                SparseMat Jtp  = J.transpose();
+                SparseMat Jp   = Jprior.sparseView(); Jp.makeCompressed();
+                SparseMat Jptp = Jp.transpose();
+
+                MatrixXd  B = -Jtp*RESIDUAL -Jptp*Gpinv*rprior;
+                SparseMat S = Jtp*J + Jptp*Gpinv*Jp;
+                
+                // Build the Ax=B and factorize
+                SparseMat I(S.cols(), S.cols()); I.setIdentity();
+                SparseMat A = S + lambda/pow(2, (MAX_ITER - 1) - iidx)*I;
+                Eigen::SparseLU<SparseMat> solver;
+                solver.analyzePattern(A);
+                solver.factorize(A);
+                
                 // Solve
                 solver_failed = solver.info() != Eigen::Success;
                 dX = solver.solve(B);
-                Cov = H.toDense();
+                G  = (I - (S + G.inverse()).toDense().inverse()*S)*G;
 
                 // If solving is not successful, return false
                 if (solver_failed || dX.hasNaN())
@@ -486,18 +502,17 @@ public:
                 else
                 {   
                     // Cap the change
-                    if (dX.norm() > 0.5)
-                        dX = dX/dX.norm();
+                    if (dX.norm() > 0.1)
+                        dX = 0.1*dX/dX.norm();
 
                     Xpred.boxplusd(dX);
-                    Xpred.SetCov(Cov);
+                    Xpred.SetCov(G);
                     
-                    printf("CIDX: %d. ITER: %d. Time: %f. Features: %d\n", cidx, iidx, Xpred.tcurr, Nf);
-                    // printf("\tCov: \n");
-                    // cout << S.toDense() << endl;
+                    double J = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
+                    printf("CIDX: %d. ITER: %d. Time: %f. Features: %d. J: %f\n", cidx, iidx, Xpred.tcurr, Nf, J);
 
-                    printf("\tdX  : dR : %6.3f, %6.3f, %6.3f. dP : %6.3f, %6.3f, %6.3f. dW : %6.3f, %6.3f, %6.3f. dV : %6.3f, %6.3f, %6.3f\n",
-                            dX(0), dX(1), dX(2), dX(3), dX(4), dX(5), dX(6), dX(7), dX(8), dX(9), dX(10), dX(11));
+                    printf("\t|dX| %6.3f. dR : %6.3f, %6.3f, %6.3f. dP : %6.3f, %6.3f, %6.3f. dW : %6.3f, %6.3f, %6.3f. dV : %6.3f, %6.3f, %6.3f\n",
+                            dX.norm(), dX(0), dX(1), dX(2), dX(3), dX(4), dX(5), dX(6), dX(7), dX(8), dX(9), dX(10), dX(11));
 
                     printf("\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n",
                             Xpred.Pos(0),    Xpred.Pos(1),    Xpred.Pos(2),
@@ -505,8 +520,8 @@ public:
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
 
-                    printf("\tX.Cov: \n");
-                    cout << Xpred.Cov << endl;
+                    // printf("\tX.Cov: \n");
+                    // cout << Xpred.Cov << endl;
                 }
             }
 
@@ -523,11 +538,11 @@ public:
                    Xhat.Omg(0),    Xhat.Omg(1),    Xhat.Omg(2),
                    Xhat.Vel(0),    Xhat.Vel(1),    Xhat.Vel(2));
                     
-            // // DEBUG: Break if loops 5 times.
-            // static int debug_count = 0;
-            // debug_count++;
-            // if (debug_count > 0)
-            //     break;
+            // DEBUG: Break after n steps
+            static int debug_count = 0; debug_count++;
+            int debug_steps = 1; nh_ptr->getParam("debug_step", debug_steps);
+            if (debug_count >= debug_steps)
+                break;
         }
     }
 };
