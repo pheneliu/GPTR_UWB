@@ -92,9 +92,9 @@ public:
         double dt = tn - tc;
 
         // Intermediary quanities
-        Vector3d dA = Wc*dt;
-        SO3d dQ = SO3d::exp(Wc*dt);
-        SO3d Qcinv = Qc.inverse();
+        Vector3d dA    = Wc*dt;
+        SO3d     dQ    = SO3d::exp(Wc*dt);
+        SO3d     Qcinv = Qc.inverse();
         
         // Predict the state 
         SO3d     Qn = Qc*dQ;
@@ -197,7 +197,7 @@ public:
     }
 };
 
-class EKFLO
+class GPLO
 {
 private:
 
@@ -219,9 +219,9 @@ private:
 public:
 
     // Destructor
-   ~EKFLO() {};
+   ~GPLO() {};
 
-    EKFLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_)
+    GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_)
     : Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_)
     {
         // // Initialize the covariance
@@ -264,8 +264,7 @@ public:
     }
 
     void Associate(const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
-                   const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW,
-                   vector<LidarCoef> &Coef)
+                   const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW, vector<LidarCoef> &Coef)
     {
         if (priormap->size() > knnSize)
         {
@@ -276,9 +275,9 @@ public:
             #pragma omp parallel for num_threads(MAX_THREADS)
             for (int pidx = 0; pidx < pointsCount; pidx++)
             {
-                PointXYZI pointInW = cloudInW->points[pidx];
                 PointXYZI pointInB = cloudInB->points[pidx];
-                
+                PointXYZI pointInW = cloudInW->points[pidx];
+
                 Coef_[pidx].n = Vector4d(0, 0, 0, 0);
                 Coef_[pidx].t = -1;
 
@@ -349,12 +348,12 @@ public:
                         float d2p = pa * pointInB.x + pb * pointInB.y + pc * pointInB.z + pd;
 
                         // Weightage based on close the point is to the plane ?
-                        float score = (1 - 0.9f * fabs(d2p)) / Util::pointDistance(pointInB);
+                        float score = 1.0;//(1 - 0.9f * fabs(d2p)) / Util::pointDistance(pointInB);
 
                         if (score > 0)
                         {
                             Coef_[pidx].t      = 0;
-                            Coef_[pidx].f      = Vector3d(pointInB.x, pointInB.y, pointInB.z);
+                            Coef_[pidx].finW   = Vector3d(pointInW.x, pointInW.y, pointInW.z);
                             Coef_[pidx].fdsk   = Vector3d(pointInB.x, pointInB.y, pointInB.z);
                             Coef_[pidx].n      = Vector4d(pa, pb, pc, pd);
                             Coef_[pidx].plnrty = score;
@@ -451,6 +450,21 @@ public:
                 vector<LidarCoef> Coef;
                 Associate(kdTreeMap, priormap, cloudDeskewedInB, cloudDeskewedInW, Coef);
 
+                // Visualize the associated points
+                {
+                    static ros::Publisher assocPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/assoc_cloud", 1);
+                    CloudXYZIPtr assocCloud(new CloudXYZI());
+                    assocCloud->resize(Coef.size());
+                    for(int pidx = 0; pidx < Coef.size(); pidx++)
+                    {
+                        auto &point = assocCloud->points[pidx];
+                        point.x = Coef[pidx].finW.x();
+                        point.y = Coef[pidx].finW.y();
+                        point.z = Coef[pidx].finW.z();
+                    }
+                    Util::publishCloud(assocPub, *assocCloud, ros::Time::now(), "world");
+                }
+
                 static ros::Publisher cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/clouddsk_inW", 1);
                 Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -517,9 +531,6 @@ public:
                             Xpred.YPR().x(), Xpred.YPR().y(), Xpred.YPR().z(),
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
-
-                    // printf("\tX.Cov: \n");
-                    // cout << Xpred.Cov << endl;
                 }
             }
 

@@ -22,7 +22,7 @@
 
 // Custom built utilities
 #include "CloudMatcher.hpp"
-#include "EKFLO.hpp"
+#include "GPLO.hpp"
 #include "utility.h"
 
 using namespace std;
@@ -201,11 +201,11 @@ void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
 {
     // Calculate the trajectory by sim  ple iekf first, before refining with spline
     StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    EKFLO ekflo(Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1);
+    GPLO gplo(Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1);
 
     poseprior->resize(clouds.size());
     poseprior->points[0] = myTf(Xhat0.Rot.matrix(), Xhat0.Pos).Pose6D(Xhat0.tcurr);
-    ekflo.findTraj(kdTreeMap, priormap, clouds, cloudstamp, poseprior, nh_ptr);
+    gplo.findTraj(kdTreeMap, priormap, clouds, cloudstamp, poseprior, nh_ptr);
 
     // // Number of clouds
     // int Ncloud = clouds.size();

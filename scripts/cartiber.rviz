@@ -25,7 +25,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: Lidar0
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -58,6 +58,12 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        lidar_0:
+          Value: true
+        lidar_1:
+          Value: true
+        world:
+          Value: true
       Marker Alpha: 1
       Marker Scale: 1
       Name: TF
@@ -65,7 +71,11 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        world:
+          lidar_0:
+            {}
+          lidar_1:
+            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -152,7 +162,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 10
+      Distance: 27.73078727722168
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -168,9 +178,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7853981852531433
+      Pitch: -0.06460174918174744
       Target Frame: <Fixed Frame>
-      Yaw: 0.7853981852531433
+      Yaw: 5.6185808181762695
     Saved: ~
 Window Geometry:
   Displays:
@@ -188,5 +198,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1920
-  X: 3840
+  X: 0
   Y: 0
