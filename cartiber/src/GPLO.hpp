@@ -78,17 +78,20 @@ public:
     }
 
     // Increment
-    StateWithCov boxplusf(double tn, const MatrixNd &Rm)
+    StateWithCov boxplusf(double tn, StateWithCov &Xhatprev, const MatrixNd &Rm)
     {
+        // Find the old delta t
+        double dt_ = (tcurr - Xhatprev.tcurr);
+
         // Load the previous states
         double   tc   = tcurr;
         SO3d     Qc   = Rot;
         Vector3d Pc   = Pos;
-        Vector3d Wc   = Omg;
-        Vector3d Vc   = Vel;
+        Vector3d Wc   = dt_ == 0.0 ? Vector3d(0, 0, 0) : (Xhatprev.Rot.inverse()*Rot).log() / dt_;
+        Vector3d Vc   = dt_ == 0.0 ? Vector3d(0, 0, 0) : (Pos - Xhatprev.Pos) / dt_;
         MatrixNd Covc = Cov;
 
-        // Find the delta t
+        // Find the new delta t
         double dt = tn - tc;
 
         // Intermediary quanities
@@ -203,6 +206,7 @@ private:
 
     boost::shared_ptr<ros::NodeHandle> &nh_ptr;
 
+    StateWithCov Xhatprev;
     StateWithCov Xhat;
 
     // Covariance of random processes
@@ -226,7 +230,7 @@ public:
 
     // Constructor
     GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, boost::shared_ptr<ros::NodeHandle> &nh_ptr_)
-    : Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
+    : Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
     {
         // // Initialize the covariance
         // Cov = MatrixNd::Identity()*Cov0;
@@ -423,7 +427,7 @@ public:
             ROS_ASSERT_MSG(dt > 0 && fabs(dt - 0.1) < 0.02, "Time step error: %f", dt);
 
             // Step 1: Predict the trajectory, use this as the prior
-            StateWithCov Xprior = Xhat.boxplusf(tn, Rm);
+            StateWithCov Xprior = Xhat.boxplusf(tn, Xhatprev, Rm);
 
             nh_ptr->getParam("MAX_ITER", MAX_ITER);
 
@@ -494,7 +498,7 @@ public:
                 SparseMat Jptp = Jp.transpose();
 
                 MatrixXd  B = -Jtp*RESIDUAL -Jptp*Gpinv*rprior;
-                SparseMat S = Jtp*J + Jptp*Gpinv*Jp;
+                SparseMat S =  Jtp*J + Jptp*Gpinv*Jp;
                 
                 // Build the Ax=B and factorize
                 SparseMat I(S.cols(), S.cols()); I.setIdentity();
@@ -519,7 +523,6 @@ public:
                 }
                 else
                 {
-                    
                     // Cap the change
                     if (dX.norm() > dXmax)
                         dX = dXmax*dX/dX.norm();
@@ -557,6 +560,7 @@ public:
             }
 
             // Update the states
+            Xhatprev = Xhat;
             Xhat = Xpred;
             printf("\n");
             
