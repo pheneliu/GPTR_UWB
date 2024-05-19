@@ -201,6 +201,8 @@ class GPLO
 {
 private:
 
+    boost::shared_ptr<ros::NodeHandle> &nh_ptr;
+
     StateWithCov Xhat;
 
     // Covariance of random processes
@@ -215,25 +217,25 @@ private:
     // Max iterations
     int MAX_ITER = 10;
     double lambda = 0.0;
+    double dXmax = 0.5;
 
 public:
 
     // Destructor
    ~GPLO() {};
 
-    GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_)
-    : Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_)
+    // Constructor
+    GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, boost::shared_ptr<ros::NodeHandle> &nh_ptr_)
+    : Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
     {
         // // Initialize the covariance
         // Cov = MatrixNd::Identity()*Cov0;
         Eigen::VectorXd Rm_(12);
         Rm_ << 0, 0, 0, 0, 0, 0, Rw, Rw, Rw, Rv, Rv, Rv;
         Rm = Rm_.asDiagonal();
-    }   
 
-    void Update()
-    {
-    }
+        nh_ptr->getParam("dXmax", dXmax);
+    }   
 
     void Deskew(CloudXYZITPtr &cloud, CloudXYZIPtr &cloudDeskewedInW,
                 myTf<double> &tf_W_Bb, myTf<double> &tf_W_Be,
@@ -405,7 +407,7 @@ public:
 
     void findTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
                  vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
-                 CloudPosePtr &poseprior, boost::shared_ptr<ros::NodeHandle> &nh_ptr)
+                 CloudPosePtr &poseprior)
     {
         int Ncloud = clouds.size();
         ROS_ASSERT(Ncloud == poseprior->size());
@@ -429,6 +431,8 @@ public:
             StateWithCov Xpred = Xprior;
             for (int iidx = 0; iidx < MAX_ITER; iidx++)
             {
+                double J0, JK;
+
                 MatrixNd Jprior;
                 VectorNd rprior = Xpred.boxminus(Xprior, Jprior);
 
@@ -440,11 +444,11 @@ public:
                 static CloudXYZIPtr cloudDeskewedInB(new CloudXYZI());
                 static CloudXYZIPtr cloudDeskewedInW(new CloudXYZI());
 
-                if (iidx == 0)
-                {
+                // if (iidx == 0)
+                // {
                     Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
                     pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
-                }
+                // }
 
                 // Step 3: Associate pointcloud with map
                 vector<LidarCoef> Coef;
@@ -467,13 +471,12 @@ public:
 
                 static ros::Publisher cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/clouddsk_inW", 1);
                 Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-                // Step 4: Update the state with the detected features
+                // Step 4: Find the increment and update the states
                 int Nf = Coef.size();
                 VectorXd RESIDUAL(Nf, 1);
                 MatrixXd JACOBIAN(Nf, 12);
-
                 EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
 
                 // Solve for best increment
@@ -505,6 +508,9 @@ public:
                 dX = solver.solve(B);
                 G  = (I - (S + G.inverse()).toDense().inverse()*S)*G;
 
+                // Calculate the initial cost
+                J0 = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
+
                 // If solving is not successful, return false
                 if (solver_failed || dX.hasNaN())
                 {
@@ -512,16 +518,24 @@ public:
                     cout << dX;
                 }
                 else
-                {   
+                {
+                    
                     // Cap the change
-                    if (dX.norm() > 0.1)
-                        dX = 0.1*dX/dX.norm();
+                    if (dX.norm() > dXmax)
+                        dX = dXmax*dX/dX.norm();
 
+                    // Back up the states
+                    StateWithCov Xpred_ = Xpred;
+                    
                     Xpred.boxplusd(dX);
                     Xpred.SetCov(G);
-                    
-                    double J = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
-                    printf("CIDX: %d. ITER: %d. Time: %f. Features: %d. J: %f\n", cidx, iidx, Xpred.tcurr, Nf, J);
+
+                    // Re-evaluate to update the cost
+                    EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
+                    JK = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
+
+                    printf("CIDX: %d. ITER: %d. Time: %f. Features: %d. J: %f -> %f\n",
+                            cidx, iidx, Xpred.tcurr, Nf, J0, JK);
 
                     printf("\t|dX| %6.3f. dR : %6.3f, %6.3f, %6.3f. dP : %6.3f, %6.3f, %6.3f. dW : %6.3f, %6.3f, %6.3f. dV : %6.3f, %6.3f, %6.3f\n",
                             dX.norm(), dX(0), dX(1), dX(2), dX(3), dX(4), dX(5), dX(6), dX(7), dX(8), dX(9), dX(10), dX(11));
@@ -531,9 +545,18 @@ public:
                             Xpred.YPR().x(), Xpred.YPR().y(), Xpred.YPR().z(),
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
+
+                    // If the cost increases, terminate
+                    if (JK > J0)
+                    {
+                        Xpred = Xpred_;
+                        printf(KRED "Cost increases. Revert.\n" RESET);
+                        break;
+                    }
                 }
             }
 
+            // Update the states
             Xhat = Xpred;
             printf("\n");
             
@@ -550,7 +573,7 @@ public:
             // DEBUG: Break after n steps
             static int debug_count = 0; debug_count++;
             int debug_steps = 1; nh_ptr->getParam("debug_step", debug_steps);
-            if (debug_count >= debug_steps)
+            if (debug_count >= debug_steps && debug_steps > 0)
                 break;
         }
     }
