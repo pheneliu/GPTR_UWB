@@ -260,12 +260,12 @@ int main(int argc, char **argv)
         cout << topic << endl;
 
     // Get the leaf size
-    int leaf_size;
+    nh_ptr->getParam("leaf_size", leaf_size);
 
     // Noise
     nh_ptr->getParam("UW_NOISE", UW_NOISE);
     nh_ptr->getParam("UV_NOISE", UV_NOISE);
-    printf("Proccess noise: %f, %f\n", UW_NOISE, UV_NOISE);
+    printf("Proccess noise: %.3f, %.3f\n", UW_NOISE, UV_NOISE);
 
     // Determine the number of lidar
     int Nlidar = pc_topics.size();
@@ -302,11 +302,11 @@ int main(int argc, char **argv)
     kdTreeMap->setInputCloud(priormap);
     
     // Publish the prior map for visualization
-    static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 1);
-    for(int count = 0; count < 6; i ++)
+    static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
+    for(int count = 0; count < 6; count ++)
     {
         Util::publishCloud(pmpub, *priormap, ros::Time::now(), "world");
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // Make the ikd-tree
@@ -352,7 +352,7 @@ int main(int argc, char **argv)
             clouds[lidx].push_back(cloud);
             cloudstamp[lidx].push_back(pcMsg->header.stamp);
 
-            printf("Loading lidar pointcloud %d at time : %.3f, %.3f. Cloud total: %d. Cloud size: %d / %d\r",
+            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %d. Cloud size: %d / %d\r",
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,

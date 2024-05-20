@@ -581,22 +581,12 @@ public:
                             Xpred.YPR().x(), Xpred.YPR().y(), Xpred.YPR().z(),
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
-
-
                 }
             }
 
             // Update the states
             Xhatprev = Xhat;
             Xhat = Xpred;
-            
-            // // Report status
-            // printf(KYEL "\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n" RESET,
-            //        Xhat.Pos(0),    Xhat.Pos(1),    Xhat.Pos(2),
-            //        Xhat.YPR().x(), Xhat.YPR().y(), Xhat.YPR().z(),
-            //        Xhat.Omg(0),    Xhat.Omg(1),    Xhat.Omg(2),
-            //        Xhat.Vel(0),    Xhat.Vel(1),    Xhat.Vel(2));
-            // printf("\n");
 
             // Publish the estimated pose for visualization
             PointPose pose = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);

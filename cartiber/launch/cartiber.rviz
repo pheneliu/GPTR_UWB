@@ -3,9 +3,7 @@ Panels:
     Help Height: 78
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /cloudDsk01
-        - /assocCloud01
+      Expanded: ~
       Splitter Ratio: 0.6676470637321472
     Tree Height: 746
   - Class: rviz/Selection
@@ -214,7 +212,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Spheres
-      Topic: /assoc_cloud
+      Topic: /lidar_0/assoc_cloud
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -247,7 +245,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 13.060033798217773
+      Distance: 10.452261924743652
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -255,17 +253,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 3.1784555912017822
-        Y: -4.374032020568848
-        Z: -1.999998927116394
+        X: 1.0499224662780762
+        Y: 1.6328856945037842
+        Z: -1.9999984502792358
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.1897970587015152
+      Pitch: 1.45979642868042
       Target Frame: body
-      Yaw: 2.657247304916382
+      Yaw: 1.2522450685501099
     Saved: ~
 Window Geometry:
   Displays:
