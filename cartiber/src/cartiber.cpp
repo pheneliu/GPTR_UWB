@@ -195,17 +195,14 @@ void DeskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplineP
     }
 }
 
-void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
-                        vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
-                        myTf<double> &tf_W_L0, CloudPosePtr &poseprior, ros::Publisher &pppub, int lidx)
+void trajectoryEstimate(const CloudXYZIPtr &priormap, const ikdtreePtr &ikdtPM,
+                        const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp,
+                        const myTf<double> &tf_W_L0, int lidx, mutex &nh_mtx)
 {
     // Calculate the trajectory by sim  ple iekf first, before refining with spline
     StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr);
-
-    poseprior->resize(clouds.size());
-    poseprior->points[0] = myTf(Xhat0.Rot.matrix(), Xhat0.Pos).Pose6D(Xhat0.tcurr);
-    gplo.findTraj(kdTreeMap, priormap, clouds, cloudstamp, poseprior, pppub, lidx);
+    GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx);
+    gplo.FindTraj(kdTreeMap, priormap, clouds, cloudstamp);
 
     // // Number of clouds
     // int Ncloud = clouds.size();
@@ -378,12 +375,22 @@ int main(int argc, char **argv)
         pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
 
     // Find a preliminary trajectory for each lidar sequence
-    vector<CloudPosePtr> poseprior(Nlidar);
+    mutex nh_mtx;
+    vector<GPLO> gplo;
+    vector<thread> trajEst;
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
-        poseprior[lidx] = CloudPosePtr(new CloudPose());
-        trajectoryEstimate(priormap, ikdtPM, clouds[lidx], cloudstamp[lidx], tf_W_Li0[lidx], poseprior[lidx], pppub[lidx], lidx);
+        // Calculate the trajectory by sim  ple iekf first, before refining with spline
+        StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
+        gplo.push_back(GPLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
+        trajEst.push_back(thread(std::bind(&GPLO::FindTraj, &gplo[lidx],
+                                 std::ref(kdTreeMap), std::ref(priormap),
+                                 std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]))));
     }
+
+    // Wait for the trajectory estimate to finish
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        trajEst[lidx].join();
 
     ros::Rate rate(1);
     while(ros::ok())

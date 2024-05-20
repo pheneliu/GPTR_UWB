@@ -4,8 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Lidar01
-        - /Lidar11
+        - /Lidar11/Lidar1InW1
       Splitter Ratio: 0.6676470637321472
     Tree Height: 746
   - Class: rviz/Selection
@@ -125,14 +124,14 @@ Visualization Manager:
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
-          Name: PosPrior0
+          Name: PosePrior0
           Position Transformer: XYZ
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
           Size (m): 0.05000000074505806
           Style: Spheres
-          Topic: /poseprior_0
+          Topic: /lidar_0/pose_prior
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -181,7 +180,7 @@ Visualization Manager:
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
-          Name: assocCloud0
+          Name: AssocCloud0
           Position Transformer: XYZ
           Queue Size: 1
           Selectable: true
@@ -241,14 +240,14 @@ Visualization Manager:
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
-          Name: posPrior1
+          Name: PosePrior1
           Position Transformer: XYZ
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
           Size (m): 0.05000000074505806
           Style: Spheres
-          Topic: /poseprior_1
+          Topic: /lidar_1/pose_prior
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -297,7 +296,7 @@ Visualization Manager:
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
-          Name: assocCloud1
+          Name: AssocCloud1
           Position Transformer: XYZ
           Queue Size: 1
           Selectable: true
@@ -339,7 +338,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 15.213638305664062
+      Distance: 14.738662719726562
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -355,9 +354,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8847968578338623
+      Pitch: 0.8647971153259277
       Target Frame: body
-      Yaw: 0.8422513604164124
+      Yaw: 0.8390641212463379
     Saved: ~
 Window Geometry:
   Displays:

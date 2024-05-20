@@ -18,7 +18,7 @@
         <param name="UW_NOISE"       value="100.0" />
         <param name="UV_NOISE"       value="100.0" />
         <param name="DEBUG_STEPS"    value="0"     />
-        <param name="MAX_ITER"       value="20"    />
+        <param name="MAX_ITER"       value="5"    />
         <param name="dXmax"          value="0.1"   />
     </node>
 
