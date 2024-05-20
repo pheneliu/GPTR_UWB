@@ -250,6 +250,7 @@ int main(int argc, char **argv)
 
     printf("Lidar calibration started.\n");
 
+    // Get the user define parameters
     nh_ptr->getParam("priormap_file", priormap_file);
     nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
     nh_ptr->getParam("pc_topics", pc_topics);
@@ -258,10 +259,18 @@ int main(int argc, char **argv)
     for(auto topic : pc_topics)
         cout << topic << endl;
 
-    // Get the number of lidar
+    // Get the leaf size
+    int leaf_size;
 
-    // Calculate the number of lidars
+    // Noise
+    nh_ptr->getParam("UW_NOISE", UW_NOISE);
+    nh_ptr->getParam("UV_NOISE", UV_NOISE);
+    printf("Proccess noise: %f, %f\n", UW_NOISE, UV_NOISE);
+
+    // Determine the number of lidar
     int Nlidar = pc_topics.size();
+
+    // Get the initial position of the lidars
     vector<double> xyzypr_W_L0(Nlidar*6, 0.0);
     if( nh_ptr->getParam("xyzypr_W_L0", xyzypr_W_L0) )
     {
@@ -285,14 +294,8 @@ int main(int argc, char **argv)
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
 
-    // Noise
-    nh_ptr->getParam("UW_NOISE", UW_NOISE);
-    nh_ptr->getParam("UV_NOISE", UV_NOISE);
-    printf("Proccess noise: %f, %f\n", UW_NOISE, UV_NOISE);
-
     // Load the priormap
-    CloudXYZIPtr priormap(new CloudXYZI());
-    pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
+    CloudXYZIPtr priormap(new CloudXYZI()); pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
     priormap = uniformDownsample<PointXYZI>(priormap, leaf_size);
     // Create the kd tree
     printf("Building the prior map");
@@ -300,8 +303,7 @@ int main(int argc, char **argv)
     
     // Publish the prior map for visualization
     static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 1);
-    int count = 0;
-    while(count++ < 6)
+    for(int count = 0; count < 6; i ++)
     {
         Util::publishCloud(pmpub, *priormap, ros::Time::now(), "world");
         std::this_thread::sleep_for(std::chrono::milliseconds(500));

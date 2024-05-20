@@ -204,7 +204,7 @@ class GPLO
 {
 private:
 
-    boost::shared_ptr<ros::NodeHandle> &nh_ptr;
+    NodeHandlePtr &nh_ptr;
 
     StateWithCov Xhatprev;
     StateWithCov Xhat;
@@ -219,9 +219,19 @@ private:
     double minKnnNbrDis = 0.1;
 
     // Max iterations
-    int MAX_ITER = 10;
+    int MAX_ITER  = 10;
     double lambda = 0.0;
-    double dXmax = 0.5;
+    double dXmax  = 0.5;
+
+    // Number of debug steps
+    int DEBUG_STEPS = 1;
+
+    // Lidar index
+    int lidx;
+
+    // Visualization
+    ros::Publisher assocPub;
+    ros::Publisher cloudDskPub;
 
 public:
 
@@ -229,40 +239,59 @@ public:
    ~GPLO() {};
 
     // Constructor
-    GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, boost::shared_ptr<ros::NodeHandle> &nh_ptr_)
+    GPLO(const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_)
     : Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
     {
-        // // Initialize the covariance
-        // Cov = MatrixNd::Identity()*Cov0;
+        // Initialize the covariance of velocity
         Eigen::VectorXd Rm_(12);
         Rm_ << 0, 0, 0, 0, 0, 0, Rw, Rw, Rw, Rv, Rv, Rv;
         Rm = Rm_.asDiagonal();
 
+        // Get the maximum change
         nh_ptr->getParam("dXmax", dXmax);
+
+        // Get the number of max iterations
+        nh_ptr->getParam("MAX_ITER", MAX_ITER);
+
+        // Debug steps
+        nh_ptr->getParam("DEBUG_STEPS", DEBUG_STEPS);
+
+        // Advertise report
+        assocPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", lidx), 1);
+        cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/clouddsk_inW", lidx), 1);
     }   
 
-    void Deskew(CloudXYZITPtr &cloud, CloudXYZIPtr &cloudDeskewedInW,
+    void Deskew(CloudXYZITPtr &cloud, CloudXYZIPtr &cloudDeskewedInB,
                 myTf<double> &tf_W_Bb, myTf<double> &tf_W_Be,
                 double tc, double dt)
     {
+        // Total number of points
         int Npoint = cloud->size();
-        cloudDeskewedInW->clear();
-        cloudDeskewedInW->resize(Npoint);
+
+        // Transform
+        myTf tf_Be_Bb = tf_W_Be.inverse()*tf_W_Bb;
+        myTf tfI;
+
+        // Reset the output pointcloud
+        cloudDeskewedInB->clear(); cloudDeskewedInB->resize(Npoint);
+
+        // Assign the new value
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int pidx = 0; pidx < Npoint; pidx++)
         {
             PointXYZIT &pi = cloud->points[pidx];
-            PointXYZI  &po = cloudDeskewedInW->points[pidx];
-
+            PointXYZI  &po = cloudDeskewedInB->points[pidx];
             po.intensity = pi.intensity;
             
             // Interpolation factor
-            double s = (pi.t - tc) / dt;
+            double s = 1.0 - min(1.0, (pi.t - tc) / dt);
+
             // Interpolated pose
-            myTf tf_W_Bs = tf_W_Bb.slerp(s, tf_W_Be);
+            myTf tf_Be_Bs = tfI.slerp(s, tf_Be_Bb);
+
             // Transformed point into another frame
             PointXYZIT po_;
-            Util::transform_point(tf_W_Bs, pi, po_);
+            Util::transform_point(tf_Be_Bs, pi, po_);
             po.x = po_.x;
             po.y = po_.y;
             po.z = po_.z;
@@ -354,7 +383,7 @@ public:
                         float d2p = pa * pointInB.x + pb * pointInB.y + pc * pointInB.z + pd;
 
                         // Weightage based on close the point is to the plane ?
-                        float score = 1.0;//(1 - 0.9f * fabs(d2p)) / Util::pointDistance(pointInB);
+                        float score = 1;//(1 - 0.9f * fabs(d2p) / Util::pointDistance(pointInB));
 
                         if (score > 0)
                         {
@@ -410,12 +439,11 @@ public:
     }
 
     void findTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
-                 vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
-                 CloudPosePtr &poseprior, ros::Publisher &pppub, int lidx)
+                  vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
+                  CloudPosePtr &poseprior, ros::Publisher &pppub, int lidx)
     {
-        int Ncloud = clouds.size();
-        ROS_ASSERT(Ncloud == poseprior->size());
-        for(int cidx = 0; cidx < Ncloud; cidx++)
+        int Ncloud = clouds.size(); ROS_ASSERT(Ncloud == poseprior->size());
+        for(int cidx = 0; cidx < Ncloud && ros::ok(); cidx++)
         {
             // Step 0: Save current state and identify the time step to be the end of the scan
             myTf tf_W_Bb(Xhat.Rot.matrix(), Xhat.Pos);
@@ -423,16 +451,15 @@ public:
             double tc = clouds[cidx]->points.front().t; // -> tcurr, ideally should be equal to tcurr, and cloudstamp[cidx].stamp
             double tn = clouds[cidx]->points.back().t; // -> tnext
             double dt = tn - tc;
-            // tn > tc and time step arround 0.1 second
+            
+            // assert that tn > tc and time steps differ less then 0.1 seconds
             ROS_ASSERT_MSG(dt > 0 && fabs(dt - 0.1) < 0.02, "Time step error: %f", dt);
 
             // Step 1: Predict the trajectory, use this as the prior
-            StateWithCov Xprior = Xhat.Propagation(tn, Xhatprev, Rm);
-
-            nh_ptr->getParam("MAX_ITER", MAX_ITER);
+            StateWithCov Xpred = Xhat.Propagation(tn, Xhatprev, Rm);
+            StateWithCov Xprior = Xpred;
 
             // Step 2: Iterative update with internal deskew and association
-            StateWithCov Xpred = Xprior;
             for (int iidx = 0; iidx < MAX_ITER; iidx++)
             {
                 double J0, JK;
@@ -448,16 +475,90 @@ public:
                 static CloudXYZIPtr cloudDeskewedInB(new CloudXYZI());
                 static CloudXYZIPtr cloudDeskewedInW(new CloudXYZI());
 
-                Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
-                pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
+                // Step 2.1: Deskew
+                Deskew(clouds[cidx], cloudDeskewedInB, tf_W_Bb, tf_W_Be, tc, dt);
+                pcl::transformPointCloud(*cloudDeskewedInB, *cloudDeskewedInW, tf_W_Be.pos, tf_W_Be.rot);
 
-                // Step 3: Associate pointcloud with map
+                // Step 2.2: Associate pointcloud with map
                 vector<LidarCoef> Coef;
                 Associate(kdTreeMap, priormap, cloudDeskewedInB, cloudDeskewedInW, Coef);
 
-                // Visualize the associated points
+                // Step 2.3: Find the increment and update the states
+                int Nf = Coef.size();
+                VectorXd RESIDUAL(Nf, 1);
+                MatrixXd JACOBIAN(Nf, 12);
+                EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
+
+                // Solve for best increment
+                VectorNd dX; // increment of the state
+
+                // Sparsify the matrices for easy calculation
+                typedef SparseMatrix<double> SparseMat;
+                SparseMat J    = JACOBIAN.sparseView(); J.makeCompressed();
+                SparseMat Jtp  = J.transpose();
+                SparseMat Jp   = Jprior.sparseView(); Jp.makeCompressed();
+                SparseMat Jptp = Jp.transpose();
+                MatrixNd Gpinv = Xprior.Cov.inverse();
+
+                MatrixXd  B = -Jtp*RESIDUAL -Jptp*Gpinv*rprior;
+                SparseMat A =  Jtp*J + Jptp*Gpinv*Jp;
+                
+                // Build the Ax=B and solve
+                SparseMat I(A.cols(), A.cols()); I.setIdentity();
+                Eigen::SparseLU<SparseMat> solver;
+                solver.analyzePattern(A);
+                solver.factorize(A);
+                bool solver_failed = solver.info() != Eigen::Success;
+
+                // Solve
+                dX = solver.solve(B);
+
+                // Calculate the initial cost
+                J0 = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
+
+                // If solving is not successful, return false
+                if (solver_failed || dX.hasNaN())
                 {
-                    static ros::Publisher assocPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/assoc_cloud", 1);
+                    printf(KRED"Failed to solve!\n"RESET);
+                    cout << dX;
+                    break;
+                }
+
+                // Cap the change
+                if (dX.norm() > dXmax)
+                    dX = dXmax*dX/dX.norm();
+
+                // Back up the states
+                StateWithCov Xpred_ = Xpred;
+                
+                // Update the state
+                Xpred.boxplusd(dX);
+
+                // Update the covariance
+                MatrixNd G = Xpred_.Cov;                 
+                G  = (I - (A + G.inverse()).toDense().inverse()*A)*G;
+                // G = A.toDense().inverse();
+                Xpred.SetCov(G);
+
+                // Re-evaluate to update the cost
+                EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
+                JK = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
+
+                double dJ = JK - J0;
+                // Check the increase
+                if (dJ > 0)
+                {
+                    printf(KRED "Cost increases. Revert.\n" RESET);
+                    Xpred = Xpred_;
+                    break;
+                }
+
+                // Visualization
+                {
+                    // Pointcloud deskewed
+                    Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
+                    
+                    // Associated the associated points
                     CloudXYZIPtr assocCloud(new CloudXYZI());
                     assocCloud->resize(Coef.size());
                     for(int pidx = 0; pidx < Coef.size(); pidx++)
@@ -468,71 +569,6 @@ public:
                         point.z = Coef[pidx].finW.z();
                     }
                     Util::publishCloud(assocPub, *assocCloud, ros::Time::now(), "world");
-                }
-
-                static ros::Publisher cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/clouddsk_inW", 1);
-                Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
-                // std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-                // Step 4: Find the increment and update the states
-                int Nf = Coef.size();
-                VectorXd RESIDUAL(Nf, 1);
-                MatrixXd JACOBIAN(Nf, 12);
-                EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
-
-                // Solve for best increment
-                bool solver_failed;
-                VectorNd dX;                            // increment of the state
-                MatrixNd G = Xpred.Cov;                 // Current covariance
-                // MatrixNd Ginv = Xpred.Cov.inverse();
-                MatrixNd Gpinv = Xprior.Cov.inverse();
-
-                // Sparsify the matrices for easy calculation
-                typedef SparseMatrix<double> SparseMat;
-                SparseMat J    = JACOBIAN.sparseView(); J.makeCompressed();
-                SparseMat Jtp  = J.transpose();
-                SparseMat Jp   = Jprior.sparseView(); Jp.makeCompressed();
-                SparseMat Jptp = Jp.transpose();
-
-                MatrixXd  B = -Jtp*RESIDUAL -Jptp*Gpinv*rprior;
-                SparseMat S =  Jtp*J + Jptp*Gpinv*Jp;
-                
-                // Build the Ax=B and factorize
-                SparseMat I(S.cols(), S.cols()); I.setIdentity();
-                SparseMat A = S + lambda/pow(2, (MAX_ITER - 1) - iidx)*I;
-                Eigen::SparseLU<SparseMat> solver;
-                solver.analyzePattern(A);
-                solver.factorize(A);
-                
-                // Solve
-                solver_failed = solver.info() != Eigen::Success;
-                dX = solver.solve(B);
-                G  = (I - (S + G.inverse()).toDense().inverse()*S)*G;
-
-                // Calculate the initial cost
-                J0 = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
-
-                // If solving is not successful, return false
-                if (solver_failed || dX.hasNaN())
-                {
-                    printf(KRED"Failed to solve!\n"RESET);
-                    cout << dX;
-                }
-                else
-                {
-                    // Cap the change
-                    if (dX.norm() > dXmax)
-                        dX = dXmax*dX/dX.norm();
-
-                    // Back up the states
-                    StateWithCov Xpred_ = Xpred;
-                    
-                    Xpred.boxplusd(dX);
-                    Xpred.SetCov(G);
-
-                    // Re-evaluate to update the cost
-                    EvaluateLidar(Xpred, Coef, RESIDUAL, JACOBIAN);
-                    JK = RESIDUAL.dot(RESIDUAL) + rprior.dot(Gpinv*rprior);
 
                     printf("CIDX: %d. ITER: %d. Time: %f. Features: %d. J: %f -> %f\n",
                             cidx, iidx, Xpred.tcurr, Nf, J0, JK);
@@ -540,43 +576,36 @@ public:
                     printf("\t|dX| %6.3f. dR : %6.3f, %6.3f, %6.3f. dP : %6.3f, %6.3f, %6.3f. dW : %6.3f, %6.3f, %6.3f. dV : %6.3f, %6.3f, %6.3f\n",
                             dX.norm(), dX(0), dX(1), dX(2), dX(3), dX(4), dX(5), dX(6), dX(7), dX(8), dX(9), dX(10), dX(11));
 
-                    printf("\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n",
+                    printf("\tXpred: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n",
                             Xpred.Pos(0),    Xpred.Pos(1),    Xpred.Pos(2),
                             Xpred.YPR().x(), Xpred.YPR().y(), Xpred.YPR().z(),
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
 
-                    // If the cost increases, terminate
-                    if (JK > J0)
-                    {
-                        Xpred = Xpred_;
-                        printf(KRED "Cost increases. Revert.\n" RESET);
-                        break;
-                    }
+
                 }
             }
 
             // Update the states
             Xhatprev = Xhat;
             Xhat = Xpred;
-            printf("\n");
             
-            // Report status
-            printf(KYEL "\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n" RESET,
-                   Xhat.Pos(0),    Xhat.Pos(1),    Xhat.Pos(2),
-                   Xhat.YPR().x(), Xhat.YPR().y(), Xhat.YPR().z(),
-                   Xhat.Omg(0),    Xhat.Omg(1),    Xhat.Omg(2),
-                   Xhat.Vel(0),    Xhat.Vel(1),    Xhat.Vel(2));
+            // // Report status
+            // printf(KYEL "\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n" RESET,
+            //        Xhat.Pos(0),    Xhat.Pos(1),    Xhat.Pos(2),
+            //        Xhat.YPR().x(), Xhat.YPR().y(), Xhat.YPR().z(),
+            //        Xhat.Omg(0),    Xhat.Omg(1),    Xhat.Omg(2),
+            //        Xhat.Vel(0),    Xhat.Vel(1),    Xhat.Vel(2));
+            // printf("\n");
 
-            // Publish the estimated pose
+            // Publish the estimated pose for visualization
             PointPose pose = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
             poseprior->points[cidx] = pose;
             Util::publishCloud(pppub, *poseprior, ros::Time::now(), "world");
         
             // DEBUG: Break after n steps
             static int debug_count = 0; debug_count++;
-            int debug_steps = 1; nh_ptr->getParam("debug_step", debug_steps);
-            if (debug_count >= debug_steps && debug_steps > 0)
+            if (DEBUG_STEPS > 0 && debug_count >= DEBUG_STEPS)
                 break;
         }
     }

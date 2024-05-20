@@ -3,7 +3,9 @@ Panels:
     Help Height: 78
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /cloudDsk01
+        - /assocCloud01
       Splitter Ratio: 0.6676470637321472
     Tree Height: 746
   - Class: rviz/Selection
@@ -89,7 +91,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -104,7 +106,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -177,14 +179,14 @@ Visualization Manager:
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
-      Name: cloudDsk
+      Name: cloudDsk0
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.05000000074505806
       Style: Boxes
-      Topic: /clouddsk_inW
+      Topic: /lidar_0/clouddsk_inW
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -205,7 +207,7 @@ Visualization Manager:
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
-      Name: assocCloud
+      Name: assocCloud0
       Position Transformer: XYZ
       Queue Size: 1
       Selectable: true
@@ -245,7 +247,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 21.212478637695312
+      Distance: 13.060033798217773
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -253,17 +255,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -0.13057392835617065
-        Y: -9.882230758666992
+        X: 3.1784555912017822
+        Y: -4.374032020568848
         Z: -1.999998927116394
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.03479708358645439
+      Pitch: 0.1897970587015152
       Target Frame: body
-      Yaw: 1.6672464609146118
+      Yaw: 2.657247304916382
     Saved: ~
 Window Geometry:
   Displays:
@@ -281,5 +283,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1920
-  X: 0
+  X: 3840
   Y: 0

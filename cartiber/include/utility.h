@@ -134,6 +134,7 @@ typedef Eigen::Quaterniond Quaternf;
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
 
+typedef boost::shared_ptr<ros::NodeHandle> NodeHandlePtr;
 
 /* #region  Custom point type definition ----------------------------------------------------------------------------*/
 
