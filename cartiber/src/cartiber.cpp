@@ -201,7 +201,7 @@ void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
 {
     // Calculate the trajectory by sim  ple iekf first, before refining with spline
     StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    GPLO gplo(Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr);
+    GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr);
 
     poseprior->resize(clouds.size());
     poseprior->points[0] = myTf(Xhat0.Rot.matrix(), Xhat0.Pos).Pose6D(Xhat0.tcurr);
@@ -393,20 +393,20 @@ int main(int argc, char **argv)
         // Publish the prior map for visualization
         Util::publishCloud(pmpub, *priormap, currTime, "world");
 
-        static vector<ros::Publisher> scanInWPub;
-        if(scanInWPub.size() == 0)
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                scanInWPub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d_inW", lidx), 1));
+        // static vector<ros::Publisher> scanInWPub;
+        // if(scanInWPub.size() == 0)
+        //     for(int lidx = 0; lidx < Nlidar; lidx++)
+        //         scanInWPub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d_inW", lidx), 1));
 
-        for(int lidx = 0; lidx < Nlidar; lidx++)
-        {
-            CloudXYZIPtr temp(new CloudXYZI());
-            pcl::transformPointCloud(*pc0[lidx], *temp, tf_W_Li0[lidx].cast<float>().tfMat());
-            Util::publishCloud(scanInWPub[lidx], *temp, currTime, "world");
+        // for(int lidx = 0; lidx < Nlidar; lidx++)
+        // {
+        //     CloudXYZIPtr temp(new CloudXYZI());
+        //     pcl::transformPointCloud(*pc0[lidx], *temp, tf_W_Li0[lidx].cast<float>().tfMat());
+        //     Util::publishCloud(scanInWPub[lidx], *temp, currTime, "world");
 
-            // Pose prior calculated from iekf
-            Util::publishCloud(pppub[lidx], *poseprior[lidx], currTime, "world");
-        }
+        //     // Pose prior calculated from iekf
+        //     Util::publishCloud(pppub[lidx], *poseprior[lidx], currTime, "world");
+        // }
 
         // Sleep
         rate.sleep();

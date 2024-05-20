@@ -8,7 +8,7 @@
         launch-prefix="bash -c 'sleep 3; $0 $@' ">
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
-        <param name="pc_topics"      type="yaml" value="['/lidar_1/points']"/>
+        <param name="pc_topics"      type="yaml" value="['/lidar_1/points', '/lidar_0/points']"/>
         <param name="xyzypr_W_L0"    type="yaml"
                                      value="[
                                              0, 0, 0.5, -135, 00, 0,
