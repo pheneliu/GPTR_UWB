@@ -2,20 +2,27 @@
 
 <launch>
 
-  <arg name="autorun" default = "false" />
+    <arg name="autorun" default="false" />
 
-  <node required="true" pkg="cartiber" type="cartiber" name="cartiber" output="screen" launch-prefix="bash -c 'sleep 3; $0 $@' ">
-        <param name="xyzypr_W_L0" type="yaml"
-               value="[0, 0, 0.5, -135, 00, 0,
-                       0, 0, 0.7,  045, 45, 0]" />
-        <param name="UW_NOISE"   value="10000"  />
-        <param name="UV_NOISE"   value="10000"  />
-        <param name="debug_step" value="-1"    />
-        <param name="MAX_ITER"   value="20"     />
-        <param name="dXmax"      value="0.1"    />
-  </node>
+    <node required="true" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+        launch-prefix="bash -c 'sleep 3; $0 $@' ">
+        <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
+        <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
+        <param name="pc_topics"      type="yaml" value="['/lidar_1/points']"/>
+        <param name="xyzypr_W_L0"    type="yaml"
+                                     value="[
+                                             0, 0, 0.5, -135, 00, 0,
+                                             0, 0, 0.7,  045, 45, 0
+                                            ]" />
+        <param name="UW_NOISE"       value="100.0" />
+        <param name="UV_NOISE"       value="100.0" />
+        <param name="debug_step"     value="-1" />
+        <param name="MAX_ITER"       value="20" />
+        <param name="dXmax"          value="0.1" />
+    </node>
 
-  <!-- Visualize -->
-  <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required = "true" args="-d $(find cartiber)/launch/cartiber.rviz" />
+    <!-- Visualize -->
+    <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
+        args="-d $(find cartiber)/launch/cartiber.rviz" />
 
 </launch>

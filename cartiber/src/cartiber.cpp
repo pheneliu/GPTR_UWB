@@ -31,16 +31,16 @@ using namespace std;
 boost::shared_ptr<ros::NodeHandle> nh_ptr;
 
 // Get the dense prior map
-string priormap_file = "/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd";
+string priormap_file = "";
 
 // Get the lidar bag file
-string lidar_bag_file = "/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag";
+string lidar_bag_file = "";
 
 // Get the lidar topics
-vector<string> pc_topics = {"/lidar_1/points"};
+vector<string> pc_topics = {"/lidar_0/points"};
 
 // Get the prior map leaf size
-double leaf_size = 0.05;
+double leaf_size = 0.15;
 
 // Kdtree for priormap
 KdFLANNPtr kdTreeMap(new KdFLANN());
@@ -197,7 +197,7 @@ void DeskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplineP
 
 void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
                         vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
-                        myTf<double> &tf_W_L0, CloudPosePtr &poseprior)
+                        myTf<double> &tf_W_L0, CloudPosePtr &poseprior, ros::Publisher &pppub, int lidx)
 {
     // Calculate the trajectory by sim  ple iekf first, before refining with spline
     StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
@@ -205,7 +205,7 @@ void trajectoryEstimate(CloudXYZIPtr &priormap, ikdtreePtr &ikdtPM,
 
     poseprior->resize(clouds.size());
     poseprior->points[0] = myTf(Xhat0.Rot.matrix(), Xhat0.Pos).Pose6D(Xhat0.tcurr);
-    gplo.findTraj(kdTreeMap, priormap, clouds, cloudstamp, poseprior);
+    gplo.findTraj(kdTreeMap, priormap, clouds, cloudstamp, poseprior, pppub, lidx);
 
     // // Number of clouds
     // int Ncloud = clouds.size();
@@ -250,11 +250,18 @@ int main(int argc, char **argv)
 
     printf("Lidar calibration started.\n");
 
+    nh_ptr->getParam("priormap_file", priormap_file);
+    nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
+    nh_ptr->getParam("pc_topics", pc_topics);
+    printf("Get bag at %s and prior map at %s\n", lidar_bag_file.c_str(), priormap_file.c_str());
+    printf("Lidar topics: \n");
+    for(auto topic : pc_topics)
+        cout << topic << endl;
+
     // Get the number of lidar
 
     // Calculate the number of lidars
     int Nlidar = pc_topics.size();
-    
     vector<double> xyzypr_W_L0(Nlidar*6, 0.0);
     if( nh_ptr->getParam("xyzypr_W_L0", xyzypr_W_L0) )
     {
@@ -311,7 +318,8 @@ int main(int argc, char **argv)
     vector<vector<ros::Time>> cloudstamp(pc_topics.size());
 
     // Load the bag file
-    rosbag::Bag lidar_bag; lidar_bag.open(lidar_bag_file);
+    rosbag::Bag lidar_bag;
+    lidar_bag.open(lidar_bag_file);
     rosbag::View view(lidar_bag, rosbag::TopicQuery(pc_topics));
 
     // Load the pointclouds
@@ -363,12 +371,16 @@ int main(int argc, char **argv)
     vector<double> timestart(Nlidar);
     getInitPose(clouds, cloudstamp, priormap, timestartup, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
 
+    static vector<ros::Publisher> pppub(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
+
     // Find a preliminary trajectory for each lidar sequence
     vector<CloudPosePtr> poseprior(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         poseprior[lidx] = CloudPosePtr(new CloudPose());
-        trajectoryEstimate(priormap, ikdtPM, clouds[lidx], cloudstamp[lidx], tf_W_Li0[lidx], poseprior[lidx]);
+        trajectoryEstimate(priormap, ikdtPM, clouds[lidx], cloudstamp[lidx], tf_W_Li0[lidx], poseprior[lidx], pppub[lidx], lidx);
     }
 
     ros::Rate rate(1);
@@ -383,11 +395,6 @@ int main(int argc, char **argv)
         if(scanInWPub.size() == 0)
             for(int lidx = 0; lidx < Nlidar; lidx++)
                 scanInWPub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d_inW", lidx), 1));
-
-        static vector<ros::Publisher> pppub;
-        if(pppub.size() == 0)
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                pppub.push_back(nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1));
 
         for(int lidx = 0; lidx < Nlidar; lidx++)
         {

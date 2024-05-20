@@ -78,7 +78,7 @@ public:
     }
 
     // Increment
-    StateWithCov boxplusf(double tn, StateWithCov &Xhatprev, const MatrixNd &Rm)
+    StateWithCov Propagation(double tn, StateWithCov &Xhatprev, const MatrixNd &Rm)
     {
         // Find the old delta t
         double dt_ = (tcurr - Xhatprev.tcurr);
@@ -411,7 +411,7 @@ public:
 
     void findTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
                  vector<CloudXYZITPtr> &clouds, vector<ros::Time> &cloudstamp,
-                 CloudPosePtr &poseprior)
+                 CloudPosePtr &poseprior, ros::Publisher &pppub, int lidx)
     {
         int Ncloud = clouds.size();
         ROS_ASSERT(Ncloud == poseprior->size());
@@ -427,7 +427,7 @@ public:
             ROS_ASSERT_MSG(dt > 0 && fabs(dt - 0.1) < 0.02, "Time step error: %f", dt);
 
             // Step 1: Predict the trajectory, use this as the prior
-            StateWithCov Xprior = Xhat.boxplusf(tn, Xhatprev, Rm);
+            StateWithCov Xprior = Xhat.Propagation(tn, Xhatprev, Rm);
 
             nh_ptr->getParam("MAX_ITER", MAX_ITER);
 
@@ -448,11 +448,8 @@ public:
                 static CloudXYZIPtr cloudDeskewedInB(new CloudXYZI());
                 static CloudXYZIPtr cloudDeskewedInW(new CloudXYZI());
 
-                // if (iidx == 0)
-                // {
-                    Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
-                    pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
-                // }
+                Deskew(clouds[cidx], cloudDeskewedInW, tf_W_Bb, tf_W_Be, tc, dt);
+                pcl::transformPointCloud(*cloudDeskewedInW, *cloudDeskewedInB, tf_Be_W.pos, tf_Be_W.rot);
 
                 // Step 3: Associate pointcloud with map
                 vector<LidarCoef> Coef;
@@ -475,7 +472,7 @@ public:
 
                 static ros::Publisher cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/clouddsk_inW", 1);
                 Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                // std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
                 // Step 4: Find the increment and update the states
                 int Nf = Coef.size();
@@ -485,8 +482,8 @@ public:
 
                 // Solve for best increment
                 bool solver_failed;
-                VectorNd dX;
-                MatrixNd G = Xpred.Cov;
+                VectorNd dX;                            // increment of the state
+                MatrixNd G = Xpred.Cov;                 // Current covariance
                 // MatrixNd Ginv = Xpred.Cov.inverse();
                 MatrixNd Gpinv = Xprior.Cov.inverse();
 
@@ -564,16 +561,18 @@ public:
             Xhat = Xpred;
             printf("\n");
             
-            PointPose pose = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
-            poseprior->points[cidx] = pose;
-
-            // Check
+            // Report status
             printf(KYEL "\tXhat: Pos: %6.3f, %6.3f, %6.3f. Rot: %6.3f, %6.3f, %6.3f. Omg: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f.\n" RESET,
                    Xhat.Pos(0),    Xhat.Pos(1),    Xhat.Pos(2),
                    Xhat.YPR().x(), Xhat.YPR().y(), Xhat.YPR().z(),
                    Xhat.Omg(0),    Xhat.Omg(1),    Xhat.Omg(2),
                    Xhat.Vel(0),    Xhat.Vel(1),    Xhat.Vel(2));
-                    
+
+            // Publish the estimated pose
+            PointPose pose = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
+            poseprior->points[cidx] = pose;
+            Util::publishCloud(pppub, *poseprior, ros::Time::now(), "world");
+        
             // DEBUG: Break after n steps
             static int debug_count = 0; debug_count++;
             int debug_steps = 1; nh_ptr->getParam("debug_step", debug_steps);
