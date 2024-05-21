@@ -106,7 +106,7 @@
 #include "basalt/spline/ceres_local_param.hpp"
 
 // ikdtree
-// #include <ikdTree/ikd_Tree.h>
+#include <ikdTree/ikd_Tree.h>
 
 using namespace std;
 using namespace Eigen;

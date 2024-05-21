@@ -1,6 +1,6 @@
 
 #include <Eigen/Dense>
-#include "CloudMatcher.hpp"
+#include <Eigen/Sparse>
 #include "utility.h"
 
 using namespace Eigen;
@@ -234,10 +234,6 @@ private:
     ros::Publisher cloudDskPub;
     ros::Publisher pppub;
 
-    // Pose prior for visualization
-    CloudPosePtr poseprior = CloudPosePtr(new CloudPose());
-    int debug_count = 0;
-
 public:
 
     // Destructor
@@ -448,9 +444,12 @@ public:
     }
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
-                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp)
+                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp, CloudPosePtr &posePrior)
     {
         int Ncloud = clouds.size();
+        posePrior = CloudPosePtr(new CloudPose());
+        posePrior->resize(Ncloud);
+
         for(int cidx = 0; cidx < Ncloud && ros::ok(); cidx++)
         {
             // Step 0: Save current state and identify the time step to be the end of the scan
@@ -544,8 +543,8 @@ public:
 
                 // Update the covariance
                 MatrixNd G = Xpred_.Cov;                 
-                G  = (I - (A + G.inverse()).toDense().inverse()*A)*G;
-                // G = A.toDense().inverse();
+                // G  = (I - (A + G.inverse()).toDense().inverse()*A)*G;
+                G = A.toDense().inverse();
                 Xpred.SetCov(G);
 
                 // Re-evaluate to update the cost
@@ -590,24 +589,23 @@ public:
                             Xpred.Omg(0),    Xpred.Omg(1),    Xpred.Omg(2),
                             Xpred.Vel(0),    Xpred.Vel(1),    Xpred.Vel(2));
                 }
+
+                if (fabs(dJ) < 1e-3)
+                    break;
             }
 
             // Update the states
             Xhatprev = Xhat;
             Xhat = Xpred;
 
-            // Publish the estimated pose for visualization
-            if (poseprior->size() != Ncloud)
-                poseprior->resize(Ncloud);
-
-            PointPose pose = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
-            poseprior->points[cidx] = pose;
-            Util::publishCloud(pppub, *poseprior, ros::Time::now(), "world");
+            // Add the estimated pose to the pointcloud
+            posePrior->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
+            Util::publishCloud(pppub, *posePrior, ros::Time::now(), "world");
 
             // DEBUG: Break after n steps
-            debug_count++;
+            static int debug_count = 0; debug_count++;
             if (DEBUG_STEPS > 0 && debug_count >= DEBUG_STEPS)
-                break;
+                break; 
         }
     }
 };

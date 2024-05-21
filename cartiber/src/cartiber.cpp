@@ -199,10 +199,10 @@ void trajectoryEstimate(const CloudXYZIPtr &priormap, const ikdtreePtr &ikdtPM,
                         const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp,
                         const myTf<double> &tf_W_L0, int lidx, mutex &nh_mtx)
 {
-    // Calculate the trajectory by sim  ple iekf first, before refining with spline
-    StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx);
-    gplo.FindTraj(kdTreeMap, priormap, clouds, cloudstamp);
+    // // Calculate the trajectory by sim  ple iekf first, before refining with spline
+    // StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
+    // GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx);
+    // gplo.FindTraj(kdTreeMap, priormap, clouds, cloudstamp);
 
     // // Number of clouds
     // int Ncloud = clouds.size();
@@ -378,19 +378,26 @@ int main(int argc, char **argv)
     mutex nh_mtx;
     vector<GPLO> gplo;
     vector<thread> trajEst;
+    vector<CloudPosePtr> posePrior(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
-        // Calculate the trajectory by sim  ple iekf first, before refining with spline
+        // Creating the trajectory estimator
         StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
         gplo.push_back(GPLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
+        
+        // Estimate the trajectory
+        posePrior[lidx] = CloudPosePtr(new CloudPose());
         trajEst.push_back(thread(std::bind(&GPLO::FindTraj, &gplo[lidx],
-                                 std::ref(kdTreeMap), std::ref(priormap),
-                                 std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]))));
+                                            std::ref(kdTreeMap), std::ref(priormap),
+                                            std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
+                                            std::ref(posePrior[lidx]))));
     }
-
     // Wait for the trajectory estimate to finish
     for(int lidx = 0; lidx < Nlidar; lidx++)
         trajEst[lidx].join();
+
+    // Now got all trajectories, fit a spline to these trajectories
+
 
     ros::Rate rate(1);
     while(ros::ok())
