@@ -22,8 +22,11 @@
 
 // Custom built utilities
 #include "CloudMatcher.hpp"
-#include "GPLO.hpp"
 #include "utility.h"
+#include "GPLO.hpp"
+
+// Factor for optimization
+#include "factor/PoseAnalyticFactor.h"
 
 using namespace std;
 
@@ -67,6 +70,7 @@ double UV_NOISE = 10.0;
 // Define the posespline
 using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
 // typedef Matrix<double, 12, 12> MatrixNd;
+typedef std::shared_ptr<GPLO> GPLOPtr;
 
 template <typename PointType>
 typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::PointCloud<PointType>::Ptr &cloudin, double sampling_radius)
@@ -167,7 +171,7 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     // return T_W_Li0;
 }
 
-void DeskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplinePtr &traj)
+void deskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplinePtr &traj)
 {
     int Npoints = cloudin->size();
     cloudout->resize(Npoints);
@@ -229,12 +233,92 @@ void trajectoryEstimate(const CloudXYZIPtr &priormap, const ikdtreePtr &ikdtPM,
     //         swCloudInW[swcidx]->resize(clouds[cidx]->size());
 
     //         // Deskew the pointcloud using the spline
-    //         DeskewBySpline(clouds[cidx], swCloudInW[swcidx], lidarTraj);
+    //         deskewBySpline(clouds[cidx], swCloudInW[swcidx], lidarTraj);
 
     //         // pcl::transformPointCloud(*clouds[cidx], *swCloudInW[swcidx],
     //         //                           myTf<double>(lidarTraj->pose(tstart)).cast<float>().tfMat());
     //     }
     // }
+}
+
+// Fit the spline with data
+string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
+{
+    // Create spline
+    int KNOTS = traj->numKnots();
+    int N = traj->order();
+
+    // Ceres problem
+    ceres::Problem problem;
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+
+    // Set up the ceres problem
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.num_threads = MAX_THREADS;
+    options.max_num_iterations = 10;
+
+    ceres::LossFunction *loss_function = new ceres::CauchyLoss(loss_thres);
+
+    ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
+
+    // Add the parameter blocks for rotation
+    for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
+        problem.AddParameterBlock(traj->getKnotSO3(knot_idx).data(), 4, local_parameterization);
+
+    // Add the parameter blocks for position
+    for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
+        problem.AddParameterBlock(traj->getKnotPos(knot_idx).data(), 3);
+
+    double cost_pose_init;
+    double cost_pose_final;
+    vector<ceres::internal::ResidualBlock *> res_ids_pose;
+    // Add the pose factors
+    for (int k = 0; k < ts.size(); k++)
+    {
+        double t = ts[k];
+
+        // Continue if sample is in the window
+        if (t < traj->minTime() + 1e-6 && t > traj->maxTime() - 1e-6)
+            continue;
+
+        auto us = traj->computeTIndex(t);
+        double u = us.first;
+        int s = us.second;
+
+        Quaternd q(rot(k, 3), rot(k, 0), rot(k, 1), rot(k, 2));
+        Vector3d p(pos(k, 0), pos(k, 1), pos(k, 2));
+
+        ceres::CostFunction *cost_function = new PoseAnalyticFactor(SE3d(q, p), wp[k], wr[k], N, traj->getDt(), u);
+
+        // Find the coupled poses
+        vector<double *> factor_param_blocks;
+        for (int knot_idx = s; knot_idx < s + N; knot_idx++)
+            factor_param_blocks.emplace_back(traj->getKnotSO3(knot_idx).data());
+
+        for (int knot_idx = s; knot_idx < s + N; knot_idx++)
+            factor_param_blocks.emplace_back(traj->getKnotPos(knot_idx).data());
+
+        // // printf("Creating functor: u: %f, s: %d. sample: %d / %d\n", u, s, i, pose_gt.size());
+        // // cost_function->SetNumResiduals(6);
+
+        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+        res_ids_pose.push_back(res_block);
+    }
+
+    // Init cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+
+    // Solve the optimization problem
+    ceres::Solve(options, &problem, &summary);
+
+    // Final cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+
+    string report = myprintf("Spline Fitting. Cost: %f -> %f. Iterations: %d.\n",
+                                cost_pose_init, cost_pose_final, summary.iterations.size());
+
+    return report;
 }
 
 int main(int argc, char **argv)
@@ -376,18 +460,18 @@ int main(int argc, char **argv)
 
     // Find a preliminary trajectory for each lidar sequence
     mutex nh_mtx;
-    vector<GPLO> gplo;
+    vector<GPLOPtr> gplo;
     vector<thread> trajEst;
     vector<CloudPosePtr> posePrior(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         // Creating the trajectory estimator
         StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-        gplo.push_back(GPLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
-        
+        gplo.push_back(GPLOPtr(new GPLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx)));
+
         // Estimate the trajectory
         posePrior[lidx] = CloudPosePtr(new CloudPose());
-        trajEst.push_back(thread(std::bind(&GPLO::FindTraj, &gplo[lidx],
+        trajEst.push_back(thread(std::bind(&GPLO::FindTraj, gplo[lidx],
                                             std::ref(kdTreeMap), std::ref(priormap),
                                             std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
                                             std::ref(posePrior[lidx]))));
@@ -396,8 +480,44 @@ int main(int argc, char **argv)
     for(int lidx = 0; lidx < Nlidar; lidx++)
         trajEst[lidx].join();
 
-    // Now got all trajectories, fit a spline to these trajectories
+    trajEst.clear();
+    gplo.clear();
 
+    // Now got all trajectories, fit a spline to these trajectories and sample them
+    vector<PoseSplinePtr> traj(Nlidar);
+    vector<CloudPosePtr> poseSampled(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        traj[lidx] = PoseSplinePtr(new PoseSplineX(SPLINE_N, 0.1));
+        traj[lidx]->setStartTime(clouds[lidx].front()->points.back().t);
+        traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t, SE3d());
+        
+        int Ncloud = clouds[lidx].size();
+        vector<double> ts(Ncloud);
+        MatrixXd pos(Ncloud, 3);
+        MatrixXd rot(Ncloud, 4);
+        vector<double> wp(Ncloud, 1);
+        vector<double> wr(Ncloud, 1);
+        double loss_thread = 1.0;
+
+        #pragma omp parallel for num_threads(MAX_THREADS)
+        for(int cidx = 0; cidx < Ncloud; cidx++)
+        {
+            ts[cidx] = clouds[lidx][cidx]->points.back().t;
+            pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x, posePrior[lidx]->points[cidx].y, posePrior[lidx]->points[cidx].z;
+            rot.block<1, 4>(cidx, 0) << posePrior[lidx]->points[cidx].qx, posePrior[lidx]->points[cidx].qy, posePrior[lidx]->points[cidx].qz, posePrior[lidx]->points[cidx].qw;
+        }
+
+        fitspline(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+
+        // Sample the spline for visualization
+        poseSampled[lidx] = CloudPosePtr(new CloudPose());
+        for(auto t : ts)
+        {
+            myTf tf_W_B(traj[lidx]->pose(t));
+            poseSampled[lidx]->points.push_back(tf_W_B.Pose6D(t));
+        }
+    }
 
     ros::Rate rate(1);
     while(ros::ok())
@@ -407,10 +527,13 @@ int main(int argc, char **argv)
         // Publish the prior map for visualization
         Util::publishCloud(pmpub, *priormap, currTime, "world");
 
-        // static vector<ros::Publisher> scanInWPub;
-        // if(scanInWPub.size() == 0)
-        //     for(int lidx = 0; lidx < Nlidar; lidx++)
-        //         scanInWPub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d_inW", lidx), 1));
+        static vector<ros::Publisher> splineSamplePub;
+        if(splineSamplePub.size() == 0)
+            for(int lidx = 0; lidx < Nlidar; lidx++)
+                splineSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
+                
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+            Util::publishCloud(splineSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
 
         // for(int lidx = 0; lidx < Nlidar; lidx++)
         // {

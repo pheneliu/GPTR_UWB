@@ -204,7 +204,7 @@ class GPLO
 {
 private:
 
-    NodeHandlePtr &nh_ptr;
+    NodeHandlePtr nh_ptr;
 
     StateWithCov Xhatprev;
     StateWithCov Xhat;
@@ -543,8 +543,8 @@ public:
 
                 // Update the covariance
                 MatrixNd G = Xpred_.Cov;                 
-                // G  = (I - (A + G.inverse()).toDense().inverse()*A)*G;
-                G = A.toDense().inverse();
+                G  = (I - (A + G.inverse()).toDense().inverse()*A)*G;
+                // G = A.toDense().inverse();
                 Xpred.SetCov(G);
 
                 // Re-evaluate to update the cost
