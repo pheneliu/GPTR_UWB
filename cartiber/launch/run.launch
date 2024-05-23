@@ -15,8 +15,8 @@
                                              0, 0, 0.7,  045, 45, 0
                                             ]" />
         <param name="leaf_size"      value="0.15"  />
-        <param name="UW_NOISE"       value="100.0" />
-        <param name="UV_NOISE"       value="100.0" />
+        <param name="UW_NOISE"       value="10.0" />
+        <param name="UV_NOISE"       value="10.0" />
         <param name="DEBUG_STEPS"    value="0"     />
         <param name="MAX_ITER"       value="5"    />
         <param name="dXmax"          value="0.1"   />

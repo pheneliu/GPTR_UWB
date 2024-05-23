@@ -1,4 +1,5 @@
 #include "unistd.h"
+#include <algorithm>  // for std::sort
 
 // PCL utilities
 #include <pcl/kdtree/kdtree_flann.h>
@@ -27,6 +28,7 @@
 
 // Factor for optimization
 #include "factor/PoseAnalyticFactor.h"
+#include "factor/ExtrinsicFactor.h"
 
 using namespace std;
 
@@ -259,7 +261,6 @@ string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd 
     options.max_num_iterations = 10;
 
     ceres::LossFunction *loss_function = new ceres::CauchyLoss(loss_thres);
-
     ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
 
     // Add the parameter blocks for rotation
@@ -321,12 +322,126 @@ string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd 
     return report;
 }
 
+myTf<double> umeyamaAlign(const MatrixXd &x, const MatrixXd &y)
+{
+    int Nsample = x.cols();
+
+    // Calculate the mean
+    Vector3d meanx(0, 0, 0);
+    Vector3d meany(0, 0, 0);
+    for(int sidx = 0; sidx < Nsample; sidx++)
+    {
+        meanx += x.col(sidx);
+        meany += y.col(sidx);
+    }
+    meanx /= Nsample;
+    meany /= Nsample;
+
+    // variance
+    // double sigmax = 0;
+    // double sigmay = 0;
+    MatrixXd covxy = MatrixXd::Zero(3, 3);
+    for(int sidx = 0; sidx < Nsample; sidx++)
+    {
+        Vector3d xtilde = x.col(sidx) - meanx;
+        Vector3d ytilde = y.col(sidx) - meany;
+        // sigmax += pow(xtilde.norm(), 2)/n;
+        // sigmay += pow(ytilde.norm(), 2)/n;
+        covxy += xtilde*ytilde.transpose();
+    }
+    covxy /= Nsample;
+
+    // SVD
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(covxy, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    Matrix3d U = svd.matrixU();
+    // VectorXd S = svd.singularValues();
+    Matrix3d V = svd.matrixV();
+
+    double detU = U.determinant();
+    double detV = V.determinant();
+
+    Matrix3d S = MatrixXd::Identity(3, 3);
+    if (detU * detV < 0.0)
+        S(2, 2) = -1;
+    
+    Matrix3d R = U*S*V;
+    Vector3d p = meany - R*meanx;
+
+    return myTf(R, p);
+}
+
+myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &trajy)
+{
+    // Trajectory should have 1:1 correspondence
+    ROS_ASSERT(trajx->size() == trajy->size());
+    int Nsample = trajx->size();
+
+    // Ceres problem
+    ceres::Problem problem;
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+
+    // Set up the ceres problem
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.num_threads = MAX_THREADS;
+    options.max_num_iterations = 50;
+
+    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+    ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
+
+    SO3d rot(Quaternd(1, 0, 0, 0));
+    problem.AddParameterBlock(rot.data(), 4, local_parameterization);
+
+    Vector3d pos(0, 0, 0);
+    problem.AddParameterBlock(pos.data(), 3);
+    
+    vector<double *> factor_param_blocks;
+    factor_param_blocks.emplace_back(rot.data());
+    factor_param_blocks.emplace_back(pos.data());
+
+    double cost_pose_init;
+    double cost_pose_final;
+    vector<ceres::internal::ResidualBlock *> res_ids_pose;
+    for(int sidx = 0; sidx < Nsample; sidx++)
+    {
+        myTf Ti(trajx->points[sidx]);
+        myTf Tj(trajy->points[sidx]);
+        SE3d Tji = (Ti.inverse()*Tj).getSE3();
+
+        ceres::CostFunction *cost_function = new ExtrinsicFactor(Tji.so3(), Tji.translation(), 1.0, 1.0);
+        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+        res_ids_pose.push_back(res_block);
+    }
+
+    // Init cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+
+    // Solve the optimization problem
+    ceres::Solve(options, &problem, &summary);
+
+    // Final cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+
+    printf("Optimization done: Iter: %d. Cost: %f -> %f\n",
+            summary.iterations.size(),
+            summary.initial_cost, summary.final_cost);
+
+    myTf<double> T_L0_Li(rot.unit_quaternion(), pos);
+
+    // Delete the created memories
+    // delete rot;
+    // delete pos;
+
+    return T_L0_Li;
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "cartiber");
     ros::NodeHandle nh("~");
     nh_ptr = boost::make_shared<ros::NodeHandle>(nh);
-
+    
+    // Supress the pcl warning
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
     printf("Lidar calibration started.\n");
@@ -483,6 +598,33 @@ int main(int argc, char **argv)
     trajEst.clear();
     gplo.clear();
 
+    // Merge the time stamps
+    double tmincut = cloudstamp.front().front().toSec();
+    double tmaxcut = cloudstamp.front().back().toSec();
+    deque<double> tsample;
+    for(auto &stamps : cloudstamp)
+    {
+        tmincut = max(tmincut, stamps.front().toSec());
+        tmaxcut = min(tmaxcut, stamps.back().toSec());
+
+        for(auto &stamp : stamps)
+            tsample.push_back(stamp.toSec());
+    }
+    // Sort the sampling time:
+    std::sort(tsample.begin(), tsample.end());
+    // Pop the ones outside of tmincut and tmaxcut
+    while(tsample.size() != 0)
+        if (tsample.front() <= tmincut)
+            tsample.pop_front();
+        else
+            break;
+
+    while(tsample.size() != 0)
+        if (tsample.back() >= tmaxcut)
+            tsample.pop_back();
+        else
+            break;    
+
     // Now got all trajectories, fit a spline to these trajectories and sample them
     vector<PoseSplinePtr> traj(Nlidar);
     vector<CloudPosePtr> poseSampled(Nlidar);
@@ -504,19 +646,30 @@ int main(int argc, char **argv)
         for(int cidx = 0; cidx < Ncloud; cidx++)
         {
             ts[cidx] = clouds[lidx][cidx]->points.back().t;
-            pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x, posePrior[lidx]->points[cidx].y, posePrior[lidx]->points[cidx].z;
+            pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x,  posePrior[lidx]->points[cidx].y,  posePrior[lidx]->points[cidx].z;
             rot.block<1, 4>(cidx, 0) << posePrior[lidx]->points[cidx].qx, posePrior[lidx]->points[cidx].qy, posePrior[lidx]->points[cidx].qz, posePrior[lidx]->points[cidx].qw;
         }
-
+        
+        // Fit the spline
         fitspline(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
 
-        // Sample the spline for visualization
+        // Sample the spline by the synchronized sampling time
         poseSampled[lidx] = CloudPosePtr(new CloudPose());
-        for(auto t : ts)
+        for(auto t : tsample)
         {
             myTf tf_W_B(traj[lidx]->pose(t));
             poseSampled[lidx]->points.push_back(tf_W_B.Pose6D(t));
         }
+        printf("Lidar %d trajectory sampled at %d points\n", lidx, poseSampled[lidx]->size());
+    }
+    
+    // Optimize the extrinsics
+    for(int lidx = 1; lidx < Nlidar; lidx++)
+    {
+        myTf tf_L0_L = optimizeExtrinsics(poseSampled[0], poseSampled[lidx]);
+        printf("T_L0_L%d: XYZ: %f, %f, %f, YPR: %f, %f, %f\n",
+                lidx, tf_L0_L.pos(0), tf_L0_L.pos(1),  tf_L0_L.pos(2),
+                      tf_L0_L.yaw(),  tf_L0_L.pitch(), tf_L0_L.roll());
     }
 
     ros::Rate rate(1);
@@ -531,7 +684,7 @@ int main(int argc, char **argv)
         if(splineSamplePub.size() == 0)
             for(int lidx = 0; lidx < Nlidar; lidx++)
                 splineSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
-                
+
         for(int lidx = 0; lidx < Nlidar; lidx++)
             Util::publishCloud(splineSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
 
