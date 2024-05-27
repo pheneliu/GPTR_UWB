@@ -45,7 +45,7 @@
 #include "utility.h"
 
 #include "PoseLocalParameterization.h"
-#include "factor/PointToPlaneDisFactor.h"
+// #include "factor/PointToPlaneDisFactor.h"
 
 #ifndef CLOUDMATCHER_HPP
 #define CLOUDMATCHER_HPP
@@ -78,9 +78,56 @@ struct IOASummary
     mytf final_tf;
 };
 
+
+#ifndef POINTTOPLANDISFACTOR_H
+#define POINTTOPLANDISFACTOR_H
+
+class PointToPlaneFactor : public ceres::SizedCostFunction<1, 7>
+{
+public:
+    PointToPlaneFactor() = delete;
+    PointToPlaneFactor(const Vector3d &point,
+                       const Vector4d &coeff) : point_(point), sqrt_info_static_(1.0)
+    {
+        normal_ << coeff.x(), coeff.y(), coeff.z();
+        offset_ =  coeff.w();
+    }
+    virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
+    {
+        Vector3d    Pi(parameters[0][0], parameters[0][1], parameters[0][2]);
+        Quaterniond Qi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
+
+        double residual = normal_.transpose() * (Qi * point_ + Pi) + offset_;
+
+        residuals[0] = sqrt_info_static_*residual;
+        
+        if(jacobians)
+        {
+            Eigen::Map<Eigen::Matrix<double, 1, 7, Eigen::RowMajor>> jacobian_pose(jacobians[0]);
+            jacobian_pose.setZero();
+            jacobian_pose.block<1, 3>(0, 0) =  normal_.transpose();
+            jacobian_pose.block<1, 3>(0, 3) = -normal_.transpose()
+                                               *Qi.toRotationMatrix()
+                                               *Util::skewSymmetric(point_);
+            jacobian_pose = sqrt_info_static_*jacobian_pose;
+        }
+
+        return true;
+    }
+    // void Check(double **parameters);
+
+private:
+    Eigen::Vector3d point_;
+    Eigen::Vector3d normal_;
+    double offset_;
+    
+    double sqrt_info_static_;
+};
+
+#endif
+
 class CloudMatcher
 {
-
 private:
     
     double minMatchSqDis = 1.0;
@@ -189,7 +236,7 @@ public:
             vector<ceres::internal::ResidualBlock *> res_ids_proj_surf;
             for (int j = 0; j < Nsurf; j++)
             {
-                Point2PlaneDisFactor *f = new Point2PlaneDisFactor(srcSurfCoord[j], srcSurfCoeff[j]);
+                PointToPlaneFactor *f = new PointToPlaneFactor(srcSurfCoord[j], srcSurfCoeff[j]);
                 ceres::internal::ResidualBlock *res_id = problem.AddResidualBlock(f, huber_loss_function, PARAM_POSE);
                 res_ids_proj_surf.push_back(res_id);
             }
@@ -386,7 +433,7 @@ public:
             vector<ceres::internal::ResidualBlock *> res_ids_proj_surf;
             for (int j = 0; j < Nsurf; j++)
             {
-                Point2PlaneDisFactor *f = new Point2PlaneDisFactor(srcSurfCoord[j], srcSurfCoeff[j]);
+                PointToPlaneFactor *f = new PointToPlaneFactor(srcSurfCoord[j], srcSurfCoeff[j]);
                 ceres::internal::ResidualBlock *res_id = problem.AddResidualBlock(f, huber_loss_function, PARAM_POSE);
                 res_ids_proj_surf.push_back(res_id);
             }
@@ -397,7 +444,7 @@ public:
             vector<ceres::internal::ResidualBlock *> res_ids_proj_edge;
             for (int j = 0; j < Nedge; j++)
             {
-                Point2PlaneDisFactor *f = new Point2PlaneDisFactor(srcEdgeCoord[j], srcEdgeCoeff[j]);
+                PointToPlaneFactor *f = new PointToPlaneFactor(srcEdgeCoord[j], srcEdgeCoeff[j]);
                 ceres::internal::ResidualBlock *res_id = problem.AddResidualBlock(f, huber_loss_function, PARAM_POSE);
                 res_ids_proj_edge.push_back(res_id);
             }

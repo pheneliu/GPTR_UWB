@@ -11,6 +11,7 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include "sensor_msgs/PointCloud2.h"
+#include "livox_ros_driver/CustomMsg.h"
 
 // Add ikdtree
 #include <ikdTree/ikd_Tree.h>
@@ -25,6 +26,7 @@
 #include "CloudMatcher.hpp"
 #include "utility.h"
 #include "GPLO.hpp"
+#include "SGPLO.hpp"
 
 // Factor for optimization
 #include "factor/PoseAnalyticFactor.h"
@@ -43,6 +45,9 @@ string lidar_bag_file = "";
 
 // Get the lidar topics
 vector<string> pc_topics = {"/lidar_0/points"};
+
+// Get the lidar type
+vector<string> lidar_type = {"ouster"};
 
 // Get the prior map leaf size
 double leaf_size = 0.15;
@@ -435,6 +440,50 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     return T_L0_Li;
 }
 
+void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
+{
+    int Ncloud1 = cloudbuf1.size();
+    int Ncloud2 = cloudbuf2.size();
+
+    int last_cloud2 = 0;
+    for(int cidx1 = 0; cidx1 < Ncloud1; cidx1++)
+    {
+        // Create a cloud
+        cloud21.push_back(CloudXYZITPtr(new CloudXYZIT()));
+
+        const CloudXYZITPtr &cloud1 = cloudbuf1[cidx1];
+        CloudXYZITPtr &cloudx = cloud21.back();
+
+        *cloudx = *cloud1;
+        
+        for(int cidx2 = last_cloud2; cidx2 < Ncloud2; cidx2++)
+        {
+            const CloudXYZITPtr &cloud2 = cloudbuf2[cidx2];
+
+            double t1f = cloud1->points.front().t;
+            double t1b = cloud1->points.back().t;
+            double t2f = cloud2->points.front().t;
+            double t2b = cloud2->points.back().t;
+            
+            if (t2f > t1b)
+                break;
+            
+            if (t2b < t1f)
+                continue;
+
+            // Now there is overlap, extract the points in the cloud1 interval
+            ROS_ASSERT((t2f >= t1f && t2f <= t1b) || (t2b >= t1f && t2b <= t1b));
+            // Insert points to the cloudx
+            for(auto &point : cloud2->points)
+                if(point.t >= t1f && point.t <= t1b)
+                    cloudx->push_back(point);
+            last_cloud2 = cidx2;
+
+            // printf("Cloud2 %d is split. Cloudx of Cloud1 %d now has %d points\n", last_cloud2, cidx1, cloudx->size());
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "cartiber");
@@ -446,14 +495,24 @@ int main(int argc, char **argv)
 
     printf("Lidar calibration started.\n");
 
+    // Spline order
+    nh_ptr->getParam("SPLINE_N", SPLINE_N);
+    nh_ptr->getParam("deltaT", deltaT);
+
+    printf("SPLINE order %d with knot length: %d\n", SPLINE_N, deltaT);
+
     // Get the user define parameters
     nh_ptr->getParam("priormap_file", priormap_file);
     nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
     nh_ptr->getParam("pc_topics", pc_topics);
+    nh_ptr->getParam("lidar_type", lidar_type);
     printf("Get bag at %s and prior map at %s\n", lidar_bag_file.c_str(), priormap_file.c_str());
     printf("Lidar topics: \n");
     for(auto topic : pc_topics)
         cout << topic << endl;
+    printf("Lidar type: \n");
+    for(auto type : lidar_type)
+        cout << type << endl;
 
     // Get the leaf size
     nh_ptr->getParam("leaf_size", leaf_size);
@@ -523,19 +582,28 @@ int main(int argc, char **argv)
     // Load the pointclouds
     for (rosbag::MessageInstance const m : view)
     {
-        sensor_msgs::PointCloud2::ConstPtr pcMsg = m.instantiate<sensor_msgs::PointCloud2>();
-        if (pcMsg != nullptr)
-        {
-            int lidx = pctopicidx[m.getTopic()];
-            
-            CloudOusterPtr cloud_raw(new CloudOuster());
-            pcl::fromROSMsg(*pcMsg, *cloud_raw);
+        sensor_msgs::PointCloud2::ConstPtr pcMsgOuster = m.instantiate<sensor_msgs::PointCloud2>();
+        livox_ros_driver::CustomMsg::ConstPtr pcMsgLivox = m.instantiate<livox_ros_driver::CustomMsg>();
 
-            CloudXYZITPtr cloud(new CloudXYZIT()); cloud->resize(cloud_raw->size());
+        CloudXYZITPtr cloud(new CloudXYZIT());
+        ros::Time stamp;
+        int lidx = pctopicidx[m.getTopic()];
+        int Npoint = 0;
+
+        if (pcMsgOuster != nullptr && lidar_type[lidx] == "ouster")
+        {
+            Npoint = pcMsgOuster->width*pcMsgOuster->height;
+
+            cloud->resize(Npoint);
+            stamp = pcMsgOuster->header.stamp;
+
+            CloudOusterPtr cloud_raw(new CloudOuster());
+            pcl::fromROSMsg(*pcMsgOuster, *cloud_raw);
+
             #pragma omp parallel for num_threads(MAX_THREADS)
-            for(int pidx = 0; pidx < cloud_raw->size(); pidx++)
+            for(int pidx = 0; pidx < Npoint; pidx++)
             {
-                double pt0 = pcMsg->header.stamp.toSec();
+                double pt0 = pcMsgOuster->header.stamp.toSec();
                 PointOuster &pi = cloud_raw->points[pidx];
                 PointXYZIT &po = cloud->points[pidx];
                 po.x = pi.x;
@@ -544,18 +612,41 @@ int main(int argc, char **argv)
                 po.intensity = pi.intensity;
                 po.t = pt0 + pi.t/1.0e9;
             }
+        }
+        else if (pcMsgLivox != nullptr && lidar_type[lidx] == "livox")
+        {
+            Npoint = pcMsgLivox->point_num;
 
+            cloud->resize(Npoint);
+            stamp = pcMsgLivox->header.stamp;
+
+            #pragma omp parallel for num_threads(MAX_THREADS)
+            for(int pidx = 0; pidx < Npoint; pidx++)
+            {
+                double pt0 = pcMsgLivox->header.stamp.toSec();
+                const livox_ros_driver::CustomPoint &pi = pcMsgLivox->points[pidx];
+                PointXYZIT &po = cloud->points[pidx];
+                po.x = pi.x;
+                po.y = pi.y;
+                po.z = pi.z;
+                po.intensity = pi.reflectivity/255.0*1000;
+                po.t = pt0 + pi.offset_time/1.0e9;
+            }
+        }
+
+        if (cloud->size() != 0)
+        {
             clouds[lidx].push_back(cloud);
-            cloudstamp[lidx].push_back(pcMsg->header.stamp);
+            cloudstamp[lidx].push_back(stamp);
 
-            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %d. Cloud size: %d / %d\r",
+            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %d. Cloud size: %d / %d. Topic: %s.\r",
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,
-                    clouds[lidx].size(), clouds[lidx].back()->size(), cloud_raw->size());
+                    clouds[lidx].size(), clouds[lidx].back()->size(), Npoint, pc_topics[lidx].c_str());
             cout << endl;
 
-            // // Confirm the time correctness
+            // Confirm the time correctness
             ROS_ASSERT_MSG(cloudstamp[lidx].back().toSec() == clouds[lidx].back()->points.front().t,
                            "Time: %f, %f.",
                            cloudstamp[lidx].back().toSec(), clouds[lidx].back()->points.front().t);
@@ -623,15 +714,20 @@ int main(int argc, char **argv)
         if (tsample.back() >= tmaxcut)
             tsample.pop_back();
         else
-            break;    
+            break;
+
+    printf("Sample time: %f -> %f. %f, %f, %f, %f\n",
+            tsample.front(), tsample.back(),
+            cloudstamp.front().front().toSec(), cloudstamp.front().back().toSec(),
+            cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
 
     // Now got all trajectories, fit a spline to these trajectories and sample them
     vector<PoseSplinePtr> traj(Nlidar);
     vector<CloudPosePtr> poseSampled(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
-        traj[lidx] = PoseSplinePtr(new PoseSplineX(SPLINE_N, 0.1));
-        traj[lidx]->setStartTime(clouds[lidx].front()->points.back().t);
+        traj[lidx] = PoseSplinePtr(new PoseSplineX(SPLINE_N, deltaT));
+        traj[lidx]->setStartTime(clouds[lidx].front()->points.front().t);
         traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t, SE3d());
         
         int Ncloud = clouds[lidx].size();
@@ -651,7 +747,7 @@ int main(int argc, char **argv)
         }
         
         // Fit the spline
-        fitspline(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+        string report = fitspline(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
 
         // Sample the spline by the synchronized sampling time
         poseSampled[lidx] = CloudPosePtr(new CloudPose());
@@ -660,17 +756,40 @@ int main(int argc, char **argv)
             myTf tf_W_B(traj[lidx]->pose(t));
             poseSampled[lidx]->points.push_back(tf_W_B.Pose6D(t));
         }
-        printf("Lidar %d trajectory sampled at %d points\n", lidx, poseSampled[lidx]->size());
+    }
+
+    // Export the sampling time for checking
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        poseSampled[lidx]->width = 1;
+        poseSampled[lidx]->height = poseSampled[lidx]->size();
+        printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d\n", lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size());
+        pcl::io::savePCDFileASCII (myprintf("/home/tmn/ros_ws/dev_ws/src/cartiber/log/sampled_%d.pcd", lidx), *poseSampled[lidx]);
     }
     
-    // Optimize the extrinsics
+    // Optimize the extrinsics for initial condition
+    vector<SE3d> T_L0_Li(Nlidar, SE3d());
     for(int lidx = 1; lidx < Nlidar; lidx++)
     {
         myTf tf_L0_L = optimizeExtrinsics(poseSampled[0], poseSampled[lidx]);
         printf("T_L0_L%d: XYZ: %f, %f, %f, YPR: %f, %f, %f\n",
                 lidx, tf_L0_L.pos(0), tf_L0_L.pos(1),  tf_L0_L.pos(2),
                       tf_L0_L.yaw(),  tf_L0_L.pitch(), tf_L0_L.roll());
+        
+        // Import the estimte
+        T_L0_Li[lidx] = tf_L0_L.getSE3();
     }
+
+    // Merge the pointcloud by time.
+    vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
+    for(int lidx = 1; lidx < Nlidar; lidx++)
+    {
+        printf("Split cloud %d\n", lidx);
+        syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
+    }
+
+    // Find the trajectory with joint factors
+    SGPLO sgplo(nh_ptr, traj, T_L0_Li);
 
     ros::Rate rate(1);
     while(ros::ok())
@@ -687,16 +806,6 @@ int main(int argc, char **argv)
 
         for(int lidx = 0; lidx < Nlidar; lidx++)
             Util::publishCloud(splineSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
-
-        // for(int lidx = 0; lidx < Nlidar; lidx++)
-        // {
-        //     CloudXYZIPtr temp(new CloudXYZI());
-        //     pcl::transformPointCloud(*pc0[lidx], *temp, tf_W_Li0[lidx].cast<float>().tfMat());
-        //     Util::publishCloud(scanInWPub[lidx], *temp, currTime, "world");
-
-        //     // Pose prior calculated from iekf
-        //     Util::publishCloud(pppub[lidx], *poseprior[lidx], currTime, "world");
-        // }
 
         // Sleep
         rate.sleep();

@@ -328,82 +328,23 @@ public:
                     continue;
                 }
 
-                // Calculating the coefficients
-                MatrixXd mat_A0(knnSize, 3);
-                MatrixXd mat_B0(knnSize, 1);
-                Vector3d mat_X0;
-                Matrix3d mat_A1;
-                MatrixXd mat_D1(1, 3);
-                Matrix3d mat_V1;
-
-                mat_A0.setZero();
-                mat_B0.setConstant(-1);
-                mat_X0.setZero();
-
-                mat_A1.setZero();
-                mat_D1.setZero();
-                mat_V1.setZero();
-
                 vector<int> knn_idx(knnSize, 0); vector<float> knn_sq_dis(knnSize, 0);
                 kdtreeMap->nearestKSearch(pointInW, knnSize, knn_idx, knn_sq_dis);
 
+                vector<PointXYZI> nbrPoints;
                 if (knn_sq_dis.back() < minKnnSqDis)
+                    for(auto &idx : knn_idx)
+                        nbrPoints.push_back(priormap->points[idx]);
+                else
+                    continue;
+                    
+                // Fit the plane
+                if(Util::fitPlane(nbrPoints, 0.5, 0.2, Coef_[pidx].n, Coef_[pidx].plnrty))
                 {
-                    // printf(KGRN "Pidx: %d. Nbr: %d\n" RESET, pidx, knn_idx.size());
-
-                    for (int j = 0; j < knn_idx.size(); j++)
-                    {
-                        mat_A0(j, 0) = priormap->points[knn_idx[j]].x;
-                        mat_A0(j, 1) = priormap->points[knn_idx[j]].y;
-                        mat_A0(j, 2) = priormap->points[knn_idx[j]].z;
-                    }
-                    mat_X0 = mat_A0.colPivHouseholderQr().solve(mat_B0);
-
-                    float pa = mat_X0(0, 0);
-                    float pb = mat_X0(1, 0);
-                    float pc = mat_X0(2, 0);
-                    float pd = 1;
-
-                    float ps = sqrt(pa * pa + pb * pb + pc * pc);
-                    pa /= ps; pb /= ps; pc /= ps; pd /= ps;
-
-                    // NOTE: plane as (x y z)*w+1 = 0
-
-                    bool valid_plane = true;
-                    for (int j = 0; j < knn_idx.size(); j++)
-                    {
-                        double d2p = pa * priormap->points[knn_idx[j]].x +
-                                     pb * priormap->points[knn_idx[j]].y +
-                                     pc * priormap->points[knn_idx[j]].z + pd;
-
-                        if (fabs(d2p) > minKnnNbrDis)
-                        {
-                            valid_plane = false;
-                            break;
-                        }
-                    }
-
-                    if (valid_plane)
-                    {
-                        float d2p = pa * pointInB.x + pb * pointInB.y + pc * pointInB.z + pd;
-
-                        // Weightage based on close the point is to the plane ?
-                        float score = 1;//(1 - 0.9f * fabs(d2p) / Util::pointDistance(pointInB));
-
-                        if (score > 0)
-                        {
-                            Coef_[pidx].t      = 0;
-                            Coef_[pidx].finW   = Vector3d(pointInW.x, pointInW.y, pointInW.z);
-                            Coef_[pidx].fdsk   = Vector3d(pointInB.x, pointInB.y, pointInB.z);
-                            Coef_[pidx].n      = Vector4d(pa, pb, pc, pd);
-                            Coef_[pidx].plnrty = score;
-
-                            // printf("Pidx %d admitted. Score: %f.\n", pidx, score);
-                        }
-                    }
+                    Coef_[pidx].t = 0;
+                    Coef_[pidx].finW = Vector3d(pointInW.x, pointInW.y, pointInW.z);
+                    Coef_[pidx].fdsk = Vector3d(pointInB.x, pointInB.y, pointInB.z);
                 }
-                // else
-                //     printf(KRED "Pidx: %d. Nbr: %d\n" RESET, pidx, knn_idx.size());
             }
             
             // Copy the coefficients to the buffer
