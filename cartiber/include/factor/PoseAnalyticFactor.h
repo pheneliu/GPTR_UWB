@@ -5,9 +5,6 @@
 #include "basalt/utils/sophus_utils.hpp"
 #include "utility.h"
 
-using SO3d = Sophus::SO3<double>;
-using SE3d = Sophus::SE3<double>;
-
 class PoseAnalyticFactor : public ceres::CostFunction
 {
 public:

@@ -31,6 +31,7 @@
 // Factor for optimization
 #include "factor/PoseAnalyticFactor.h"
 #include "factor/ExtrinsicFactor.h"
+#include "factor/ExtrinsicPoseFactor.h"
 
 using namespace std;
 
@@ -42,6 +43,9 @@ string priormap_file = "";
 
 // Get the lidar bag file
 string lidar_bag_file = "";
+
+// Number of clouds to work with
+int MAX_CLOUDS = -1;
 
 // Get the lidar topics
 vector<string> pc_topics = {"/lidar_0/points"};
@@ -499,20 +503,26 @@ int main(int argc, char **argv)
     nh_ptr->getParam("SPLINE_N", SPLINE_N);
     nh_ptr->getParam("deltaT", deltaT);
 
-    printf("SPLINE order %d with knot length: %d\n", SPLINE_N, deltaT);
+    printf("SPLINE order %d with knot length: %f\n", SPLINE_N, deltaT);
 
     // Get the user define parameters
     nh_ptr->getParam("priormap_file", priormap_file);
     nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
-    nh_ptr->getParam("pc_topics", pc_topics);
+    nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
+    nh_ptr->getParam("pc_topics",  pc_topics);
     nh_ptr->getParam("lidar_type", lidar_type);
+    
     printf("Get bag at %s and prior map at %s\n", lidar_bag_file.c_str(), priormap_file.c_str());
+    printf("MAX_CLOUDS: %d\n", MAX_CLOUDS);
+
     printf("Lidar topics: \n");
     for(auto topic : pc_topics)
         cout << topic << endl;
+    
     printf("Lidar type: \n");
     for(auto type : lidar_type)
         cout << type << endl;
+
 
     // Get the leaf size
     nh_ptr->getParam("leaf_size", leaf_size);
@@ -651,6 +661,9 @@ int main(int argc, char **argv)
                            "Time: %f, %f.",
                            cloudstamp[lidx].back().toSec(), clouds[lidx].back()->points.front().t);
         }
+
+        if (MAX_CLOUDS > 0 && clouds.front().size() >= MAX_CLOUDS)
+            break;
     }
 
     vector<myTf<double>> tf_W_Li0(Nlidar);
@@ -790,6 +803,9 @@ int main(int argc, char **argv)
 
     // Find the trajectory with joint factors
     SGPLO sgplo(nh_ptr, traj, T_L0_Li);
+
+    // Find the trajectories
+    sgplo.FindTraj(kdTreeMap, priormap, clouds);
 
     ros::Rate rate(1);
     while(ros::ok())

@@ -5,8 +5,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar01
+        - /Lidar01/SWOpt01
         - /Lidar11
-      Splitter Ratio: 0.6676470637321472
+      Splitter Ratio: 0.5411764979362488
     Tree Height: 746
   - Class: rviz/Selection
     Name: Selection
@@ -214,9 +215,37 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.05000000074505806
           Style: Boxes
           Topic: /lidar_0/spline_sample
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 252; 175; 62
+          Color Transformer: FlatColor
+          Decay Time: 60
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Min Color: 0; 0; 0
+          Name: SWOpt0
+          Position Transformer: XYZ
+          Queue Size: 0
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.05000000074505806
+          Style: Flat Squares
+          Topic: /lidar_0/sw_opt
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -265,7 +294,7 @@ Visualization Manager:
           Color: 0; 255; 32
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -280,7 +309,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -349,7 +378,7 @@ Visualization Manager:
           Color: 0; 255; 32
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -358,9 +387,37 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.05000000074505806
           Style: Boxes
           Topic: /lidar_1/spline_sample
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: false
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 115; 210; 22
+          Color Transformer: FlatColor
+          Decay Time: 60
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Min Color: 0; 0; 0
+          Name: SWOpt1
+          Position Transformer: XYZ
+          Queue Size: 0
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.05000000074505806
+          Style: Flat Squares
+          Topic: /lidar_1/sw_opt
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -395,7 +452,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 12.21755313873291
+      Distance: 8.975544929504395
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -403,17 +460,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.16205698251724243
-        Y: 0.4672505855560303
-        Z: -2.000002861022949
+        X: 0.13026678562164307
+        Y: 1.4203068017959595
+        Z: -2.000001907348633
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8547974228858948
+      Pitch: 1.3697967529296875
       Target Frame: body
-      Yaw: 0.26406458020210266
+      Yaw: 1.5790621042251587
     Saved: ~
 Window Geometry:
   Displays:
