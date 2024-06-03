@@ -4,10 +4,15 @@
 
 #include "factor/PoseAnalyticFactor.h"
 #include "factor/GaussianPriorFactor.h"
-#include "factor/PointToPlaneAnalyticFactor.hpp"
+#include "factor/PoseGPFactor.h"
+#include "factor/PointToPlaneGPFactor.hpp"
+
+#include "GaussianProcess.hpp"
 
 using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
-using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
+// using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
+typedef std::shared_ptr<GPLO> GPLOPtr;
+typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 class SGPLO
 {
@@ -22,7 +27,7 @@ private:
     vector<SE3d> T_L0_Li;
 
     // Spline to model the trajectory of each lidar
-    vector<PoseSplinePtr> traj;
+    vector<GaussianProcessPtr> traj;
 
     // Associate params
     int knnSize = 6;
@@ -34,6 +39,9 @@ private:
 
     int SPLINE_N = 4;
     double deltaT = 0.1;
+
+    int DK = 1;
+    double tshift = 0.05;
 
     double wR = 10;
     double wP = 10;
@@ -50,7 +58,7 @@ public:
     // Destructor
    ~SGPLO() {};
 
-    SGPLO(NodeHandlePtr &nh_ptr_, vector<PoseSplinePtr> &traj_, vector<SE3d> &T_L0_Li_)
+    SGPLO(NodeHandlePtr &nh_ptr_, vector<GaussianProcessPtr> &traj_, vector<SE3d> &T_L0_Li_)
         : nh_ptr(nh_ptr_), traj(traj_), T_L0_Li(T_L0_Li_)
     {
         // Trajectory estimate
@@ -64,10 +72,14 @@ public:
         nh_ptr->getParam("fixed_start", fixed_start);
         nh_ptr->getParam("fixed_end", fixed_end);
 
+        nh_ptr->getParam("DK", DK);
+        nh_ptr->getParam("tshift", tshift);
+
         nh_ptr->getParam("wR", wR);
         nh_ptr->getParam("wP", wP);
 
-        printf("Window size: %d. Fixes: <%f, >%f. Weight: %f, %f\n", WINDOW_SIZE, fixed_start, fixed_end, wR, wP);
+        printf("Window size: %d. Fixes: <%f, >%f. GPinvt: %f, %d. Weight: %f, %f.\n",
+                WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, wR, wP);
     }
 
     void Associate(const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
@@ -136,7 +148,7 @@ public:
         }
     }
 
-    void Deskew(PoseSplinePtr &traj, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudDeskewedInB)
+    void Deskew(GaussianProcessPtr &traj, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudDeskewedInB)
     {
         int Npoints = cloudRaw->size();
         cloudDeskewedInB->resize(Npoints);
@@ -164,7 +176,7 @@ public:
     }
 
     void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options, ceres::Solver::Summary &summary,
-                            vector<PoseSplinePtr> &localTraj, double fixed_start, double fixed_end)
+                            vector<GaussianProcessPtr> &localTraj, double fixed_start, double fixed_end)
     {
         int Nlidar = traj.size();
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
@@ -174,21 +186,23 @@ public:
         ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
         for (int lidx = 0; lidx < Nlidar; lidx++)
         {
-            int KNOTS = localTraj[lidx]->numKnots();
+            int KNOTS = localTraj[lidx]->getNumKnots();
             
             // Add the parameter blocks for rotation
             for (int kidx = 0; kidx < KNOTS; kidx++)
+            {
                 problem.AddParameterBlock(localTraj[lidx]->getKnotSO3(kidx).data(), 4, local_parameterization);
-
-            // Add the parameter blocks for position
-            for (int kidx = 0; kidx < KNOTS; kidx++)
+                problem.AddParameterBlock(localTraj[lidx]->getKnotOmg(kidx).data(), 3);
                 problem.AddParameterBlock(localTraj[lidx]->getKnotPos(kidx).data(), 3);
+                problem.AddParameterBlock(localTraj[lidx]->getKnotVel(kidx).data(), 3);
+                problem.AddParameterBlock(localTraj[lidx]->getKnotAcc(kidx).data(), 3);                
+            }
 
             // Fix the knots
             if (fixed_start >= 0)
                 for (int kidx = 0; kidx < KNOTS; kidx++)
                 {
-                    if (localTraj[lidx]->getKnotTime(kidx) <= localTraj[lidx]->minTime() + fixed_start)
+                    if (localTraj[lidx]->getKnotTime(kidx) <= localTraj[lidx]->getMinTime() + fixed_start)
                     {
                         problem.SetParameterBlockConstant(localTraj[lidx]->getKnotSO3(kidx).data());
                         problem.SetParameterBlockConstant(localTraj[lidx]->getKnotPos(kidx).data());
@@ -199,7 +213,7 @@ public:
             {
                 for (int kidx = 0; kidx < KNOTS; kidx++)
                 {
-                    if (localTraj[lidx]->getKnotTime(kidx) >= localTraj[lidx]->maxTime() - fixed_end)
+                    if (localTraj[lidx]->getKnotTime(kidx) >= localTraj[lidx]->getMaxTime() - fixed_end)
                     {
                         problem.SetParameterBlockConstant(localTraj[lidx]->getKnotSO3(KNOTS - 1 - kidx).data());
                         problem.SetParameterBlockConstant(localTraj[lidx]->getKnotPos(KNOTS - 1 - kidx).data());
@@ -209,12 +223,12 @@ public:
         }
     }
 
-    bool TimeInInterval(PoseSplinePtr &traj, double t, double eps = 0)
-    {
-        return (t >= traj->minTime() + eps && t <= traj->maxTime() - eps);
-    }
+    // bool TimeInInterval(GaussianProcessPtr &traj, double t, double eps = 0)
+    // {
+    //     return (t >= traj->getMinTime() + eps && t <= traj->getMaxTime() - eps);
+    // }
 
-    void AddLidarFactors(vector<LidarCoef> &coef, PoseSplinePtr &traj, ceres::Problem &problem,
+    void AddLidarFactors(vector<LidarCoef> &coef, GaussianProcessPtr &traj, ceres::Problem &problem,
                          vector<ceres::internal::ResidualBlock *> &res_ids_lidar)
     {
         // map<int, int> coupled_knots;
@@ -226,99 +240,100 @@ public:
             if (coef.t < 0)
                 continue;
 
-            if (!TimeInInterval(traj, coef.t, 1e-6))
+            if (!traj->TimeInInterval(coef.t, 1e-6))
                 continue;
 
             skip++;
             if (skip % lidar_ds_rate != 0)
                 continue;
             
-            auto us = traj->computeTIndex(coef.t);
-            int base_knot = us.second;
-            double s = us.first;
+            auto   us = traj->computeTimeIndex(coef.t);
+            int    u  = us.first;
+            double s  = us.second;
 
             vector<double *> factor_param_blocks;
 
             // Add the parameter blocks for rotation
-            for (int knot_idx = base_knot; knot_idx < base_knot + SPLINE_N; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotSO3(knot_idx).data());
-
-            // Add the parameter blocks for position
-            for (int knot_idx = base_knot; knot_idx < base_knot + SPLINE_N; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotPos(knot_idx).data());
+            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+            }
 
             ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-            ceres::CostFunction *cost_function = new PointToPlaneAnalyticFactor(coef.finW, coef.f, coef.n, coef.plnrty, SPLINE_N, traj->getDt(), s);
+            ceres::CostFunction *cost_function = new PointToPlaneGPFactor(coef.finW, coef.f, coef.n, coef.plnrty, traj->getDt(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
             res_ids_lidar.push_back(res);
         }
     }
 
-    void AddPosePriorFactors(PoseSplinePtr &traj, ceres::Problem &problem,
+    void AddPosePriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
                              vector<ceres::internal::ResidualBlock *> &res_ids_pose)
     {
         ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
 
         // Add the pose factors with priors sampled from previous spline
-        for (double t = traj->minTime(); t < traj->maxTime(); t+=0.05)
+        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=0.05)
         {
             // Continue if sample is in the window
-            if (!TimeInInterval(traj, t, 1e-6))
+            if (!traj->TimeInInterval(t, 1e-6))
                 continue;
 
-            auto   us = traj->computeTIndex(t);
-            int    base_knot = us.second;
-            double s = us.first;
+            auto  us = traj->computeTimeIndex(t);
+            int    u = us.first;
+            double s = us.second;
 
             vector<double *> factor_param_blocks;
-
             // Find the coupled poses
-            for (int knot_idx = base_knot; knot_idx < base_knot + SPLINE_N; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotSO3(knot_idx).data());
+            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+            }
 
-            for (int knot_idx = base_knot; knot_idx < base_knot + SPLINE_N; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotPos(knot_idx).data());
-
-            ceres::CostFunction *cost_function = new PoseAnalyticFactor(traj->pose(t), 10.0, 10.0, SPLINE_N, traj->getDt(), s);
+            ceres::CostFunction *cost_function = new PoseGPFactor(traj->pose(t), 10.0, 10.0, traj->getDt(), s);
             auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
             res_ids_pose.push_back(res_block);
         }
     }
 
-    void AddExtrinsicPoseFactors(PoseSplinePtr &traj, ceres::Problem &problem,
+    void AddExtrinsicPoseFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
                                  vector<ceres::internal::ResidualBlock *> &res_ids_lidar)
     {
         // Add the extrinsic factors at fix intervals
-        for (double t = traj->minTime(); t < traj->maxTime() - 0.05; t += 0.05)
+        for (double t = traj->getMinTime(); t < traj->getMaxTime() - 0.05; t += 0.05)
         {
             
         }
     }
 
-    void AddGaussianPriorFactors(PoseSplinePtr &traj, ceres::Problem &problem,
+    void AddGaussianPriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
                                  vector<ceres::internal::ResidualBlock *> &res_ids_gp)
     {
-        int DK = 1;
-        double tshift = 0.5*(traj->getDt());
-
         // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->numKnots() - DK; kidx++)
+        for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
         {
 
             double ta = traj->getKnotTime(kidx) + tshift;
             double tb = traj->getKnotTime(kidx + DK) + tshift;
 
-            if (!TimeInInterval(traj, ta, 1e-6) || !TimeInInterval(traj, tb, 1e-6))
+            if (!traj->TimeInInterval(ta, 1e-6) || !traj->TimeInInterval(tb, 1e-6))
                 continue;
 
             // Find the coupled control points
-            auto   usa   = traj->computeTIndex(ta);
-            int    basea = usa.second;
-            double sa    = usa.first;
+            auto   usa   = traj->computeTimeIndex(ta);
+            int    basea = usa.first;
+            double sa    = usa.second;
 
-            auto   usb   = traj->computeTIndex(tb);
-            int    baseb = usb.second;
-            double sb    = usb.first;
+            auto   usb   = traj->computeTimeIndex(tb);
+            int    baseb = usb.first;
+            double sb    = usb.second;
 
             // Confirm that basea and baseb are DK knots apart
             ROS_ASSERT(baseb - basea == DK);
@@ -405,26 +420,25 @@ public:
             // Step 2: Build the optimization problem
 
             // Step 2.1: Copy the knots to the local trajectories
-            vector<PoseSplinePtr> localTraj(Nlidar);
+            vector<GaussianProcessPtr> localTraj(Nlidar);
             for (int lidx = 0; lidx < Nlidar; lidx++)
             {
-                double tmin = max(traj[lidx]->minTime(), swClouds[lidx].front()->points.front().t);
-                double tmax = min(traj[lidx]->maxTime(), swClouds[lidx].back()->points.back().t);
+                int    umin = traj[lidx]->computeTimeIndex(max(traj[lidx]->getMinTime(), swClouds[lidx].front()->points.front().t)).first;                
+                double tmin = traj[lidx]->getKnotTime(umin);
+                double tmax = min(traj[lidx]->getMaxTime(), swClouds[lidx].back()->points.back().t);
 
                 // Find the knots related to this trajectory
-                localTraj[lidx] = PoseSplinePtr(new PoseSplineX(SPLINE_N, deltaT));
+                localTraj[lidx] = GaussianProcessPtr(new GaussianProcess(deltaT));
                 localTraj[lidx]->setStartTime(tmin);
-                localTraj[lidx]->extendKnotsTo(tmax, SE3d());
+                localTraj[lidx]->extendKnotsTo(tmax);
 
                 // Find the starting knot in traj and copy to localtraj
-                auto us = traj[lidx]->computeTIndex(tmin);
-                int s = us.second;
-                for(int kidx = 0; kidx < localTraj[lidx]->numKnots(); kidx++)
-                    localTraj[lidx]->setKnot(traj[lidx]->getKnot(kidx + s), kidx);
+                for(int kidx = 0; kidx < localTraj[lidx]->getNumKnots(); kidx++)
+                    localTraj[lidx]->setKnot(kidx, traj[lidx]->getKnot(kidx + umin));
             }
 
             // Step 2,2: Create the ceres problem and add the knots to the param list
-            
+
             // Create the ceres problem
             ceres::Problem problem;
             ceres::Solver::Options options;
@@ -432,7 +446,7 @@ public:
 
             // vector<SE3d> pose0(Nlidar);
             // for(int lidx = 0; lidx < Nlidar; lidx++)
-            //     pose0.push_back(localTraj[lidx]->pose((localTraj[lidx]->minTime() + localTraj[lidx]->maxTime())/2));
+            //     pose0.push_back(localTraj[lidx]->pose((localTraj[lidx]->getMinTime() + localTraj[lidx]->maxTime())/2));
 
             // Create the problem
             CreateCeresProblem(problem, options, summary, localTraj, fixed_start, fixed_end);
@@ -450,10 +464,10 @@ public:
             for(int lidx = 0; lidx < Nlidar; lidx++)
                 AddPosePriorFactors(localTraj[lidx], problem, res_ids_pose);
 
-            // Step 2.5: Add gaussian prior factors
-            vector<ceres::internal::ResidualBlock *> res_ids_gp;
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                AddGaussianPriorFactors(localTraj[lidx], problem, res_ids_gp);
+            // // Step 2.5: Add gaussian prior factors
+            // vector<ceres::internal::ResidualBlock *> res_ids_gp;
+            // for(int lidx = 0; lidx < Nlidar; lidx++)
+            //     AddGaussianPriorFactors(localTraj[lidx], problem, res_ids_gp);
 
             // Step 2.6: Add relative extrinsic factors
 
@@ -462,7 +476,7 @@ public:
 
             // vector<SE3d> pose1(Nlidar);
             // for(int lidx = 0; lidx < Nlidar; lidx++)
-            //     pose1.push_back(localTraj[lidx]->pose((localTraj[lidx]->minTime() + localTraj[lidx]->maxTime())/2));
+            //     pose1.push_back(localTraj[lidx]->pose((localTraj[lidx]->getMinTime() + localTraj[lidx]->maxTime())/2));
 
             printf("LO Opt %d: J: %6.3f -> %6.3f. Iter: %d\n",
                     Nlidar,
@@ -471,13 +485,13 @@ public:
             // Step 2.1: Copy the knots back to the global trajectory
             for (int lidx = 0; lidx < Nlidar; lidx++)
             {
-                double tmin = localTraj[lidx]->minTime();
+                double tmin = localTraj[lidx]->getMinTime();
 
                 // Find the starting knot in traj and copy to localtraj
-                auto us = traj[lidx]->computeTIndex(tmin);
+                auto us = traj[lidx]->computeTimeIndex(tmin);
                 int s = us.second;
-                for(int kidx = 0; kidx < localTraj[lidx]->numKnots(); kidx++)
-                    traj[lidx]->setKnot(localTraj[lidx]->getKnot(kidx), kidx + s);
+                for(int kidx = 0; kidx < localTraj[lidx]->getNumKnots(); kidx++)
+                    traj[lidx]->setKnot(kidx + s, localTraj[lidx]->getKnot(kidx));
             }
 
             // Step N: Visualize
@@ -487,7 +501,7 @@ public:
             if (swTrajPub.size() == 0)
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                     swTrajPub.push_back(nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", lidx), 1));
-            
+
             // Sample and publish
             for(int lidx = 0; lidx < Nlidar; lidx++)
             {
@@ -497,11 +511,12 @@ public:
                     double tb = swClouds[lidx][swIdx]->front().t;
                     double te = swClouds[lidx][swIdx]->back().t;
                     for(double ts = tb; ts < te; ts += 0.02)
-                        if(TimeInInterval(localTraj[lidx], ts))
+                        if(localTraj[lidx]->TimeInInterval(ts))
                             poseSampled->points.push_back(myTf(localTraj[lidx]->pose(ts)).Pose6D(ts));
                 }
                 Util::publishCloud(swTrajPub[lidx], *poseSampled, ros::Time::now(), "world");
             }
+
         }
     }
 };

@@ -63,14 +63,14 @@ public:
         return *this;
     }
 
-    Matrix3d rightJacobian(const Vector3d &phi) const
+    Matrix3d Jr(const Vector3d &phi) const
     {
         Matrix3d Jr;
         Sophus::rightJacobianSO3(phi, Jr);
         return Jr;
     }
 
-    Matrix3d rightJacobianInvSO3(const Vector3d &phi) const
+    Matrix3d JrInv(const Vector3d &phi) const
     {
         Matrix3d Jr;
         Sophus::rightJacobianInvSO3(phi, Jr);
@@ -125,7 +125,7 @@ public:
 
         // Populate the blocks with calculations
         dQdR = dQ.matrix().transpose();
-        dQdW = rightJacobian(dA)*dt;
+        dQdW = Jr(dA)*dt;
 
         dPdP = Matrix3d::Identity();
         dPdV = Matrix3d::Identity()*dt;
@@ -188,7 +188,7 @@ public:
         r << Phi, Pos - Xbar.Pos, Vel - Xbar.Vel, Omg - Xbar.Omg;
         
         J = MatrixNd::Identity();
-        J.block<3, 3>(0, 0) = rightJacobianInvSO3(Phi);
+        J.block<3, 3>(0, 0) = JrInv(Phi);
 
         // MatrixNd W = Eigen::LLT<Eigen::Matrix<double, 6, 6>>(Xbar.Cov.inverse()).matrixL().transpose();
         return r;

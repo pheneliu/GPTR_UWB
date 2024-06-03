@@ -26,12 +26,14 @@
 #include "CloudMatcher.hpp"
 #include "utility.h"
 #include "GPLO.hpp"
+#include "GaussianProcess.hpp"
 #include "SGPLO.hpp"
 
 // Factor for optimization
 #include "factor/PoseAnalyticFactor.h"
 #include "factor/ExtrinsicFactor.h"
 #include "factor/ExtrinsicPoseFactor.h"
+#include "factor/PoseGPFactor.h"
 
 using namespace std;
 
@@ -79,9 +81,10 @@ double UW_NOISE = 10.0;
 double UV_NOISE = 10.0;
 
 // Define the posespline
-using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
+// using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
 // typedef Matrix<double, 12, 12> MatrixNd;
 typedef std::shared_ptr<GPLO> GPLOPtr;
+typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 template <typename PointType>
 typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::PointCloud<PointType>::Ptr &cloudin, double sampling_radius)
@@ -182,82 +185,39 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     // return T_W_Li0;
 }
 
-void deskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplinePtr &traj)
-{
-    int Npoints = cloudin->size();
-    cloudout->resize(Npoints);
+// void deskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplinePtr &traj)
+// {
+//     int Npoints = cloudin->size();
+//     cloudout->resize(Npoints);
     
-    // double t0 = cloudin->points[0].t;
-    // myTf T_W_Bk(traj->pose(t0));
+//     // double t0 = cloudin->points[0].t;
+//     // myTf T_W_Bk(traj->pose(t0));
 
-    #pragma omp parallel for num_threads(MAX_THREADS)
-    for(int pidx = 0; pidx < Npoints; pidx++)
-    {        
-        PointXYZIT &pi = cloudin->points[pidx];
-        PointXYZIT &po = cloudout->points[pidx];
+//     #pragma omp parallel for num_threads(MAX_THREADS)
+//     for(int pidx = 0; pidx < Npoints; pidx++)
+//     {        
+//         PointXYZIT &pi = cloudin->points[pidx];
+//         PointXYZIT &po = cloudout->points[pidx];
         
-        double ts = pi.t;
-        myTf T_W_Bs = traj->pose(ts);
+//         double ts = pi.t;
+//         myTf T_W_Bs = traj->pose(ts);
 
-        Vector3d pi_inBs(pi.x, pi.y, pi.z);
-        Vector3d pi_inW = T_W_Bs.rot*pi_inBs + T_W_Bs.pos;
+//         Vector3d pi_inBs(pi.x, pi.y, pi.z);
+//         Vector3d pi_inW = T_W_Bs.rot*pi_inBs + T_W_Bs.pos;
 
-        po.x = pi_inW.x();
-        po.y = pi_inW.y();
-        po.z = pi_inW.z();
-        po.t = pi.t;
-        po.intensity = pi.intensity;
-    }
-}
-
-void trajectoryEstimate(const CloudXYZIPtr &priormap, const ikdtreePtr &ikdtPM,
-                        const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp,
-                        const myTf<double> &tf_W_L0, int lidx, mutex &nh_mtx)
-{
-    // // Calculate the trajectory by sim  ple iekf first, before refining with spline
-    // StateWithCov Xhat0(cloudstamp.front().toSec(), tf_W_L0.rot, tf_W_L0.pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-    // GPLO gplo(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx);
-    // gplo.FindTraj(kdTreeMap, priormap, clouds, cloudstamp);
-
-    // // Number of clouds
-    // int Ncloud = clouds.size();
-    
-    // // Construct a spline
-    // PoseSplinePtr lidarTraj = nullptr;
-    // lidarTraj = PoseSplinePtr(new PoseSplineX(SPLINE_N, deltaT));
-    // lidarTraj->setStartTime(cloudstamp.front().toSec());
-    // lidarTraj->extendKnotsTo(clouds.back()->points.back().t, tf_W_L0.getSE3());
-
-    // // Extract the pointclouds and fit it to the sliding window
-    // for(int cidx = 0; cidx < Ncloud; cidx+=sw_shift)
-    // {
-    //     int sw_startidx = cidx;
-    //     int sw_finalidx = min(Ncloud, cidx + sw_shift);
-
-    //     // Extract the pointclouds on the sliding window, deskew, then convert them to the world frame
-    //     vector<CloudXYZITPtr> swCloudInW(sw_finalidx - sw_startidx);
-    //     for(int cidx = sw_startidx; cidx < sw_finalidx; cidx++)
-    //     {
-    //         int swcidx = cidx - sw_startidx;
-    //         double tstart = clouds[swcidx]->points.front().t;
-    //         swCloudInW[swcidx] = CloudXYZITPtr(new CloudXYZIT());
-    //         swCloudInW[swcidx]->resize(clouds[cidx]->size());
-
-    //         // Deskew the pointcloud using the spline
-    //         deskewBySpline(clouds[cidx], swCloudInW[swcidx], lidarTraj);
-
-    //         // pcl::transformPointCloud(*clouds[cidx], *swCloudInW[swcidx],
-    //         //                           myTf<double>(lidarTraj->pose(tstart)).cast<float>().tfMat());
-    //     }
-    // }
-}
+//         po.x = pi_inW.x();
+//         po.y = pi_inW.y();
+//         po.z = pi_inW.z();
+//         po.t = pi.t;
+//         po.intensity = pi.intensity;
+//     }
+// }
 
 // Fit the spline with data
-string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
+string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
 {
     // Create spline
-    int KNOTS = traj->numKnots();
-    int N = traj->order();
+    int KNOTS = traj->getNumKnots();
 
     // Ceres problem
     ceres::Problem problem;
@@ -267,18 +227,20 @@ string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd 
     // Set up the ceres problem
     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 10;
+    options.max_num_iterations = 50;
 
     ceres::LossFunction *loss_function = new ceres::CauchyLoss(loss_thres);
     ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
 
     // Add the parameter blocks for rotation
     for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
+    {
         problem.AddParameterBlock(traj->getKnotSO3(knot_idx).data(), 4, local_parameterization);
-
-    // Add the parameter blocks for position
-    for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
+        problem.AddParameterBlock(traj->getKnotOmg(knot_idx).data(), 3);
         problem.AddParameterBlock(traj->getKnotPos(knot_idx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotVel(knot_idx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotAcc(knot_idx).data(), 3);
+    }
 
     double cost_pose_init;
     double cost_pose_final;
@@ -289,29 +251,31 @@ string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd 
         double t = ts[k];
 
         // Continue if sample is in the window
-        if (t < traj->minTime() + 1e-6 && t > traj->maxTime() - 1e-6)
+        if (t < traj->getMinTime() + 1e-6 && t > traj->getMaxTime() - 1e-6)
             continue;
 
-        auto us = traj->computeTIndex(t);
-        double u = us.first;
-        int s = us.second;
+        auto   us = traj->computeTimeIndex(t);
+        int    u  = us.first;
+        double s  = us.second;
 
         Quaternd q(rot(k, 3), rot(k, 0), rot(k, 1), rot(k, 2));
         Vector3d p(pos(k, 0), pos(k, 1), pos(k, 2));
 
-        ceres::CostFunction *cost_function = new PoseAnalyticFactor(SE3d(q, p), wp[k], wr[k], N, traj->getDt(), u);
+        ceres::CostFunction *cost_function = new PoseGPFactor(SE3d(q, p), wp[k], wr[k], traj->getDt(), s);
 
         // Find the coupled poses
         vector<double *> factor_param_blocks;
-        for (int knot_idx = s; knot_idx < s + N; knot_idx++)
-            factor_param_blocks.emplace_back(traj->getKnotSO3(knot_idx).data());
+        for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
+        {
+            factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+            factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+            factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+            factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+            factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+        }
 
-        for (int knot_idx = s; knot_idx < s + N; knot_idx++)
-            factor_param_blocks.emplace_back(traj->getKnotPos(knot_idx).data());
-
-        // // printf("Creating functor: u: %f, s: %d. sample: %d / %d\n", u, s, i, pose_gt.size());
-        // // cost_function->SetNumResiduals(6);
-
+        // printf("Creating functor: u: %f, s: %d. sample: %d / %d\n", u, s, i, pose_gt.size());
+        // cost_function->SetNumResiduals(6);
         auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
         res_ids_pose.push_back(res_block);
     }
@@ -326,8 +290,8 @@ string fitspline(PoseSplinePtr &traj, vector<double> ts, MatrixXd pos, MatrixXd 
     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
 
     string report = myprintf("Spline Fitting. Cost: %f -> %f. Iterations: %d.\n",
-                                cost_pose_init, cost_pose_final, summary.iterations.size());
-
+                             cost_pose_init, cost_pose_final, summary.iterations.size());
+    cout << report << endl;
     return report;
 }
 
@@ -498,6 +462,21 @@ int main(int argc, char **argv)
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
     printf("Lidar calibration started.\n");
+
+    // GaussianProcess gp(0.05);
+    // gp.setStartTime(43.91);
+    // gp.extendKnotsTo(57.1102, StateStamped());
+
+    // printf("gp: %f. %f -> %f. Knots: %d\n", gp.getDt(), gp.getMinTime(), gp.getMaxTime(), gp.getNumKnots());
+
+    // StateStamped Xhat = gp.getStateAt(49.69);
+
+    // cout << "Xhat.t\n" << Xhat.t << endl;
+    // cout << "Xhat.R\n" << Xhat.R.matrix() << endl;
+    // cout << "Xhat.O\n" << Xhat.O << endl;
+    // cout << "Xhat.P\n" << Xhat.P << endl;
+    // cout << "Xhat.V\n" << Xhat.V << endl;
+    // cout << "Xhat.A\n" << Xhat.A << endl;
 
     // Spline order
     nh_ptr->getParam("SPLINE_N", SPLINE_N);
@@ -735,13 +714,13 @@ int main(int argc, char **argv)
             cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
 
     // Now got all trajectories, fit a spline to these trajectories and sample them
-    vector<PoseSplinePtr> traj(Nlidar);
+    vector<GaussianProcessPtr> traj(Nlidar);
     vector<CloudPosePtr> poseSampled(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
-        traj[lidx] = PoseSplinePtr(new PoseSplineX(SPLINE_N, deltaT));
+        traj[lidx] = GaussianProcessPtr(new GaussianProcess(deltaT));
         traj[lidx]->setStartTime(clouds[lidx].front()->points.front().t);
-        traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t, SE3d());
+        traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t);
         
         int Ncloud = clouds[lidx].size();
         vector<double> ts(Ncloud);
@@ -760,14 +739,17 @@ int main(int argc, char **argv)
         }
         
         // Fit the spline
-        string report = fitspline(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+        string report = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
 
         // Sample the spline by the synchronized sampling time
         poseSampled[lidx] = CloudPosePtr(new CloudPose());
-        for(auto t : tsample)
+        for(int tidx = 0; tidx < tsample.size() - 1; tidx++)
         {
-            myTf tf_W_B(traj[lidx]->pose(t));
-            poseSampled[lidx]->points.push_back(tf_W_B.Pose6D(t));
+            double t1 = tsample[tidx];
+            double t2 = (tsample[tidx] + tsample[tidx + 1])/2;
+
+            poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t1)).Pose6D(t1));
+            poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t2)).Pose6D(t2));
         }
     }
 
@@ -801,11 +783,11 @@ int main(int argc, char **argv)
         syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
     }
 
-    // Find the trajectory with joint factors
-    SGPLO sgplo(nh_ptr, traj, T_L0_Li);
+    // // Find the trajectory with joint factors
+    // SGPLO sgplo(nh_ptr, traj, T_L0_Li);
 
-    // Find the trajectories
-    sgplo.FindTraj(kdTreeMap, priormap, clouds);
+    // // Find the trajectories
+    // sgplo.FindTraj(kdTreeMap, priormap, clouds);
 
     ros::Rate rate(1);
     while(ros::ok())

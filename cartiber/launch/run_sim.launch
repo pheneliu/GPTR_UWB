@@ -12,14 +12,14 @@
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"                 value="100"/>
-        <param name="pc_topics"      type="yaml" value="['/lidar_1/points']"/>
-        <param name="lidar_type"     type="yaml" value="['ouster', 'livox']"/>
-        <param name="xyzypr_W_L0"    type="yaml"
-                                     value="[
+        <param name="MAX_CLOUDS"     value="300"/>
+        <param name="pc_topics"      value="['/lidar_1/points']" type="yaml" />
+        <param name="lidar_type"     value="['ouster', 'livox']" type="yaml" />
+        <param name="xyzypr_W_L0"    value="[
                                              0, 0, 0.5, -135, 00, 0,
                                              0, 0, 0.7,  045, 45, 0
-                                            ]" />
+                                            ]"                   type="yaml"/>
+        <!-- EKF params -->
         <param name="leaf_size"      value="0.15" />
         <param name="UW_NOISE"       value="10.0" />
         <param name="UV_NOISE"       value="10.0" />
@@ -28,13 +28,15 @@
         <param name="dXmax"          value="0.1"  />
         
         <param name="SPLINE_N"       value="4"    />
-        <param name="deltaT"         value="0.1"  />
+        <param name="deltaT"         value="0.2" />
 
         <param name="WINDOW_SIZE"    value="10"    />
-        <param name="wR"             value="10.0" />
-        <param name="wP"             value="10.0" />
-        <param name="fixed_start"    value="0.0"  />
-        <param name="fixed_end"      value="0.0"  />
+        <param name="wR"             value="10.0"  />
+        <param name="wP"             value="10.0"  />
+        <param name="DK"             value="1"     />
+        <param name="tshift"         value="0.025" />
+        <param name="fixed_start"    value="0.0"   />
+        <param name="fixed_end"      value="0.0"   />
     </node>
 
     <!-- Visualize -->
