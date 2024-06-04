@@ -27,10 +27,10 @@
         <param name="MAX_ITER"       value="5"    />
         <param name="dXmax"          value="0.1"  />
         
-        <param name="SPLINE_N"       value="4"    />
+        <!-- <param name="SPLINE_N"       value="4"    /> -->
         <param name="deltaT"         value="0.2" />
 
-        <param name="WINDOW_SIZE"    value="10"    />
+        <param name="WINDOW_SIZE"    value="5"    />
         <param name="wR"             value="10.0"  />
         <param name="wP"             value="10.0"  />
         <param name="DK"             value="1"     />

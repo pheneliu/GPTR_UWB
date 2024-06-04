@@ -4,8 +4,9 @@
 
 #include "factor/PoseAnalyticFactor.h"
 #include "factor/GaussianPriorFactor.h"
-#include "factor/PoseGPFactor.h"
-#include "factor/PointToPlaneGPFactor.hpp"
+#include "factor/GPPoseFactor.h"
+#include "factor/GPMotionPriorFactor.h"
+#include "factor/GPPointToPlaneFactor.h"
 
 #include "GaussianProcess.hpp"
 
@@ -49,9 +50,6 @@ private:
     // Time to fix the knot
     double fixed_start = 0.0;
     double fixed_end = 0.0;
-
-    // Param for creating huber loss
-    double lidar_loss_thres = 1.0;
 
 public:
 
@@ -223,16 +221,9 @@ public:
         }
     }
 
-    // bool TimeInInterval(GaussianProcessPtr &traj, double t, double eps = 0)
-    // {
-    //     return (t >= traj->getMinTime() + eps && t <= traj->getMaxTime() - eps);
-    // }
-
     void AddLidarFactors(vector<LidarCoef> &coef, GaussianProcessPtr &traj, ceres::Problem &problem,
                          vector<ceres::internal::ResidualBlock *> &res_ids_lidar)
     {
-        // map<int, int> coupled_knots;
-
         static int skip = -1;
         for (auto &coef : coef)
         {
@@ -262,9 +253,10 @@ public:
                 factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
                 factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
             }
-
+            
+            double lidar_loss_thres = -1.0;
             ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-            ceres::CostFunction *cost_function = new PointToPlaneGPFactor(coef.finW, coef.f, coef.n, coef.plnrty, traj->getDt(), s);
+            ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, coef.plnrty, traj->getDt(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
             res_ids_lidar.push_back(res);
         }
@@ -275,16 +267,17 @@ public:
     {
         ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
 
+        double dt_ = traj->getDt()/7;
         // Add the pose factors with priors sampled from previous spline
-        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=0.05)
+        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
         {
             // Continue if sample is in the window
             if (!traj->TimeInInterval(t, 1e-6))
                 continue;
 
-            auto  us = traj->computeTimeIndex(t);
-            int    u = us.first;
-            double s = us.second;
+            auto   us = traj->computeTimeIndex(t);
+            int    u  = us.first;
+            double s  = us.second;
 
             vector<double *> factor_param_blocks;
             // Find the coupled poses
@@ -297,9 +290,67 @@ public:
                 factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
             }
 
-            ceres::CostFunction *cost_function = new PoseGPFactor(traj->pose(t), 10.0, 10.0, traj->getDt(), s);
+            ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), 100.0, 100.0, traj->getDt(), s);
             auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
             res_ids_pose.push_back(res_block);
+        }
+    }
+
+    void AddMotionPriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
+                               vector<ceres::internal::ResidualBlock *> &res_ids_gp)
+    {
+        // Add the GP factors based on knot difference
+        for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
+        {
+
+            double ts = traj->getKnotTime(kidx) + tshift;
+            double tf = traj->getKnotTime(kidx + DK) + tshift;
+
+            if (!traj->TimeInInterval(ts, 1e-6) || !traj->TimeInInterval(tf, 1e-6))
+                continue;
+
+            // Find the coupled control points
+            auto   uss = traj->computeTimeIndex(ts);
+            int    us  = uss.first;
+            double ss  = uss.second;
+
+            auto   usf = traj->computeTimeIndex(tf);
+            int    uf  = usf.first;
+            double sf  = usf.second;
+
+            // Confirm that basea and baseb are DK knots apart
+            ROS_ASSERT(uf - us == DK && DK > 1);
+
+            vector<double *> factor_param_blocks;
+
+            // Add the parameter blocks
+            for (int knot_idx = us; knot_idx < us + 2; knot_idx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+            }
+
+            for (int knot_idx = uf; knot_idx < uf + 2; knot_idx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+            }
+
+            // Create the factor
+            double gp_loss_thres = -1;
+            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
+            ceres::CostFunction *cost_function = new GPMotionPriorFactor(wR, wP, traj->getDt(), ss, sf, tf - ts);
+
+            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
+            res_ids_gp.push_back(res_block);
+
+            return;
         }
     }
 
@@ -310,53 +361,6 @@ public:
         for (double t = traj->getMinTime(); t < traj->getMaxTime() - 0.05; t += 0.05)
         {
             
-        }
-    }
-
-    void AddGaussianPriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                 vector<ceres::internal::ResidualBlock *> &res_ids_gp)
-    {
-        // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
-        {
-
-            double ta = traj->getKnotTime(kidx) + tshift;
-            double tb = traj->getKnotTime(kidx + DK) + tshift;
-
-            if (!traj->TimeInInterval(ta, 1e-6) || !traj->TimeInInterval(tb, 1e-6))
-                continue;
-
-            // Find the coupled control points
-            auto   usa   = traj->computeTimeIndex(ta);
-            int    basea = usa.first;
-            double sa    = usa.second;
-
-            auto   usb   = traj->computeTimeIndex(tb);
-            int    baseb = usb.first;
-            double sb    = usb.second;
-
-            // Confirm that basea and baseb are DK knots apart
-            ROS_ASSERT(baseb - basea == DK);
-
-            vector<double *> factor_param_blocks;
-
-            // Add the parameter blocks for rotation
-            for (int knot_idx = basea; knot_idx < basea + SPLINE_N + DK; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotSO3(knot_idx).data());
-
-            // Add the parameter blocks for position
-            for (int knot_idx = basea; knot_idx < basea + SPLINE_N + DK; knot_idx++)
-                factor_param_blocks.emplace_back(traj->getKnotPos(knot_idx).data());
-
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-            ceres::CostFunction *cost_function = new GaussianPriorFactor(wR, wP, SPLINE_N, traj->getDt(), sa, sb, tb - ta, DK);
-
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_gp.push_back(res_block);
-
-            return;
         }
     }
 
@@ -464,10 +468,10 @@ public:
             for(int lidx = 0; lidx < Nlidar; lidx++)
                 AddPosePriorFactors(localTraj[lidx], problem, res_ids_pose);
 
-            // // Step 2.5: Add gaussian prior factors
-            // vector<ceres::internal::ResidualBlock *> res_ids_gp;
-            // for(int lidx = 0; lidx < Nlidar; lidx++)
-            //     AddGaussianPriorFactors(localTraj[lidx], problem, res_ids_gp);
+            // Step 2.5: Add motion prior factors
+            vector<ceres::internal::ResidualBlock *> res_ids_gp;
+            for(int lidx = 0; lidx < Nlidar; lidx++)
+                AddMotionPriorFactors(localTraj[lidx], problem, res_ids_gp);
 
             // Step 2.6: Add relative extrinsic factors
 

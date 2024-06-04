@@ -33,7 +33,7 @@
 #include "factor/PoseAnalyticFactor.h"
 #include "factor/ExtrinsicFactor.h"
 #include "factor/ExtrinsicPoseFactor.h"
-#include "factor/PoseGPFactor.h"
+#include "factor/GPPoseFactor.h"
 
 using namespace std;
 
@@ -251,7 +251,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
         double t = ts[k];
 
         // Continue if sample is in the window
-        if (t < traj->getMinTime() + 1e-6 && t > traj->getMaxTime() - 1e-6)
+        if (!traj->TimeInInterval(t, 1e-6))
             continue;
 
         auto   us = traj->computeTimeIndex(t);
@@ -261,7 +261,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
         Quaternd q(rot(k, 3), rot(k, 0), rot(k, 1), rot(k, 2));
         Vector3d p(pos(k, 0), pos(k, 1), pos(k, 2));
 
-        ceres::CostFunction *cost_function = new PoseGPFactor(SE3d(q, p), wp[k], wr[k], traj->getDt(), s);
+        ceres::CostFunction *cost_function = new GPPoseFactor(SE3d(q, p), wp[k], wr[k], traj->getDt(), s);
 
         // Find the coupled poses
         vector<double *> factor_param_blocks;
@@ -289,9 +289,8 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
     // Final cost
     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
 
-    string report = myprintf("Spline Fitting. Cost: %f -> %f. Iterations: %d.\n",
+    string report = myprintf("GP Fitting. Cost: %f -> %f. Iterations: %d.\n",
                              cost_pose_init, cost_pose_final, summary.iterations.size());
-    cout << report << endl;
     return report;
 }
 
@@ -714,6 +713,7 @@ int main(int argc, char **argv)
             cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
 
     // Now got all trajectories, fit a spline to these trajectories and sample them
+    vector<string> report(Nlidar);
     vector<GaussianProcessPtr> traj(Nlidar);
     vector<CloudPosePtr> poseSampled(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -739,7 +739,7 @@ int main(int argc, char **argv)
         }
         
         // Fit the spline
-        string report = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+        report[lidx] = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
 
         // Sample the spline by the synchronized sampling time
         poseSampled[lidx] = CloudPosePtr(new CloudPose());
@@ -758,7 +758,8 @@ int main(int argc, char **argv)
     {
         poseSampled[lidx]->width = 1;
         poseSampled[lidx]->height = poseSampled[lidx]->size();
-        printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d\n", lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size());
+        printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d. %s\n",
+                lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size(), report[lidx].c_str());
         pcl::io::savePCDFileASCII (myprintf("/home/tmn/ros_ws/dev_ws/src/cartiber/log/sampled_%d.pcd", lidx), *poseSampled[lidx]);
     }
     
@@ -783,11 +784,11 @@ int main(int argc, char **argv)
         syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
     }
 
-    // // Find the trajectory with joint factors
-    // SGPLO sgplo(nh_ptr, traj, T_L0_Li);
+    // Find the trajectory with joint factors
+    SGPLO sgplo(nh_ptr, traj, T_L0_Li);
 
-    // // Find the trajectories
-    // sgplo.FindTraj(kdTreeMap, priormap, clouds);
+    // Find the trajectories
+    sgplo.FindTraj(kdTreeMap, priormap, clouds);
 
     ros::Rate rate(1);
     while(ros::ok())
