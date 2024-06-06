@@ -7,9 +7,11 @@
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
 typedef Vector3d Vec3;
+typedef Matrix3d Mat3;
 
 using namespace std;
 using namespace Eigen;
+// using namespace Sophus;
 
 template <typename MatrixType1, typename MatrixType2>
 MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
@@ -22,49 +24,55 @@ MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
     return result;
 }
 
-Matrix3d SO3Jr(const Vector3d &phi)
-{
-    Matrix3d Jr;
-    Sophus::rightJacobianSO3(phi, Jr);
-    return Jr;
-}
+// Mat3 SO3Jr(const Vec3 &phi)
+// {
+//     Mat3 Jr;
+//     Sophus::rightJacobianSO3(phi, Jr);
+//     return Jr;
+// }
 
-Matrix3d SO3JrInv(const Vector3d &phi)
-{
-    Matrix3d Jr_inv;
-    Sophus::rightJacobianInvSO3(phi, Jr_inv);
-    return Jr_inv;
-}
+// Mat3 SO3JrInv(const Vec3 &phi)
+// {
+//     Mat3 Jr_inv;
+//     Sophus::rightJacobianInvSO3(phi, Jr_inv);
+//     return Jr_inv;
+// }
 
 // Define of the states for convenience in initialization and copying
+template <class T = double>
 class StateStamped
 {
+
 public:
 
+    using SO3T  = Sophus::SO3<T>;
+    using Vec3T = Eigen::Matrix<T, 3, 1>;
+    using Mat3T = Eigen::Matrix<T, 3, 3>;
+
     double t;
-    SO3d R;
-    Vec3 O;
-    Vec3 P;
-    Vec3 V;
-    Vec3 A;
+    SO3T  R;
+    Vec3T O;
+    Vec3T P;
+    Vec3T V;
+    Vec3T A;
 
     // Destructor
     ~StateStamped(){};
     
     // Constructor
     StateStamped()
-        : t(0), R(SO3d()), O(Vector3d(0, 0, 0)), P(Vector3d(0, 0, 0)), V(Vector3d(0, 0, 0)), A(Vector3d(0, 0, 0)) {}
+        : t(0), R(SO3T()), O(Vec3T(0, 0, 0)), P(Vec3T(0, 0, 0)), V(Vec3T(0, 0, 0)), A(Vec3T(0, 0, 0)) {}
     
     StateStamped(double t_)
-        : t(t_), R(SO3d()), O(Vector3d(0, 0, 0)), P(Vector3d(0, 0, 0)), V(Vector3d(0, 0, 0)), A(Vector3d(0, 0, 0)) {}
+        : t(t_), R(SO3T()), O(Vec3T()), P(Vec3T()), V(Vec3T()), A(Vec3T()) {}
 
     StateStamped(double t_, SO3d &R_, Vec3 &O_, Vec3 &P_, Vec3 &V_, Vec3 &A_)
-        : t(t_), R(R_), O(O_), P(P_), V(V_), A(A_) {}
+        : t(t_), R(R_.cast<T>()), O(O_.cast<T>()), P(P_.cast<T>()), V(V_.cast<T>()), A(A_.cast<T>()) {}
 
-    StateStamped(const StateStamped &other)
+    StateStamped(const StateStamped<T> &other)
         : t(other.t), R(other.R), O(other.O), P(other.P), V(other.V), A(other.A) {}
 
-    StateStamped(double t_, const StateStamped &other)
+    StateStamped(double t_, const StateStamped<T> &other)
         : t(t_), R(other.R), O(other.O), P(other.P), V(other.V), A(other.A) {}
 
     StateStamped &operator=(const StateStamped &Xother)
@@ -136,123 +144,141 @@ public:
         return TransMat(dtau, N) - PSI(dtau, N)*TransMat(dt, N);
     }
 
-    MatrixXd TransMat_RO(const double dtau)  const { return kron(TransMat(dtau, 2), Matrix3d::Identity()); }
-    MatrixXd GPCov_RO(const double dtau)     const { return kron(GPCov   (dtau, 2), Matrix3d::Identity()); }
-    MatrixXd PSI_RO(const double dtau)       const { return kron(PSI     (dtau, 2), Matrix3d::Identity()); }
-    MatrixXd LAMBDA_RO(const double dtau)    const { return kron(LAMBDA  (dtau, 2), Matrix3d::Identity()); }
+    MatrixXd TransMat_RO(const double dtau)  const { return kron(TransMat(dtau, 2), Mat3::Identity()); }
+    MatrixXd GPCov_RO(const double dtau)     const { return kron(GPCov   (dtau, 2), Mat3::Identity()); }
+    MatrixXd PSI_RO(const double dtau)       const { return kron(PSI     (dtau, 2), Mat3::Identity()); }
+    MatrixXd LAMBDA_RO(const double dtau)    const { return kron(LAMBDA  (dtau, 2), Mat3::Identity()); }
 
-    MatrixXd TransMat_PVA(const double dtau) const { return kron(TransMat(dtau, 3), Matrix3d::Identity()); }
-    MatrixXd GPCov_PVA(const double dtau)    const { return kron(GPCov   (dtau, 3), Matrix3d::Identity()); }
-    MatrixXd PSI_PVA(const double dtau)      const { return kron(PSI     (dtau, 3), Matrix3d::Identity()); }
-    MatrixXd LAMBDA_PVA(const double dtau)   const { return kron(LAMBDA  (dtau, 3), Matrix3d::Identity()); }
+    MatrixXd TransMat_PVA(const double dtau) const { return kron(TransMat(dtau, 3), Mat3::Identity()); }
+    MatrixXd GPCov_PVA(const double dtau)    const { return kron(GPCov   (dtau, 3), Mat3::Identity()); }
+    MatrixXd PSI_PVA(const double dtau)      const { return kron(PSI     (dtau, 3), Mat3::Identity()); }
+    MatrixXd LAMBDA_PVA(const double dtau)   const { return kron(LAMBDA  (dtau, 3), Mat3::Identity()); }
 
-    Matrix3d Jr(const Vector3d &phi) const
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> Jr(const Eigen::Matrix<T, 3, 1> &phi) const
     {
-        Matrix3d Jr;
+        Eigen::Matrix<T, 3, 3> Jr;
         Sophus::rightJacobianSO3(phi, Jr);
         return Jr;
     }
 
-    Matrix3d JrInv(const Vector3d &phi) const
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> JrInv(const Eigen::Matrix<T, 3, 1> &phi) const
     {
-        Matrix3d JrInv;
+        Eigen::Matrix<T, 3, 3> JrInv;
         Sophus::rightJacobianInvSO3(phi, JrInv);
         return JrInv;
     }
 
-    void MapParamToState(double const *const *parameters, int base, StateStamped &X) const
+    template <class T = double>
+    void MapParamToState(T const *const *parameters, int base, StateStamped<T> &X) const
     {
-        X.R = Eigen::Map<SO3d const>(parameters[base + 0]);
-        X.O = Eigen::Map<Vec3 const>(parameters[base + 1]);
-        X.P = Eigen::Map<Vec3 const>(parameters[base + 2]);
-        X.V = Eigen::Map<Vec3 const>(parameters[base + 3]);
-        X.A = Eigen::Map<Vec3 const>(parameters[base + 4]);
+        X.R = Eigen::Map<Sophus::SO3<T> const>(parameters[base + 0]);
+        X.O = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[base + 1]);
+        X.P = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[base + 2]);
+        X.V = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[base + 3]);
+        X.A = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[base + 4]);
     }
 
-    void ComputeXtAndDerivs(const StateStamped &Xa, const StateStamped &Xb, StateStamped &Xt,
-                            vector<vector<Matrix3d>> &DXt_DXa, vector<vector<Matrix3d>> &DXt_DXb) const
+    template <class T = double>
+    void ComputeXtAndDerivs(const StateStamped<T> &Xa, const StateStamped<T> &Xb, StateStamped<T> &Xt,
+                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa, vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb) const
     {
+        using SO3T  = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
         // Map the variables of the state
-        double tau = Xt.t; SO3d &Rt = Xt.R; Vec3 &Ot = Xt.O; Vec3 &Pt = Xt.P; Vec3 &Vt = Xt.V; Vec3 &At = Xt.A;
+        double tau = Xt.t;
+        SO3T   &Rt = Xt.R;
+        Vec3T  &Ot = Xt.O;
+        Vec3T  &Pt = Xt.P;
+        Vec3T  &Vt = Xt.V;
+        Vec3T  &At = Xt.A;
         
         // Calculate the the mixer matrixes
-        MatrixXd LAM_ROt  = LAMBDA_RO(tau);
-        MatrixXd PSI_ROt  = PSI_RO(tau);
-        MatrixXd LAM_PVAt = LAMBDA_PVA(tau);
-        MatrixXd PSI_PVAt = PSI_PVA(tau);
+        Matrix<T, Dynamic, Dynamic> LAM_ROt  = LAMBDA_RO(tau).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_ROt  = PSI_RO(tau).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMBDA_PVA(tau).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI_PVA(tau).cast<T>();
+
+        // cout << "LAMBDA RO :\n" << LAM_ROt << endl;
+        // cout << "PSI RO    :\n" << PSI_ROt << endl;
+        // cout << "LAMBDA PVA:\n" << LAM_PVAt << endl;
+        // cout << "PSI PVA   :\n" << PSI_PVAt << endl;
 
         // Extract the blocks of SO3 states
-        Matrix3d LAM_RO11 = LAM_ROt.block<3, 3>(0, 0);
-        Matrix3d LAM_RO12 = LAM_ROt.block<3, 3>(0, 3);
+        Mat3T LAM_RO11 = LAM_ROt.block(0, 0, 3, 3);
+        Mat3T LAM_RO12 = LAM_ROt.block(0, 3, 3, 3);
 
-        Matrix3d LAM_RO21 = LAM_ROt.block<3, 3>(3, 0);
-        Matrix3d LAM_RO22 = LAM_ROt.block<3, 3>(3, 3);
+        Mat3T LAM_RO21 = LAM_ROt.block(3, 0, 3, 3);
+        Mat3T LAM_RO22 = LAM_ROt.block(3, 3, 3, 3);
 
-        Matrix3d PSI_RO11 = PSI_ROt.block<3, 3>(0, 0);
-        Matrix3d PSI_RO12 = PSI_ROt.block<3, 3>(0, 3);
+        Mat3T PSI_RO11 = PSI_ROt.block(0, 0, 3, 3);
+        Mat3T PSI_RO12 = PSI_ROt.block(0, 3, 3, 3);
 
-        Matrix3d PSI_RO21 = PSI_ROt.block<3, 3>(3, 0);
-        Matrix3d PSI_RO22 = PSI_ROt.block<3, 3>(3, 3);
+        Mat3T PSI_RO21 = PSI_ROt.block(3, 0, 3, 3);
+        Mat3T PSI_RO22 = PSI_ROt.block(3, 3, 3, 3);
 
         // Extract the blocks of R3 states
-        Matrix3d LAM_PVA11 = LAM_PVAt.block<3, 3>(0, 0);
-        Matrix3d LAM_PVA12 = LAM_PVAt.block<3, 3>(0, 3);
-        Matrix3d LAM_PVA13 = LAM_PVAt.block<3, 3>(0, 6);
+        Mat3T LAM_PVA11 = LAM_PVAt.block(0, 0, 3, 3);
+        Mat3T LAM_PVA12 = LAM_PVAt.block(0, 3, 3, 3);
+        Mat3T LAM_PVA13 = LAM_PVAt.block(0, 6, 3, 3);
 
-        Matrix3d LAM_PVA21 = LAM_PVAt.block<3, 3>(3, 0);
-        Matrix3d LAM_PVA22 = LAM_PVAt.block<3, 3>(3, 3);
-        Matrix3d LAM_PVA23 = LAM_PVAt.block<3, 3>(3, 6);
+        Mat3T LAM_PVA21 = LAM_PVAt.block(3, 0, 3, 3);
+        Mat3T LAM_PVA22 = LAM_PVAt.block(3, 3, 3, 3);
+        Mat3T LAM_PVA23 = LAM_PVAt.block(3, 6, 3, 3);
 
-        Matrix3d LAM_PVA31 = LAM_PVAt.block<3, 3>(6, 0);
-        Matrix3d LAM_PVA32 = LAM_PVAt.block<3, 3>(6, 3);
-        Matrix3d LAM_PVA33 = LAM_PVAt.block<3, 3>(6, 6);
+        Mat3T LAM_PVA31 = LAM_PVAt.block(6, 0, 3, 3);
+        Mat3T LAM_PVA32 = LAM_PVAt.block(6, 3, 3, 3);
+        Mat3T LAM_PVA33 = LAM_PVAt.block(6, 6, 3, 3);
 
-        Matrix3d PSI_PVA11 = PSI_PVAt.block<3, 3>(0, 0);
-        Matrix3d PSI_PVA12 = PSI_PVAt.block<3, 3>(0, 3);
-        Matrix3d PSI_PVA13 = PSI_PVAt.block<3, 3>(0, 6);
+        Mat3T PSI_PVA11 = PSI_PVAt.block(0, 0, 3, 3);
+        Mat3T PSI_PVA12 = PSI_PVAt.block(0, 3, 3, 3);
+        Mat3T PSI_PVA13 = PSI_PVAt.block(0, 6, 3, 3);
 
-        Matrix3d PSI_PVA21 = PSI_PVAt.block<3, 3>(3, 0);
-        Matrix3d PSI_PVA22 = PSI_PVAt.block<3, 3>(3, 3);
-        Matrix3d PSI_PVA23 = PSI_PVAt.block<3, 3>(3, 6);
+        Mat3T PSI_PVA21 = PSI_PVAt.block(3, 0, 3, 3);
+        Mat3T PSI_PVA22 = PSI_PVAt.block(3, 3, 3, 3);
+        Mat3T PSI_PVA23 = PSI_PVAt.block(3, 6, 3, 3);
 
-        Matrix3d PSI_PVA31 = PSI_PVAt.block<3, 3>(6, 0);
-        Matrix3d PSI_PVA32 = PSI_PVAt.block<3, 3>(6, 3);
-        Matrix3d PSI_PVA33 = PSI_PVAt.block<3, 3>(6, 6);
+        Mat3T PSI_PVA31 = PSI_PVAt.block(6, 0, 3, 3);
+        Mat3T PSI_PVA32 = PSI_PVAt.block(6, 3, 3, 3);
+        Mat3T PSI_PVA33 = PSI_PVAt.block(6, 6, 3, 3);
 
         // Find the relative rotation 
-        SO3d Rab = Xa.R.inverse()*Xb.R;
+        Sophus::SO3<T> Rab = Xa.R.inverse()*Xb.R;
 
         // Calculate the SO3 knots in relative form
-        Vec3 thetaa    = Vector3d(0, 0, 0);
-        Vec3 thetadota = Xa.O;
-        Vec3 thetab    = Rab.log();
-        Vec3 thetadotb = JrInv(thetab)*Xb.O;
+        Eigen::Matrix<T, 3, 1> thetaa    = Matrix<T, 3, 1>::Zero();
+        Eigen::Matrix<T, 3, 1> thetadota = Xa.O;
+        Eigen::Matrix<T, 3, 1> thetab    = Rab.log();
+        Eigen::Matrix<T, 3, 1> thetadotb = JrInv(thetab)*Xb.O;
         // Put them in vector form
-        Matrix<double, 6, 1> gammaa; gammaa << thetaa, thetadota;
-        Matrix<double, 6, 1> gammab; gammab << thetab, thetadotb;
+        Eigen::Matrix<T, 6, 1> gammaa; gammaa << thetaa, thetadota;
+        Eigen::Matrix<T, 6, 1> gammab; gammab << thetab, thetadotb;
 
         // Calculate the knot euclid states and put them in vector form
-        Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
-        Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
+        Eigen::Matrix<T, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
+        Eigen::Matrix<T, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
 
         // Mix the knots to get the interpolated states
-        Matrix<double, 6, 1> gammat = LAM_ROt*gammaa + PSI_ROt*gammab;
-        Matrix<double, 9, 1> pvat   = LAM_PVAt*pvaa  + PSI_PVAt*pvab;
+        Eigen::Matrix<T, 6, 1> gammat = LAM_ROt*gammaa + PSI_ROt*gammab;
+        Eigen::Matrix<T, 9, 1> pvat   = LAM_PVAt*pvaa  + PSI_PVAt*pvab;
 
         // Retrive the interpolated SO3 in relative form
-        Vector3d thetat    = gammat.block<3, 1>(0, 0);
-        Vector3d thetadott = gammat.block<3, 1>(3, 0);
+        Eigen::Matrix<T, 3, 1> thetat    = gammat.block(0, 0, 3, 1);
+        Eigen::Matrix<T, 3, 1> thetadott = gammat.block(3, 0, 3, 1);
 
         // Assign the interpolated state
-        Rt = Xa.R*SO3d::exp(thetat);
+        Rt = Xa.R*Sophus::SO3<T>::exp(thetat);
         Ot = JrInv(thetat)*thetadott;
-        Pt = pvat.block<3, 1>(0, 0);
-        Vt = pvat.block<3, 1>(3, 0);
-        At = pvat.block<3, 1>(6, 0);
+        Pt = pvat.block(0, 0, 3, 1);
+        Vt = pvat.block(3, 0, 3, 1);
+        At = pvat.block(6, 0, 3, 1);
 
         // Calculate the Jacobian
-        DXt_DXa = vector<vector<Matrix3d>>(5, vector<Matrix3d>(5, Matrix3d::Zero()));
-        DXt_DXb = vector<vector<Matrix3d>>(5, vector<Matrix3d>(5, Matrix3d::Zero()));
+        DXt_DXa = vector<vector<Eigen::Matrix<T, 3, 3>>>(5, vector<Eigen::Matrix<T, 3, 3>>(5, Eigen::Matrix<T, 3, 3>::Zero()));
+        DXt_DXb = vector<vector<Eigen::Matrix<T, 3, 3>>>(5, vector<Eigen::Matrix<T, 3, 3>>(5, Eigen::Matrix<T, 3, 3>::Zero()));
 
         // Local index for the states in the state vector
         const int RIDX = 0;
@@ -260,20 +286,33 @@ public:
         const int PIDX = 2;
         const int VIDX = 3;
         const int AIDX = 4;
+
+        // Intermediaries to be reused
+
+        Eigen::Matrix<T, 3, 3> Jrthetat = Jr(thetat);
+        Eigen::Matrix<T, 3, 3> JrInvthetab = JrInv(thetab);
+
+        Eigen::Matrix<T, 3, 3> Dthetat_Dthetab = (PSI_RO11 - 0.5*PSI_RO12*Sophus::SO3<T>::hat(Xb.O));
+        Eigen::Matrix<T, 3, 3> Dthetadott_Dthetab = (PSI_RO21 - 0.5*PSI_RO22*Sophus::SO3<T>::hat(Xb.O));
+
+        Eigen::Matrix<T, 3, 3> Dthetab_DRa = -JrInvthetab*Rab.inverse().matrix();
+        Eigen::Matrix<T, 3, 3> Dthetat_DRa = Dthetat_Dthetab*Dthetab_DRa;
+
+        Eigen::Matrix<T, 3, 3> Dthetab_DRb = JrInvthetab;
+        Eigen::Matrix<T, 3, 3> Dthetat_DRb = Dthetat_Dthetab*Dthetab_DRb;
+
+        Eigen::Matrix<T, 3, 3> Domgt_Dthetat = 0.5*Sophus::SO3<T>::hat(thetadott);
         
         // DRt_DRa
-        DXt_DXa[RIDX][RIDX] = SO3d::exp(-thetat).matrix() - Jr(thetat)*(PSI_RO11 - PSI_RO12*SO3d::hat(Xb.O))*JrInv(thetab)*Rab.inverse().matrix();
+        DXt_DXa[RIDX][RIDX] = Sophus::SO3<T>::exp(-thetat).matrix() + Jrthetat*Dthetat_DRa;
         // DRt_DOa
-        DXt_DXa[RIDX][OIDX] = Jr(thetat)*LAM_RO12;
-        
+        DXt_DXa[RIDX][OIDX] = Jrthetat*LAM_RO12;
         // DRt_DPa DRt_DVa DRt_DAa are all zeros
         
-        // TODO:
         // DOt_Ra still needs to be computed
-        // DXt_DXa[OIDX][RIDX];
+        DXt_DXa[OIDX][RIDX] = Domgt_Dthetat*Dthetat_DRa + Jrthetat*Dthetadott_Dthetab*Dthetab_DRa;
         // DOt_Oa still needs to be computed
-        // DXt_DXa[OIDX][OIDX];
-        
+        DXt_DXa[OIDX][OIDX] = Domgt_Dthetat*LAM_RO12 + Jrthetat*LAM_RO22;
         // DOt_DPa DOt_DVa DOt_DAa are all zeros
 
         // DPt_DRa DPt_DOa are all all zeros
@@ -302,19 +341,16 @@ public:
 
 
         // DRt_DRb
-        DXt_DXb[RIDX][RIDX] = Jr(thetat)*(PSI_RO11 - PSI_RO12*SO3d::hat(Xb.O))*JrInv(thetab);
+        DXt_DXb[RIDX][RIDX] = Jrthetat*Dthetat_DRb;
         // DRt_DOb
-        DXt_DXb[RIDX][OIDX] = Jr(thetat)*PSI_RO12*JrInv(thetab);
-        // DRt_DPb DRt_DVb DRt_DAb are all zeros
-
+        DXt_DXb[RIDX][OIDX] = Jrthetat*PSI_RO12*JrInvthetab;
         // DRt_DPb DRt_DVb DRt_DAb are all zeros
         
         // TODO:
         // DOt_Rb still needs to be computed
-        // DXt_DXb[OIDX][RIDX];
+        DXt_DXb[OIDX][RIDX] = Domgt_Dthetat*Dthetat_DRb + Jrthetat*Dthetadott_Dthetab*Dthetab_DRb;
         // DOt_Ob still needs to be computed
-        // DXt_DXb[OIDX][OIDX];
-        
+        DXt_DXb[OIDX][OIDX] = Domgt_Dthetat*PSI_RO12*JrInvthetab + Jrthetat*PSI_RO22*JrInvthetab;
         // DOt_DPb DOt_DVb DOt_DAb are all zeros
 
         // DPt_DRb DPt_DOb are all all zeros
@@ -338,6 +374,20 @@ public:
         DXt_DXb[AIDX][VIDX] = PSI_PVA22;
         // DAt_DAb
         DXt_DXb[AIDX][AIDX] = PSI_PVA23;
+
+        // for(int i = 0; i < 5; i++)
+        //     for(int j = 0; j < 5; j++)
+        //     {
+        //         printf("DXt_DXa[%d][%d]\n", i, j);
+        //         cout << DXt_DXa[i][j] << endl;
+        //     }
+
+        // for(int i = 0; i < 5; i++)
+        //     for(int j = 0; j < 5; j++)
+        //     {
+        //         printf("DXt_DXb[%d][%d]\n", i, j);
+        //         cout << DXt_DXb[i][j] << endl;
+        //     }
     }
 };
 
@@ -404,7 +454,14 @@ public:
         return make_pair(u, s);
     }
 
-    StateStamped getStateAt(double t)
+    Mat3 JrInv(const Vec3 &phi) const
+    {
+        Mat3 JrInv;
+        Sophus::rightJacobianInvSO3(phi, JrInv);
+        return JrInv;
+    }
+
+    StateStamped<double> getStateAt(double t)
     {
         // Find the index of the interval to find interpolation
         auto   us = computeTimeIndex(t);
@@ -419,17 +476,17 @@ public:
         StateStamped Xb = StateStamped(t0 + ub*dt, R[ub], O[ub], P[ub], V[ub], A[ub]);
 
         // Relative angle between two knots
-        Vector3d thetaa = Vector3d(0, 0, 0);
-        Vector3d thetab = (Xa.R.inverse() * Xb.R).log();
+        Vec3 thetaa = Vec3(0, 0, 0);
+        Vec3 thetab = (Xa.R.inverse() * Xb.R).log();
 
-        Matrix<double, 6, 1> gammaa; gammaa << thetaa, Xa.O;
-        Matrix<double, 6, 1> gammab; gammab << thetab, SO3JrInv(thetab)*Xb.O;
+        Eigen::Matrix<double, 6, 1> gammaa; gammaa << thetaa, Xa.O;
+        Eigen::Matrix<double, 6, 1> gammab; gammab << thetab, JrInv(thetab)*Xb.O;
 
-        Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
-        Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
+        Eigen::Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
+        Eigen::Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
         
-        Matrix<double, 6, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
-        Matrix<double, 9, 1> pvat;   // Position, velocity, acceleration
+        Eigen::Matrix<double, 6, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
+        Eigen::Matrix<double, 9, 1> pvat;   // Position, velocity, acceleration
 
         gammat = gpm.LAMBDA_RO(s*dt)  * gammaa + gpm.PSI_RO(s*dt)  * gammab;
         pvat   = gpm.LAMBDA_PVA(s*dt) * pvaa   + gpm.PSI_PVA(s*dt) * pvab;
@@ -440,10 +497,10 @@ public:
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
 
-        return StateStamped(t, Rt, Ot, Pt, Vt, At);
+        return StateStamped<double>(t, Rt, Ot, Pt, Vt, At);
     }
 
-    StateStamped getKnot(int kidx)
+    StateStamped<double> getKnot(int kidx)
     {
         return StateStamped(getKnotTime(kidx), R[kidx], O[kidx], P[kidx], V[kidx], A[kidx]);
     }
@@ -470,7 +527,7 @@ public:
         A  = {Vec3(0, 0, 0)};
     }
 
-    void extendKnotsTo(double t, const StateStamped &Xn=StateStamped())
+    void extendKnotsTo(double t, const StateStamped<double> &Xn=StateStamped())
     {
         if(t0 == 0)
         {
@@ -497,7 +554,7 @@ public:
         }
     }
 
-    void setKnot(int kidx, const StateStamped &Xn)
+    void setKnot(int kidx, const StateStamped<double> &Xn)
     {
         R[kidx] = Xn.R;
         O[kidx] = Xn.O;

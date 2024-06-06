@@ -43,6 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sophus/sim3.hpp>
 
 #include <basalt/utils/eigen_utils.hpp>
+#include <ceres/ceres.h>
 
 namespace Sophus
 {
@@ -177,17 +178,17 @@ namespace Sophus
 
         if (phi_norm2 > Sophus::Constants<Scalar>::epsilon())
         {
-            Scalar phi_norm = std::sqrt(phi_norm2);
+            Scalar phi_norm = ceres::sqrt(phi_norm2);
             Scalar phi_norm3 = phi_norm2 * phi_norm;
 
-            J -= phi_hat * (1 - std::cos(phi_norm)) / phi_norm2;
-            J += phi_hat2 * (phi_norm - std::sin(phi_norm)) / phi_norm3;
+            J -= phi_hat * (1.0 - ceres::cos(phi_norm)) / phi_norm2;
+            J += phi_hat2 * (phi_norm - ceres::sin(phi_norm)) / phi_norm3;
         }
         else
         {
             // Taylor expansion around 0
-            J -= phi_hat / 2;
-            J += phi_hat2 / 6;
+            J -= phi_hat / 2.0;
+            J += phi_hat2 / 6.0;
         }
     }
 
@@ -218,19 +219,20 @@ namespace Sophus
         Eigen::Matrix<Scalar, 3, 3> phi_hat2 = phi_hat * phi_hat;
 
         J.setIdentity();
-        J += phi_hat / 2;
+        J += phi_hat / 2.0;
 
         if (phi_norm2 > Sophus::Constants<Scalar>::epsilon())
         {
-            Scalar phi_norm = std::sqrt(phi_norm2);
+            Scalar phi_norm = ceres::sqrt(phi_norm2);
 
-            J += phi_hat2 * (1 / phi_norm2 - (1 + std::cos(phi_norm)) /
-                                                 (2 * phi_norm * std::sin(phi_norm)));
+            J += phi_hat2 * (1.0 / phi_norm2 - (1.0 + ceres::cos(phi_norm))
+                                                /
+                                               (2.0 * phi_norm * ceres::sin(phi_norm)));
         }
         else
         {
             // Taylor expansion around 0
-            J += phi_hat2 / 12;
+            J += phi_hat2 / 12.0;
         }
     }
 
