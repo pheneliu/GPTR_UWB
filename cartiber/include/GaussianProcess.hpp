@@ -181,8 +181,101 @@ public:
     }
 
     template <class T = double>
-    void ComputeXtAndDerivs(const StateStamped<T> &Xa, const StateStamped<T> &Xb, StateStamped<T> &Xt,
-                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa, vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb) const
+    Eigen::Matrix<T, 3, 3> DJrXV_DX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V) const
+    {
+        using SO3T  = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
+        T Xn = X.norm();
+
+        if(Xn < 1e-6)
+            return 0.5*SO3T::hat(V);
+
+        // Extract the elements of input
+        T tx = X(0);
+        T ty = X(1);
+        T tz = X(2);
+        T vx = V(0);
+        T vy = V(1);
+        T vz = V(2);
+
+        T Xnp2  = Xn*Xn;
+        T Xnp3  = Xnp2*Xn;
+        T Xnp4  = Xnp3*Xn;
+
+        T sXn   = sin(Xn);
+        T sXnp2 = sXn*sXn;
+        
+        T cXn   = cos(Xn);
+        T cXnp2 = cXn*cXn;
+        
+        T gXn   = (1.0 - cXn)/Xnp2;
+        T DgXn_DXn = sXn/Xnp2 - 2.0*(1.0 - cXn)/Xnp3;
+
+        T hXn   = (Xn - sXn)/Xnp3;
+        T DhXn_DXn = (1.0 - cXn)/Xnp3 - 3.0*(Xn - sXn)/Xnp4;
+
+        Matrix<T, 1, 3> Xb = (X.transpose()/Xn);
+        
+        Mat3T DXskwsqV_DX;
+        DXskwsqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
+                       ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
+                       tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
+
+        return SO3T::hat(V)*gXn - SO3T::hat(X)*V*DgXn_DXn*Xb + DXskwsqV_DX*hXn + SO3T::hat(X)*SO3T::hat(X)*V*DhXn_DXn*Xb;
+    }
+
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> DJrInvXV_DX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V) const
+    {
+        using SO3T  = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
+        T Xn = X.norm();
+        if(Xn < 1e-6)
+            return -0.5*SO3T::hat(V);
+
+        // Extract the elements of input
+        T tx = X(0);
+        T ty = X(1);
+        T tz = X(2);
+        T vx = V(0);
+        T vy = V(1);
+        T vz = V(2);
+
+        T Xnp2  = Xn*Xn;
+        T Xnp3  = Xnp2*Xn;
+        
+        T sXn   = sin(Xn);
+        T sXnp2 = sXn*sXn;
+        
+        T cXn   = cos(Xn);
+        T cXnp2 = cXn*cXn;
+        
+        T gXn   = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
+        T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
+        
+        Mat3T DXskwsqV_DX;
+        DXskwsqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
+                       ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
+                       tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
+
+        return -0.5*SO3T::hat(V) + DXskwsqV_DX*gXn + SO3T::hat(X)*SO3T::hat(X)*V*DgXn_DXn*(X.transpose()/Xn);
+    }
+
+    template <class T = double>
+    void ComputeXtAndDerivs(const StateStamped<T> &Xa,
+                            const StateStamped<T> &Xb,
+                                  StateStamped<T> &Xt,
+                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa,
+                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb,
+                            Eigen::Matrix<T, 6, 1> &gammaa_,
+                            Eigen::Matrix<T, 6, 1> &gammab_,
+                            Eigen::Matrix<T, 6, 1> &gammat_
+                           ) const
     {
         using SO3T  = Sophus::SO3<T>;
         using Vec3T = Eigen::Matrix<T, 3, 1>;
@@ -202,10 +295,8 @@ public:
         Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMBDA_PVA(tau).cast<T>();
         Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI_PVA(tau).cast<T>();
 
-        // cout << "LAMBDA RO :\n" << LAM_ROt << endl;
-        // cout << "PSI RO    :\n" << PSI_ROt << endl;
-        // cout << "LAMBDA PVA:\n" << LAM_PVAt << endl;
-        // cout << "PSI PVA   :\n" << PSI_PVAt << endl;
+        // PSI_ROt.block(0, 3, 3, 3).setZero();
+        // PSI_ROt.block(3, 3, 3, 3).setZero();
 
         // Extract the blocks of SO3 states
         Mat3T LAM_RO11 = LAM_ROt.block(0, 0, 3, 3);
@@ -271,7 +362,7 @@ public:
 
         // Assign the interpolated state
         Rt = Xa.R*Sophus::SO3<T>::exp(thetat);
-        Ot = JrInv(thetat)*thetadott;
+        Ot = Jr(thetat)*thetadott;
         Pt = pvat.block(0, 0, 3, 1);
         Vt = pvat.block(3, 0, 3, 1);
         At = pvat.block(6, 0, 3, 1);
@@ -292,8 +383,8 @@ public:
         Eigen::Matrix<T, 3, 3> Jrthetat = Jr(thetat);
         Eigen::Matrix<T, 3, 3> JrInvthetab = JrInv(thetab);
 
-        Eigen::Matrix<T, 3, 3> Dthetat_Dthetab = (PSI_RO11 - 0.5*PSI_RO12*Sophus::SO3<T>::hat(Xb.O));
-        Eigen::Matrix<T, 3, 3> Dthetadott_Dthetab = (PSI_RO21 - 0.5*PSI_RO22*Sophus::SO3<T>::hat(Xb.O));
+        Eigen::Matrix<T, 3, 3> Dthetat_Dthetab = (PSI_RO11 + PSI_RO12*DJrInvXV_DX(thetab, Xb.O));
+        Eigen::Matrix<T, 3, 3> Dthetadott_Dthetab = (PSI_RO21 + PSI_RO22*DJrInvXV_DX(thetab, Xb.O));
 
         Eigen::Matrix<T, 3, 3> Dthetab_DRa = -JrInvthetab*Rab.inverse().matrix();
         Eigen::Matrix<T, 3, 3> Dthetat_DRa = Dthetat_Dthetab*Dthetab_DRa;
@@ -301,7 +392,7 @@ public:
         Eigen::Matrix<T, 3, 3> Dthetab_DRb = JrInvthetab;
         Eigen::Matrix<T, 3, 3> Dthetat_DRb = Dthetat_Dthetab*Dthetab_DRb;
 
-        Eigen::Matrix<T, 3, 3> Domgt_Dthetat = 0.5*Sophus::SO3<T>::hat(thetadott);
+        Eigen::Matrix<T, 3, 3> Domgt_Dthetat = DJrXV_DX(thetat, thetadott);
         
         // DRt_DRa
         DXt_DXa[RIDX][RIDX] = Sophus::SO3<T>::exp(-thetat).matrix() + Jrthetat*Dthetat_DRa;
@@ -375,19 +466,9 @@ public:
         // DAt_DAb
         DXt_DXb[AIDX][AIDX] = PSI_PVA23;
 
-        // for(int i = 0; i < 5; i++)
-        //     for(int j = 0; j < 5; j++)
-        //     {
-        //         printf("DXt_DXa[%d][%d]\n", i, j);
-        //         cout << DXt_DXa[i][j] << endl;
-        //     }
-
-        // for(int i = 0; i < 5; i++)
-        //     for(int j = 0; j < 5; j++)
-        //     {
-        //         printf("DXt_DXb[%d][%d]\n", i, j);
-        //         cout << DXt_DXb[i][j] << endl;
-        //     }
+        gammaa_ = gammaa;
+        gammab_ = gammab;
+        gammat_ = gammat;
     }
 };
 

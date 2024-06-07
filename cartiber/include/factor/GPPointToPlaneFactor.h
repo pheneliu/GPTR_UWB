@@ -108,7 +108,12 @@ public:
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
 
         StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
-        gpm.ComputeXtAndDerivs(Xa, Xb, Xt, DXt_DXa, DXt_DXb);
+        
+        Eigen::Matrix<double, 6, 1> gammaa;
+        Eigen::Matrix<double, 6, 1> gammab;
+        Eigen::Matrix<double, 6, 1> gammat;
+
+        gpm.ComputeXtAndDerivs(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Residual
         Eigen::Map<Matrix<double, 1, 1>> residual(residuals);

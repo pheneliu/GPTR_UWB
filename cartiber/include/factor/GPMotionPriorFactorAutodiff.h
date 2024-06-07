@@ -65,8 +65,9 @@ public:
         QP << 1.0/20.0*dtsfpow[5]*wP, 1.0/8.0*dtsfpow[4]*wP, 1.0/6.0*dtsfpow[3]*wP,
               1.0/ 8.0*dtsfpow[4]*wP, 1.0/3.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP,
               1.0/ 6.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP, 1.0/1.0*dtsfpow[1]*wP;
-        Info.block<9, 9>(6, 0) = kron(QP, Matrix3d::Identity());
-        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
+        Info.block<9, 9>(6, 6) = kron(QP, Matrix3d::Identity());
+        // sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
+        sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
     }
 
     template <class T>
@@ -87,16 +88,40 @@ public:
         StateStamped<T> Xs(ss*Dt); vector<vector<Mat3T>> DXs_DXsa; vector<vector<Mat3T>> DXs_DXsb;
         StateStamped<T> Xf(sf*Dt); vector<vector<Mat3T>> DXf_DXfa; vector<vector<Mat3T>> DXf_DXfb;
 
-        gpm.ComputeXtAndDerivs<T>(Xsa, Xsb, Xs, DXs_DXsa, DXs_DXsb);
-        gpm.ComputeXtAndDerivs<T>(Xfa, Xfb, Xf, DXf_DXfa, DXf_DXfb);
+        Eigen::Matrix<T, 6, 1> gammasa;
+        Eigen::Matrix<T, 6, 1> gammasb;
+        Eigen::Matrix<T, 6, 1> gammas;
+        Eigen::Matrix<T, 6, 1> gammafa;
+        Eigen::Matrix<T, 6, 1> gammafb;
+        Eigen::Matrix<T, 6, 1> gammaf;
+
+        gpm.ComputeXtAndDerivs<T>(Xsa, Xsb, Xs, DXs_DXsa, DXs_DXsb, gammasa, gammasb, gammas);
+        gpm.ComputeXtAndDerivs<T>(Xfa, Xfb, Xf, DXf_DXfa, DXf_DXfb, gammafa, gammafb, gammaf);
 
         // Relative rotation and its rate
-        SO3T Rsf = Xs.R.inverse()*Xf.R;
-        Vec3T thetaf = Rsf.log();
-        Vec3T thetadotf = gpm.JrInv(thetaf)*Xf.O;
-        
+        SO3T Rsf         = Xs.R.inverse()*Xf.R;
+        Vec3T thetaf     = Rsf.log();
+        Vec3T thetadotf  = gpm.JrInv(thetaf)*Xf.O;
+
+        // Vec3T thetasb    = gammasb.block(0, 0, 3, 1);
+        // Vec3T thetadotsb = gammasb.block(3, 0, 3, 1);
+        // Vec3T thetas     = gammas.block(0, 0, 3, 1);
+        // Vec3T thetadots  = gammas.block(3, 0, 3, 1);
+
+        // Matrix<T, Dynamic, Dynamic> LAM_ROt = gpm.LAMBDA_RO(ss*Dt).cast<T>();
+        // Matrix<T, Dynamic, Dynamic> PSI_ROt = gpm.PSI_RO(ss*Dt).cast<T>();
+        // // Extract the blocks of SO3 states
+        // Mat3T LAM_RO11 = LAM_ROt.block(0, 0, 3, 3);
+        // Mat3T LAM_RO12 = LAM_ROt.block(0, 3, 3, 3);
+        // Mat3T LAM_RO21 = LAM_ROt.block(3, 0, 3, 3);
+        // Mat3T LAM_RO22 = LAM_ROt.block(3, 3, 3, 3);
+        // Mat3T PSI_RO11 = PSI_ROt.block(0, 0, 3, 3);
+        // Mat3T PSI_RO12 = PSI_ROt.block(0, 3, 3, 3);
+        // Mat3T PSI_RO21 = PSI_ROt.block(3, 0, 3, 3);
+        // Mat3T PSI_RO22 = PSI_ROt.block(3, 3, 3, 3);
+
         // Rotational residual
-        Vec3T rRot = thetaf - dtsf*Xs.O;
+        Vec3T rRot = - dtsf*Xs.O;
 
         // Rotational rate residual
         Vec3T rRdot = thetadotf - Xs.O;

@@ -21,8 +21,8 @@ typedef std::shared_ptr<GPLO> GPLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 
-ceres::LocalParameterization *analytic_local_parameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
-ceres::LocalParameterization *autodiff_local_parameterization = new basalt::LieLocalParameterization<SO3d>();
+// ceres::LocalParameterization *analytic_local_parameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
+// ceres::LocalParameterization *autodiff_local_parameterization = new basalt::LieLocalParameterization<SO3d>();
 ceres::LocalParameterization *local_parameterization;
 
 struct FactorMeta
@@ -54,21 +54,52 @@ Eigen::MatrixXd GetJacobian(ceres::CRSMatrix &J)
 }
 
 void GetFactorJacobian(ceres::Problem &problem, FactorMeta &factorMeta,
-                       ceres::LocalParameterization *local_parameterization,
+                       int local_pamaterization_type,
                        double &cost, vector<double> &residual,
                        MatrixXd &Jacobian)
 {
-    ceres::Problem::EvaluateOptions e_option;
-
-    // Set the parameter block to analytical
+    ceres::LocalParameterization *localparameterization;
     for(auto parameter : factorMeta.so3_parameter_blocks)
-        problem.SetParameterization(parameter, local_parameterization);
+    {
+        if (local_pamaterization_type == 0)
+        {
+            localparameterization = new basalt::LieLocalParameterization<SO3d>();
+            problem.SetParameterization(parameter, localparameterization);
+        }
+        else
+        {   
+            localparameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
+            problem.SetParameterization(parameter, localparameterization);
+        }
+    }
 
+    ceres::Problem::EvaluateOptions e_option;
     ceres::CRSMatrix Jacobian_;
     e_option.residual_blocks = factorMeta.residual_blocks;
     problem.Evaluate(e_option, &cost, &residual, NULL, &Jacobian_);
     Jacobian = GetJacobian(Jacobian_);
+
+    // delete localparameterization;
 }
+
+// void GetFactorJacobianAnalytic(ceres::Problem &problem, FactorMeta &factorMeta,
+//                             //    ceres::LocalParameterization *local_parameterization,
+//                                double &cost, vector<double> &residual,
+//                                MatrixXd &Jacobian)
+// {
+//     ceres::Problem::EvaluateOptions e_option;
+//     // Set the parameter block to analytical
+//     for(auto parameter : factorMeta.so3_parameter_blocks)
+//     {
+//         // ceres::LocalParameterization *analytic_local_parameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
+//         problem.SetParameterization(parameter, analytic_local_parameterization);
+//     }
+//     ceres::CRSMatrix Jacobian_;
+//     e_option.residual_blocks = factorMeta.residual_blocks;
+//     problem.Evaluate(e_option, &cost, &residual, NULL, &Jacobian_);
+//     Jacobian = GetJacobian(Jacobian_);
+
+// }
 
 void RemoveResidualBlock(ceres::Problem &problem, FactorMeta &factorMeta)
 {
@@ -595,6 +626,7 @@ public:
                 res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
     }
 
+
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
                   const vector<vector<CloudXYZITPtr>> &clouds)
     {
@@ -602,6 +634,8 @@ public:
         int Ncloud = clouds.front().size();
         CloudPosePtr posePrior = CloudPosePtr(new CloudPose());
         posePrior->resize(Ncloud);
+
+        double maxCoef = -1.0;
 
         for(int cidx = 0; cidx < Ncloud && ros::ok(); cidx += WINDOW_SIZE/2)
         {
@@ -691,9 +725,15 @@ public:
             VectorXd residual_autodiff_;
             MatrixXd Jacobian_autodiff_;
             {
+                // // Change the local parameterization of SO3
+                // SetSO3LocalizationAutodiff(problem, localTraj);
+
                 // Test the autodiff Jacobian
                 FactorMeta gpmpFactorMetaAutodiff;
                 AddAutodiffGPMPFactor(localTraj[0], problem, gpmpFactorMetaAutodiff);
+
+                if (gpmpFactorMetaAutodiff.parameter_blocks() == 0)
+                    continue;
 
                 TicToc tt_autodiff;
                 double cost_autodiff;
@@ -702,8 +742,8 @@ public:
 
                 // int count = 100;
                 // while(count-- > 0)
-                    GetFactorJacobian(problem, gpmpFactorMetaAutodiff, autodiff_local_parameterization,
-                                      cost_autodiff, residual_autodiff, J_autodiff);  
+                    GetFactorJacobian(problem, gpmpFactorMetaAutodiff, 0,
+                                      cost_autodiff, residual_autodiff, J_autodiff);
 
                 RemoveResidualBlock(problem, gpmpFactorMetaAutodiff);
 
@@ -713,28 +753,39 @@ public:
                        cost_autodiff, tt_autodiff.Toc());
 
                 residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-                Jacobian_autodiff_ = J_autodiff.block(0, 0, 15, 16);
+                Jacobian_autodiff_ = MatrixXd(12, 12).setZero();
+                Jacobian_autodiff_.block(0, 0, 6, 6) = J_autodiff.block(0, 0,  6, 6);
+                Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
+                Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
+                Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
+
                 cout << "residual:\n" << residual_autodiff_.transpose() << endl;
                 cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
             }
 
-cout << endl;
+            cout << endl;
 
             VectorXd residual_analytic_;
             MatrixXd Jacobian_analytic_;
             {
+                // // Change the local parameterization of SO3
+                // SetSO3LocalizationAnalytic(problem, localTraj);
+
                 // Test the analytic Jacobian
                 FactorMeta gpmpFactorMetaAnalytic;
                 AddAnalyticGPMPFactor(localTraj[0], problem, gpmpFactorMetaAnalytic);
+
+                if (gpmpFactorMetaAnalytic.parameter_blocks() == 0)
+                    continue;
 
                 TicToc tt_analytic;
                 double cost_analytic;
                 vector <double> residual_analytic;
                 MatrixXd J_analytic;
-
+                
                 // int count = 100;
                 // while(count-- > 0)
-                    GetFactorJacobian(problem, gpmpFactorMetaAnalytic, analytic_local_parameterization,
+                    GetFactorJacobian(problem, gpmpFactorMetaAnalytic, 1,
                                       cost_analytic, residual_analytic, J_analytic);
 
                 RemoveResidualBlock(problem, gpmpFactorMetaAnalytic);
@@ -745,7 +796,11 @@ cout << endl;
                        cost_analytic, tt_analytic.Toc());
 
                 residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-                Jacobian_analytic_ = J_analytic.block(0, 0, 15, 16);
+                Jacobian_analytic_ = MatrixXd(12, 12).setZero();
+                Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
+                Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
+                Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
+                Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
 
                 cout << "residual:\n" << residual_analytic_.transpose() << endl;
                 cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
@@ -758,8 +813,12 @@ cout << endl;
             cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
             cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
 
-            exit(-1);
+            if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
+                maxCoef = jcbdiff.cwiseAbs().maxCoeff();
 
+            printf(KGRN "Max error: %f / %f\n" RESET, jcbdiff.maxCoeff(), maxCoef);
+
+            continue;
 
             // // Step 2.3: Add the lidar factors
             // vector<ceres::internal::ResidualBlock *> res_ids_lidar;
