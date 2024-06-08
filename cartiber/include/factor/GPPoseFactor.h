@@ -45,20 +45,6 @@ public:
         mutable_parameter_block_sizes()->push_back(3);
     }
 
-    Matrix3d Jr(const Vector3d &phi) const
-    {
-        Matrix3d Jr;
-        Sophus::rightJacobianSO3(phi, Jr);
-        return Jr;
-    }
-
-    Matrix3d JrInv(const Vector3d &phi) const
-    {
-        Matrix3d JrInv;
-        Sophus::rightJacobianInvSO3(phi, JrInv);
-        return JrInv;
-    }
-
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
         /* #region Map the memory to control points -----------------------------------------------------------------*/
@@ -95,7 +81,7 @@ public:
         if (!jacobians)
             return true;
 
-        Matrix3d DrR_DRt = JrInv(rR);
+        Matrix3d DrR_DRt = gpm.JrInv(rR);
         // Matrix3d DrP_DPt = Matrix3d::Identity(3,3);
 
         size_t idx;
@@ -223,9 +209,4 @@ private:
     double Dt;     // Knot length
     double s;      // Normalized time (t - t_i)/Dt
     GPMixer gpm;
-
-    // Lambda
-    Matrix<double, Dynamic, 1> lambda_R;
-    // Lambda dot
-    Matrix<double, Dynamic, 1> lambda_P;
 };
