@@ -66,8 +66,8 @@ public:
               1.0/ 8.0*dtsfpow[4]*wP, 1.0/3.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP,
               1.0/ 6.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP, 1.0/1.0*dtsfpow[1]*wP;
         Info.block<9, 9>(6, 6) = kron(QP, Matrix3d::Identity());
-        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
-        // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
+        // sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
+        sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
     }
 
     template <class T>

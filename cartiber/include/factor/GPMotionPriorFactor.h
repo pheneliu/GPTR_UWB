@@ -53,8 +53,8 @@ public:
               1.0/ 8.0*dtsfpow[4]*wP, 1.0/3.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP,
               1.0/ 6.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP, 1.0/1.0*dtsfpow[1]*wP;
         Info.block<9, 9>(6, 6) = kron(QP, Matrix3d::Identity());
-        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
-        // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
+        // sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
+        sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -93,18 +93,6 @@ public:
         Vec3 thetadotsb = gammasb.block(3, 0, 3, 1);
         Vec3 thetas     = gammas.block(0, 0, 3, 1);
         Vec3 thetadots  = gammas.block(3, 0, 3, 1);
-
-        // Matrix<double, Dynamic, Dynamic> LAM_ROt = gpm.LAMBDA_RO(ss*Dt);
-        // Matrix<double, Dynamic, Dynamic> PSI_ROt = gpm.PSI_RO(ss*Dt);
-        // // Extract the blocks of SO3 states
-        // Mat3 LAM_RO11 = LAM_ROt.block(0, 0, 3, 3);
-        // Mat3 LAM_RO12 = LAM_ROt.block(0, 3, 3, 3);
-        // Mat3 LAM_RO21 = LAM_ROt.block(3, 0, 3, 3);
-        // Mat3 LAM_RO22 = LAM_ROt.block(3, 3, 3, 3);
-        // Mat3 PSI_RO11 = PSI_ROt.block(0, 0, 3, 3);
-        // Mat3 PSI_RO12 = PSI_ROt.block(0, 3, 3, 3);
-        // Mat3 PSI_RO21 = PSI_ROt.block(3, 0, 3, 3);
-        // Mat3 PSI_RO22 = PSI_ROt.block(3, 3, 3, 3);
         
         // Rotational residual
         Vec3 rRot = thetaf - dtsf*Xs.O;
@@ -145,10 +133,9 @@ public:
         Mat3 Dthetaf_DRf = JrInvthetaf;
         Mat3 Dthetadotf_DRf = Dthetadotf_Dthetaf*Dthetaf_DRf;
 
-        Mat3 DJrthetas_thetadots_Dthetad = gpm.DJrXV_DX(thetas, thetadots);
-
+        // Work out the Jacobians for SO3 states first
         {
-            // rRsa
+            // dr_dRsa
             idx = RsaIdx;
             if(jacobians[idx])
             {
@@ -160,7 +147,8 @@ public:
 
                 // cout << "Dr_DRsa\n" << Dr_DRsa << endl;
             }
-    
+
+            // dr_dOsa
             idx = OsaIdx;
             if(jacobians[idx])
             {
@@ -173,7 +161,7 @@ public:
                 // cout << "Dr_DOsa\n" << Dr_DOsa << endl;
             }
 
-            // rRsb
+            // dr_dRsb
             idx = RsbIdx;
             if(jacobians[idx])
             {
@@ -185,7 +173,8 @@ public:
 
                 // cout << "Dr_DRsb\n" << Dr_DRsb << endl;
             }
-    
+            
+            // dr_dOsb
             idx = OsbIdx;
             if(jacobians[idx])
             {
@@ -198,7 +187,7 @@ public:
                 // cout << "Dr_DOsb\n" << Dr_DOsb << endl;
             }
 
-            // rRfa
+            // dr_dRfa
             idx = RfaIdx;
             if(jacobians[idx])
             {
@@ -210,7 +199,8 @@ public:
 
                 // cout << "Dr_DRfa\n" << Dr_DRfa << endl;
             }
-    
+            
+            // dr_dOfa
             idx = OfaIdx;
             if(jacobians[idx])
             {
@@ -223,7 +213,7 @@ public:
                 // cout << "Dr_DOfa\n" << Dr_DOfa << endl;
             }
 
-            // rRfb
+            // dr_dRfb
             idx = RfbIdx;
             if(jacobians[idx])
             {
@@ -235,7 +225,8 @@ public:
 
                 // cout << "Dr_DRfb\n" << Dr_DRfb << endl;
             }
-    
+
+            // dr_dOfb
             idx = OfbIdx;
             if(jacobians[idx])
             {
@@ -249,34 +240,8 @@ public:
             }
         }
 
-        // Jacobians on Xsa
+        // Jacobians on sa PVA states
         {
-            // // rR
-            // idx = RsaIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRsa(jacobians[idx]);
-            //     Dr_DRsa.setZero();
-            //     Dr_DRsa.block<3, 3>(0, 0) = gpm.JrInv(rRot)*DXs_DXsa[Ridx][Ridx];
-            //     Dr_DRsa.block<3, 3>(3, 0) = -0.5*SO3d::hat(Xsb.O)*(-gpm.JrInv(thetasb)*(Xsa.R.inverse()*Xsb.R).inverse().matrix());
-            //     Dr_DRsa = sqrtW*Dr_DRsa;
-
-            //     // cout << "Dr_DRsa\n" << Dr_DRsa << endl;
-            // }
-    
-            // idx = OsaIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOsa(jacobians[idx]);
-            //     Dr_DOsa.setZero();
-            //     Dr_DOsa.block<3, 3>(0, 0) = gpm.JrInv(rRot)*DXs_DXsa[Ridx][Oidx];
-            //     // Dr_DOsa.block<3, 3>(3, 0) = gpm.JrInv(thetasb);
-            //     Dr_DOsa = sqrtW*Dr_DOsa;
-
-            //     // cout << "Dr_DOsa\n" << Dr_DOsa << endl;
-            // }
-            
-            // rP
             idx = PsaIdx;
             if(jacobians[idx])
             {
@@ -317,34 +282,8 @@ public:
             }
         }
 
-        // Jacobians on Xsb
+        // Jacobians on sb PVA states
         {
-            // // rR
-            // idx = RsbIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRsb(jacobians[idx]);
-            //     Dr_DRsb.setZero();
-            //     Dr_DRsb.block<3, 3>(0, 0) = DXs_DXsb[Ridx][Ridx];
-            //     Dr_DRsb.block<3, 3>(3, 0) = -0.5*SO3d::hat(Xsb.O)*gpm.JrInv(thetasb);
-            //     Dr_DRsb = sqrtW*Dr_DRsb;
-
-            //     // cout << "Dr_DRsb\n" << Dr_DRsb << endl;
-            // }
-    
-            // idx = OsbIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOsb(jacobians[idx]);
-            //     Dr_DOsb.setZero();
-            //     Dr_DOsb.block<3, 3>(0, 0) = DXs_DXsb[Ridx][Oidx];
-            //     Dr_DOsb.block<3, 3>(3, 0) = gpm.JrInv(thetasb);
-            //     Dr_DOsb = sqrtW*Dr_DOsb;
-
-            //     // cout << "Dr_DOsb\n" << Dr_DOsb << endl;
-            // }
-            
-            // rP
             idx = PsbIdx;
             if(jacobians[idx])
             {
@@ -385,34 +324,8 @@ public:
             }
         }
 
-        // Jacobians on Xfa
+        // Jacobians on fa PVA states
         {
-            // // rR
-            // idx = RfaIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRfa(jacobians[idx]);
-            //     Dr_DRfa.setZero();
-            //     Dr_DRfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Ridx];
-            //     Dr_DRfa.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfa[Ridx][Ridx] + JrInvthetaf*DXf_DXfa[Oidx][Ridx];
-            //     Dr_DRfa = sqrtW*Dr_DRfa;
-
-            //     // cout << "Dr_DRfa\n" << Dr_DRfa << endl;
-            // }
-    
-            // idx = OfaIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOfa(jacobians[idx]);
-            //     Dr_DOfa.setZero();
-            //     Dr_DOfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Oidx];
-            //     Dr_DOfa.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfa[Ridx][Oidx] + JrInvthetaf*DXf_DXfa[Oidx][Oidx];
-            //     Dr_DOfa = sqrtW*Dr_DOfa;
-
-            //     // cout << "Dr_DOfa\n" << Dr_DOfa << endl;
-            // }
-            
-            // rP
             idx = PfaIdx;
             if(jacobians[idx])
             {
@@ -453,34 +366,8 @@ public:
             }
         }
 
-        // Jacobians on Xfb
+        // Jacobians on fb PVA states
         {
-            // // rR
-            // idx = RfbIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRfb(jacobians[idx]);
-            //     Dr_DRfb.setZero();
-            //     // Dr_DRfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Ridx];
-            //     // Dr_DRfb.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfb[Ridx][Ridx] + JrInvthetaf*DXf_DXfb[Oidx][Ridx];
-            //     Dr_DRfb = sqrtW*Dr_DRfb;
-
-            //     // cout << "Dr_DRfb\n" << Dr_DRfb << endl;
-            // }
-    
-            // idx = OfbIdx;
-            // if(jacobians[idx])
-            // {
-            //     Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOfb(jacobians[idx]);
-            //     Dr_DOfb.setZero();
-            //     // Dr_DOfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Oidx];
-            //     // Dr_DOfb.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfb[Ridx][Oidx] + JrInvthetaf*DXf_DXfb[Oidx][Oidx];
-            //     Dr_DOfb = sqrtW*Dr_DOfb;
-
-            //     // cout << "Dr_DOfb\n" << Dr_DOfb << endl;
-            // }
-            
-            // rP
             idx = PfbIdx;
             if(jacobians[idx])
             {

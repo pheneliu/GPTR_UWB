@@ -193,12 +193,8 @@ public:
             return 0.5*SO3T::hat(V);
 
         // Extract the elements of input
-        T tx = X(0);
-        T ty = X(1);
-        T tz = X(2);
-        T vx = V(0);
-        T vy = V(1);
-        T vz = V(2);
+        T tx = X(0); T ty = X(1); T tz = X(2);
+        T vx = V(0); T vy = V(1); T vz = V(2);
 
         T Xnp2  = Xn*Xn;
         T Xnp3  = Xnp2*Xn;
@@ -226,7 +222,6 @@ public:
         return SO3T::hat(V)*gXn - SO3T::hat(X)*V*DgXn_DXn*Xb + DXskwsqV_DX*hXn + SO3T::hat(X)*SO3T::hat(X)*V*DhXn_DXn*Xb;
     }
 
-
     template <class T = double>
     Eigen::Matrix<T, 3, 3> DJrInvXV_DX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V) const
     {
@@ -239,12 +234,8 @@ public:
             return -0.5*SO3T::hat(V);
 
         // Extract the elements of input
-        T tx = X(0);
-        T ty = X(1);
-        T tz = X(2);
-        T vx = V(0);
-        T vy = V(1);
-        T vz = V(2);
+        T tx = X(0); T ty = X(1); T tz = X(2);
+        T vx = V(0); T vy = V(1); T vz = V(2);
 
         T Xnp2  = Xn*Xn;
         T Xnp3  = Xnp2*Xn;
@@ -294,9 +285,6 @@ public:
         Matrix<T, Dynamic, Dynamic> PSI_ROt  = PSI_RO(tau).cast<T>();
         Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMBDA_PVA(tau).cast<T>();
         Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI_PVA(tau).cast<T>();
-
-        // PSI_ROt.block(0, 3, 3, 3).setZero();
-        // PSI_ROt.block(3, 3, 3, 3).setZero();
 
         // Extract the blocks of SO3 states
         Mat3T LAM_RO11 = LAM_ROt.block(0, 0, 3, 3);
@@ -460,11 +448,11 @@ public:
         DXt_DXb[VIDX][AIDX] = PSI_PVA23;
         
         // DAt_DPb
-        DXt_DXb[AIDX][PIDX] = PSI_PVA21;
+        DXt_DXb[AIDX][PIDX] = PSI_PVA31;
         // DAt_DVb
-        DXt_DXb[AIDX][VIDX] = PSI_PVA22;
+        DXt_DXb[AIDX][VIDX] = PSI_PVA32;
         // DAt_DAb
-        DXt_DXb[AIDX][AIDX] = PSI_PVA23;
+        DXt_DXb[AIDX][AIDX] = PSI_PVA33;
 
         gammaa_ = gammaa;
         gammab_ = gammab;
