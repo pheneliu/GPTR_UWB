@@ -121,7 +121,7 @@ public:
         // Mat3T PSI_RO22 = PSI_ROt.block(3, 3, 3, 3);
 
         // Rotational residual
-        Vec3T rRot = - dtsf*Xs.O;
+        Vec3T rRot = thetaf - dtsf*Xs.O;
 
         // Rotational rate residual
         Vec3T rRdot = thetadotf - Xs.O;

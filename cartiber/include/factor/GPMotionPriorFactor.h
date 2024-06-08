@@ -107,7 +107,7 @@ public:
         // Mat3 PSI_RO22 = PSI_ROt.block(3, 3, 3, 3);
         
         // Rotational residual
-        Vec3 rRot = - dtsf*Xs.O;
+        Vec3 rRot = thetaf - dtsf*Xs.O;
 
         // Rotational rate residual
         Vec3 rRdot = thetadotf - Xs.O;
@@ -154,7 +154,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRsa(jacobians[idx]);
                 Dr_DRsa.setZero();
-                Dr_DRsa.block<3, 3>(0, 0) = -dtsf*DXs_DXsa[Oidx][Ridx];
+                Dr_DRsa.block<3, 3>(0, 0) = Dthetaf_DRs*DXs_DXsa[Ridx][Ridx] - dtsf*DXs_DXsa[Oidx][Ridx];
                 Dr_DRsa.block<3, 3>(3, 0) = Dthetadotf_DRa - DXs_DXsa[Oidx][Ridx];
                 Dr_DRsa = sqrtW*Dr_DRsa;
 
@@ -166,7 +166,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOsa(jacobians[idx]);
                 Dr_DOsa.setZero();
-                Dr_DOsa.block<3, 3>(0, 0) = -dtsf*DXs_DXsa[Oidx][Oidx];
+                Dr_DOsa.block<3, 3>(0, 0) = Dthetaf_DRs*DXs_DXsa[Ridx][Oidx] - dtsf*DXs_DXsa[Oidx][Oidx];
                 Dr_DOsa.block<3, 3>(3, 0) = gpm.DJrInvXV_DX(thetaf, Xf.O)*Dthetaf_DRs*DXs_DXsa[Ridx][Oidx] - DXs_DXsa[Oidx][Oidx];
                 Dr_DOsa = sqrtW*Dr_DOsa;
 
@@ -179,7 +179,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRsb(jacobians[idx]);
                 Dr_DRsb.setZero();
-                Dr_DRsb.block<3, 3>(0, 0) = -dtsf*DXs_DXsb[Oidx][Ridx];
+                Dr_DRsb.block<3, 3>(0, 0) = Dthetaf_DRs*DXs_DXsb[Ridx][Ridx] - dtsf*DXs_DXsb[Oidx][Ridx];
                 Dr_DRsb.block<3, 3>(3, 0) = Dthetadotf_DRb - DXs_DXsb[Oidx][Ridx];
                 Dr_DRsb = sqrtW*Dr_DRsb;
 
@@ -191,7 +191,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOsb(jacobians[idx]);
                 Dr_DOsb.setZero();
-                Dr_DOsb.block<3, 3>(0, 0) = -dtsf*DXs_DXsb[Oidx][Oidx];
+                Dr_DOsb.block<3, 3>(0, 0) = Dthetaf_DRs*DXs_DXsb[Ridx][Oidx] - dtsf*DXs_DXsb[Oidx][Oidx];
                 Dr_DOsb.block<3, 3>(3, 0) = gpm.DJrInvXV_DX(thetaf, Xf.O)*Dthetaf_DRs*DXs_DXsb[Ridx][Oidx] - DXs_DXsb[Oidx][Oidx];
                 Dr_DOsb = sqrtW*Dr_DOsb;
 
@@ -204,7 +204,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRfa(jacobians[idx]);
                 Dr_DRfa.setZero();
-                // Dr_DRfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Ridx];
+                Dr_DRfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Ridx];
                 Dr_DRfa.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfa[Ridx][Ridx] + JrInvthetaf*DXf_DXfa[Oidx][Ridx];
                 Dr_DRfa = sqrtW*Dr_DRfa;
 
@@ -216,7 +216,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOfa(jacobians[idx]);
                 Dr_DOfa.setZero();
-                // Dr_DOfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Oidx];
+                Dr_DOfa.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfa[Ridx][Oidx];
                 Dr_DOfa.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfa[Ridx][Oidx] + JrInvthetaf*DXf_DXfa[Oidx][Oidx];
                 Dr_DOfa = sqrtW*Dr_DOfa;
 
@@ -229,7 +229,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 4, Eigen::RowMajor>> Dr_DRfb(jacobians[idx]);
                 Dr_DRfb.setZero();
-                // Dr_DRfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Ridx];
+                Dr_DRfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Ridx];
                 Dr_DRfb.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfb[Ridx][Ridx] + JrInvthetaf*DXf_DXfb[Oidx][Ridx];
                 Dr_DRfb = sqrtW*Dr_DRfb;
 
@@ -241,7 +241,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOfb(jacobians[idx]);
                 Dr_DOfb.setZero();
-                // Dr_DOfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Oidx];
+                Dr_DOfb.block<3, 3>(0, 0) = Dthetaf_DRf*DXf_DXfb[Ridx][Oidx];
                 Dr_DOfb.block<3, 3>(3, 0) = Dthetadotf_DRf*DXf_DXfb[Ridx][Oidx] + JrInvthetaf*DXf_DXfb[Oidx][Oidx];
                 Dr_DOfb = sqrtW*Dr_DOfb;
 
