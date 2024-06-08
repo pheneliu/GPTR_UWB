@@ -336,19 +336,20 @@ public:
                 factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
             }
             
-            double lidar_loss_thres = -1.0;
-            ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
+            double ld_loss_thres = -1.0;
+            // nh_ptr->getParam("ld_loss_thres", ld_loss_thres);
+            ceres::LossFunction *lidar_loss_function = ld_loss_thres <= 0 ? NULL : new ceres::HuberLoss(ld_loss_thres);
             ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, lidar_weight*coef.plnrty, traj->getDt(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
             res_ids_lidar.push_back(res);
+
+            // printf("Adding lidar factor %d. s: %f. u: %d, dt: %f\n", res_ids_lidar.size(), s, u, traj->getDt());
         }
     }
 
     void AddPosePriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
                              vector<ceres::internal::ResidualBlock *> &res_ids_pose)
     {
-        ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-
         double dt_ = traj->getDt()/7;
         // Add the pose factors with priors sampled from previous spline
         for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
@@ -372,8 +373,11 @@ public:
                 factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
             }
 
+            double pp_loss_thres = -1.0;
+            // nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
+            ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
             ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), ppSigmaR, ppSigmaP, traj->getDt(), s);
-            auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+            auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
             res_ids_pose.push_back(res_block);
         }
     }
@@ -424,11 +428,11 @@ public:
             }
 
             // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
+            double mp_loss_thres = -1;
+            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
             ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
-
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
+            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
             res_ids_gp.push_back(res_block);
         }
     }
@@ -1205,7 +1209,13 @@ public:
 
                 // Find the starting knot in traj and copy to localtraj
                 for(int kidx = 0; kidx < localTraj[lidx]->getNumKnots(); kidx++)
+                {
                     localTraj[lidx]->setKnot(kidx, traj[lidx]->getKnot(kidx + umin));
+                    // printf("Copying global knot %d to local knot %d. Time: GB: %f. LC: %f.\n",
+                    //         kidx + umin, kidx,
+                    //         traj[lidx]->getKnotTime(kidx + umin),
+                    //         localTraj[lidx]->getKnotTime(kidx));
+                }
             }
 
             // Step 2,2: Create the ceres problem and add the knots to the param list
@@ -1230,23 +1240,28 @@ public:
             double cost_lidar_begin = -1;
             double cost_lidar_final = -1;
             vector<ceres::internal::ResidualBlock *> res_ids_lidar;
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                for(int swIdx = 0; swIdx < WDZ; swIdx++)
-                    AddLidarFactors(Coef[lidx][swIdx], localTraj[lidx], problem, res_ids_lidar);
+            if (lidar_weight >= 0.0)
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                    for(int swIdx = 0; swIdx < WDZ; swIdx++)
+                        AddLidarFactors(Coef[lidx][swIdx], localTraj[lidx], problem, res_ids_lidar);
 
             // Step 2.4 Add pose prior factors
             double cost_pose_begin = -1;
             double cost_pose_final = -1;
             vector<ceres::internal::ResidualBlock *> res_ids_pose;
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                AddPosePriorFactors(localTraj[lidx], problem, res_ids_pose);
+            if (ppSigmaR >= 0.0 && ppSigmaR >= 0.0)
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                    AddPosePriorFactors(localTraj[lidx], problem, res_ids_pose);
+            else
+                printf(KYEL "Skipping pose prior.\n" RESET);
 
             // Step 2.5: Add motion prior factors
             double cost_mp_begin = -1;
             double cost_mp_final = -1;
             vector<ceres::internal::ResidualBlock *> res_ids_mp;
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                AddMotionPriorFactors(localTraj[lidx], problem, res_ids_mp);
+            if(mpSigmaR >= 0.0 && mpSigmaR >= 0.0)
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                    AddMotionPriorFactors(localTraj[lidx], problem, res_ids_mp);
 
             // Step 2.6: Add relative extrinsic factors
             //... To be worked out later
@@ -1284,9 +1299,15 @@ public:
 
                 // Find the starting knot in traj and copy to localtraj
                 auto us = traj[lidx]->computeTimeIndex(tmin);
-                int s = us.second;
+                int u = us.first;
                 for(int kidx = 0; kidx < localTraj[lidx]->getNumKnots(); kidx++)
-                    traj[lidx]->setKnot(kidx + s, localTraj[lidx]->getKnot(kidx));
+                {
+                    traj[lidx]->setKnot(kidx + u, localTraj[lidx]->getKnot(kidx));
+                    // printf("Copying local knot %d to global knot %d. Time: LC: %f. GB: %f.\n",
+                    //         kidx, kidx + u,
+                    //         localTraj[lidx]->getKnotTime(kidx),
+                    //         traj[lidx]->getKnotTime(kidx + u));
+                }
             }
 
             // Step N: Visualize
