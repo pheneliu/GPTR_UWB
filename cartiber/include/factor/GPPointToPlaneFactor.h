@@ -81,19 +81,19 @@ public:
         mutable_parameter_block_sizes()->push_back(3);
     }
 
-    Matrix3d Jr(const Vector3d &phi) const
-    {
-        Matrix3d Jr;
-        Sophus::rightJacobianSO3(phi, Jr);
-        return Jr;
-    }
+    // Matrix3d Jr(const Vector3d &phi) const
+    // {
+    //     Matrix3d Jr;
+    //     Sophus::rightJacobianSO3(phi, Jr);
+    //     return Jr;
+    // }
 
-    Matrix3d JrInv(const Vector3d &phi) const
-    {
-        Matrix3d JrInv;
-        Sophus::rightJacobianInvSO3(phi, JrInv);
-        return JrInv;
-    }
+    // Matrix3d JrInv(const Vector3d &phi) const
+    // {
+    //     Matrix3d JrInv;
+    //     Sophus::rightJacobianInvSO3(phi, JrInv);
+    //     return JrInv;
+    // }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
@@ -124,7 +124,7 @@ public:
         if (!jacobians)
             return true;
 
-        Matrix<double, 1, 3> Dr_DRt  = n.transpose()*Xt.R.matrix()*SO3d::hat(f);
+        Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
         Matrix<double, 1, 3> Dr_DPt  = n.transpose();
 
         size_t idx;

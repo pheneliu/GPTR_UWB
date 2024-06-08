@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar01
-        - /Lidar01/SplineSample01/Status1
         - /Lidar01/SWOpt01
         - /Lidar11
       Splitter Ratio: 0.5411764979362488
@@ -453,7 +452,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 4.994935035705566
+      Distance: 7.017523765563965
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -461,17 +460,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: -0.7306582927703857
+        Y: 0.5587506294250488
+        Z: 4.76837158203125e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.1553975343704224
+      Pitch: 1.3103972673416138
       Target Frame: body
-      Yaw: 1.165390968322754
+      Yaw: 1.4553908109664917
     Saved: ~
 Window Geometry:
   Displays:

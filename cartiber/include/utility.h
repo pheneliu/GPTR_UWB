@@ -568,7 +568,7 @@ typedef myTf<> mytf;
 namespace Util
 {
     inline void ComputeCeresCost(vector<ceres::internal::ResidualBlock *> &res_ids,
-                          double &cost, ceres::Problem &problem)
+                                 double &cost, ceres::Problem &problem)
     {
         if (res_ids.size() == 0)
         {
