@@ -9,6 +9,7 @@
 #include "factor/GPMotionPriorFactorAutodiff.h"
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPPointToPlaneFactorAutodiff.h"
+#include "factor/GPSmoothnessFactor.h"
 
 #include "basalt/spline/se3_spline.h"
 #include "basalt/spline/ceres_spline_helper.h"
@@ -118,6 +119,8 @@ private:
     double ppSigmaP = 10;
     double mpSigmaR = 10;
     double mpSigmaP = 10;
+    double smSigmaR = 10;
+    double smSigmaP = 10;
 
     // Time to fix the knot
     double fixed_start = 0.0;
@@ -157,6 +160,9 @@ public:
         // Weight for the motion prior
         nh_ptr->getParam("mpSigmaR", mpSigmaR);
         nh_ptr->getParam("mpSigmaP", mpSigmaP);
+        // Weight for the smoothness factor
+        nh_ptr->getParam("smSigmaR", smSigmaR);
+        nh_ptr->getParam("smSigmaP", smSigmaP);
 
         printf("Window size: %d. Fixes: <%f, >%f. DK: %f, %d. lidar_weight: %f. ppSigma: %f, %f. mpSigmaR: %f, %f\n",
                 WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
@@ -337,7 +343,7 @@ public:
             }
             
             double ld_loss_thres = -1.0;
-            // nh_ptr->getParam("ld_loss_thres", ld_loss_thres);
+            nh_ptr->getParam("ld_loss_thres", ld_loss_thres);
             ceres::LossFunction *lidar_loss_function = ld_loss_thres <= 0 ? NULL : new ceres::HuberLoss(ld_loss_thres);
             ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, lidar_weight*coef.plnrty, traj->getDt(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
@@ -374,7 +380,7 @@ public:
             }
 
             double pp_loss_thres = -1.0;
-            // nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
+            nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
             ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
             ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), ppSigmaR, ppSigmaP, traj->getDt(), s);
             auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
@@ -429,11 +435,35 @@ public:
 
             // Create the factor
             double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+            nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
             ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
             res_ids_gp.push_back(res_block);
+        }
+    }
+
+    void AddSmoothnessFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
+                              vector<ceres::internal::ResidualBlock *> &res_ids_sm)
+    {
+        // Add the GP factors based on knot difference
+        for (int kidx = 0; kidx < traj->getNumKnots() - 2; kidx++)
+        {
+            vector<double *> factor_param_blocks;
+            // Add the parameter blocks
+            for (int knot_idx = kidx; knot_idx < kidx + 3; knot_idx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+            }
+
+            // Create the factor
+            double sm_loss_thres = -1;
+            nh_ptr->getParam("sm_loss_thres", sm_loss_thres);
+            ceres::LossFunction *sm_loss_function = sm_loss_thres <= 0 ? NULL : new ceres::HuberLoss(sm_loss_thres);
+            ceres::CostFunction *cost_function = new GPSmoothnessFactor(smSigmaR, smSigmaP, traj->getDt());
+            auto res_block = problem.AddResidualBlock(cost_function, sm_loss_function, factor_param_blocks);
+            res_ids_sm.push_back(res_block);
         }
     }
 
@@ -1244,24 +1274,38 @@ public:
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                     for(int swIdx = 0; swIdx < WDZ; swIdx++)
                         AddLidarFactors(Coef[lidx][swIdx], localTraj[lidx], problem, res_ids_lidar);
+            else
+                printf(KYEL "Skipping lidar factors.\n" RESET);
 
             // Step 2.4 Add pose prior factors
             double cost_pose_begin = -1;
             double cost_pose_final = -1;
             vector<ceres::internal::ResidualBlock *> res_ids_pose;
-            if (ppSigmaR >= 0.0 && ppSigmaR >= 0.0)
+            if (ppSigmaR >= 0.0 && ppSigmaP >= 0.0)
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                     AddPosePriorFactors(localTraj[lidx], problem, res_ids_pose);
             else
-                printf(KYEL "Skipping pose prior.\n" RESET);
+                printf(KYEL "Skipping pose priors.\n" RESET);
 
             // Step 2.5: Add motion prior factors
             double cost_mp_begin = -1;
             double cost_mp_final = -1;
             vector<ceres::internal::ResidualBlock *> res_ids_mp;
-            if(mpSigmaR >= 0.0 && mpSigmaR >= 0.0)
+            if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0)
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                     AddMotionPriorFactors(localTraj[lidx], problem, res_ids_mp);
+            else
+                printf(KYEL "Skipping motion prior factors.\n" RESET);
+
+            // Step 2.6: Add smoothness constraints factors
+            double cost_sm_begin = -1;
+            double cost_sm_final = -1;
+            vector<ceres::internal::ResidualBlock *> res_ids_sm;
+            if(smSigmaR >= 0.0 && smSigmaP >= 0.0)
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                    AddSmoothnessFactors(localTraj[lidx], problem, res_ids_sm);
+            else
+                printf(KYEL "Skipping smoothness factors.\n" RESET);                                
 
             // Step 2.6: Add relative extrinsic factors
             //... To be worked out later
@@ -1270,6 +1314,7 @@ public:
             Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
             Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
             Util::ComputeCeresCost(res_ids_mp, cost_mp_begin, problem);
+            Util::ComputeCeresCost(res_ids_sm, cost_sm_begin, problem);
 
             // Solve and visualize:
             ceres::Solve(options, &problem, &summary);
@@ -1278,6 +1323,7 @@ public:
             Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
             Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
             Util::ComputeCeresCost(res_ids_mp, cost_mp_final, problem);
+            Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
 
             // vector<SE3d> pose1(Nlidar);
             // for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -1285,12 +1331,12 @@ public:
 
             printf("LO. Lidar %d. SW: %4d -> %4d. Iter: %2d.\n"
                    "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d\n"
-                   "J0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f\n"
-                   "JK: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f\n\n",
+                   "J0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
+                   "JK: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n\n",
                     Nlidar, gbStart, gbFinal, (int)(summary.iterations.size()),
                     res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(),
-                    summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin,
-                    summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final);
+                    summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin, cost_sm_begin,
+                    summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final, cost_sm_final);
 
             // Step 2.1: Copy the knots back to the global trajectory
             for (int lidx = 0; lidx < Nlidar; lidx++)

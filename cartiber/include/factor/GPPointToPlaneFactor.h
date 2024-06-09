@@ -44,7 +44,7 @@ public:
 
     // Constructor
     GPPointToPlaneFactor(const Vector3d &finW_, const Vector3d &f_, const Vector4d &coef, double w_,
-                               double Dt_, double s_)
+                         double Dt_, double s_)
     :   finW       (finW_            ),
         f          (f_               ),
         n          (coef.head<3>()   ),
@@ -80,20 +80,6 @@ public:
         // Acceleration of the second knot
         mutable_parameter_block_sizes()->push_back(3);
     }
-
-    // Matrix3d Jr(const Vector3d &phi) const
-    // {
-    //     Matrix3d Jr;
-    //     Sophus::rightJacobianSO3(phi, Jr);
-    //     return Jr;
-    // }
-
-    // Matrix3d JrInv(const Vector3d &phi) const
-    // {
-    //     Matrix3d JrInv;
-    //     Sophus::rightJacobianInvSO3(phi, JrInv);
-    //     return JrInv;
-    // }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
