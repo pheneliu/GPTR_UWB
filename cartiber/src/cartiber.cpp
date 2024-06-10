@@ -242,8 +242,8 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
         problem.AddParameterBlock(traj->getKnotAcc(knot_idx).data(), 3);
     }
 
-    double cost_pose_init;
-    double cost_pose_final;
+    double cost_pose_init = -1;
+    double cost_pose_final = -1;
     vector<ceres::internal::ResidualBlock *> res_ids_pose;
     // Add the pose factors
     for (int k = 0; k < ts.size(); k++)
@@ -279,6 +279,29 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
         auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
         res_ids_pose.push_back(res_block);
     }
+
+    // // Add the GP factors based on knot difference
+    // double cost_sm_init = -1;
+    // double cost_sm_final = -1;
+    // vector<ceres::internal::ResidualBlock *> res_ids_sm;
+    // for (int kidx = 0; kidx < traj->getNumKnots() - 2; kidx++)
+    // {
+    //     vector<double *> factor_param_blocks;
+    //     // Add the parameter blocks
+    //     for (int knot_idx = kidx; knot_idx < kidx + 3; knot_idx++)
+    //     {
+    //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+    //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+    //     }
+
+    //     // Create the factor
+    //     double sm_loss_thres = -1;
+    //     nh_ptr->getParam("sm_loss_thres", sm_loss_thres);
+    //     ceres::LossFunction *sm_loss_function = sm_loss_thres <= 0 ? NULL : new ceres::HuberLoss(sm_loss_thres);
+    //     ceres::CostFunction *cost_function = new GPSmoothnessFactor(smSigmaR, smSigmaP, traj->getDt());
+    //     auto res_block = problem.AddResidualBlock(cost_function, sm_loss_function, factor_param_blocks);
+    //     res_ids_sm.push_back(res_block);
+    // }
 
     // Init cost
     Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
@@ -500,7 +523,6 @@ int main(int argc, char **argv)
     printf("Lidar type: \n");
     for(auto type : lidar_type)
         cout << type << endl;
-
 
     // Get the leaf size
     nh_ptr->getParam("leaf_size", leaf_size);
@@ -740,6 +762,17 @@ int main(int argc, char **argv)
         
         // Fit the spline
         report[lidx] = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+
+        for(int kidx = 0; kidx < traj[lidx]->getNumKnots(); kidx++)
+        {
+            auto X = traj[lidx]->getKnot(kidx);
+            myTf T(X.R.unit_quaternion(), X.P);
+            printf("LIDX %d. Knot %3d. Pos: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. "
+                   "YPR: %6.3f, %6.3f, %6.3f. OMG: %6.3f, %6.3f, %6.3f.\n",
+                   lidx, kidx,
+                   X.P.x(), X.P.y(), X.P.z(), X.V.x(), X.V.y(), X.V.z(), X.A.x(), X.A.y(), X.A.z(),
+                   T.yaw(), T.pitch(), T.roll(), X.O.x(), X.O.y(), X.O.z());
+        }
 
         // Sample the spline by the synchronized sampling time
         poseSampled[lidx] = CloudPosePtr(new CloudPose());

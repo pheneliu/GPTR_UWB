@@ -536,7 +536,9 @@ public:
         auto   us = computeTimeIndex(t);
         int    u  = us.first;
         double s  = us.second;
+
         assert(u <= getNumKnots() - 1);
+
         int ua = u;  
         int ub = u+1;
 
@@ -544,12 +546,16 @@ public:
         StateStamped Xa = StateStamped(t0 + ua*dt, R[ua], O[ua], P[ua], V[ua], A[ua]);
         StateStamped Xb = StateStamped(t0 + ub*dt, R[ub], O[ub], P[ub], V[ub], A[ub]);
 
-        // Relative angle between two knots
-        Vec3 thetaa = Vec3(0, 0, 0);
-        Vec3 thetab = (Xa.R.inverse() * Xb.R).log();
+        SO3d Rab = Xa.R.inverse()*Xb.R;
 
-        Eigen::Matrix<double, 6, 1> gammaa; gammaa << thetaa, Xa.O;
-        Eigen::Matrix<double, 6, 1> gammab; gammab << thetab, JrInv(thetab)*Xb.O;
+        // Relative angle between two knots
+        Vec3 thetaa    = Vec3::Zero();
+        Vec3 thetadota = Xa.O;
+        Vec3 thetab    = Rab.log();
+        Vec3 thetadotb = JrInv(thetab)*Xb.O;
+
+        Eigen::Matrix<double, 6, 1> gammaa; gammaa << thetaa, thetadota;
+        Eigen::Matrix<double, 6, 1> gammab; gammab << thetab, thetadotb;
 
         Eigen::Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
         Eigen::Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
@@ -560,8 +566,13 @@ public:
         gammat = gpm.LAMBDA_RO(s*dt)  * gammaa + gpm.PSI_RO(s*dt)  * gammab;
         pvat   = gpm.LAMBDA_PVA(s*dt) * pvaa   + gpm.PSI_PVA(s*dt) * pvab;
 
-        SO3d Rt = SO3d::exp(gammat.block<3, 1>(0, 0));
-        Vec3 Ot = gammat.block<3, 1>(3, 0);
+        // Retrive the interpolated SO3 in relative form
+        Vec3 thetat    = gammat.block(0, 0, 3, 1);
+        Vec3 thetadott = gammat.block(3, 0, 3, 1);
+
+        // Assign the interpolated state
+        SO3d Rt = Xa.R*SO3d::exp(thetat);
+        Vec3 Ot = gpm.Jr(thetat)*thetadott;
         Vec3 Pt = pvat.block<3, 1>(0, 0);
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
