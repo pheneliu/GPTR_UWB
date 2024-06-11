@@ -127,9 +127,10 @@ public:
         MatrixXd Q(N, N);
         for(int n = 0; n < N; n++)
             for(int m = 0; m < N; m++)
-                Q(n, m) = 1.0/(2*N-2-n-m+1)*pow(dtau, 2*N-2-n-m+1)/factorial(N-1-n)/factorial(N-1-m);
+                Q(n, m) = pow(dtau, 2*N-2-n-m+1)/double(factorial(N-1-n))/double(factorial(N-1-m));
 
-        return Q;    
+        // cout << "MyQ: " << Q << endl;
+        return Q;
     }
 
     // PSI in x(tau) = LAMBDA(tau)x(k-1) + PSI(tau)x*(k)

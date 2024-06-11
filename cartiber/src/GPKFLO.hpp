@@ -7,6 +7,9 @@ using namespace Eigen;
 typedef Matrix<double, 12, 12> MatrixNd;
 typedef Matrix<double, 12, 1>  VectorNd;
 
+typedef Sophus::SO3<double> SO3d;
+typedef Vector3d Vec3;
+
 class StateWithCov
 {
 public:
@@ -14,10 +17,10 @@ public:
     double tcurr;
 
     // State estimate
-    SO3d     Rot = SO3d(Quaternd(1, 0, 0, 0));
-    Vector3d Pos = Vector3d(0, 0, 0);
-    Vector3d Omg = Vector3d(0, 0, 0);
-    Vector3d Vel = Vector3d(0, 0, 0);
+    SO3d Rot = SO3d(Quaternd(1, 0, 0, 0));
+    Vec3 Pos = Vec3(0, 0, 0);
+    Vec3 Omg = Vec3(0, 0, 0);
+    Vec3 Vel = Vec3(0, 0, 0);
     
     // Error state covariance
     MatrixNd Cov = MatrixNd::Identity();
@@ -28,18 +31,18 @@ public:
     // Constructor
     
     StateWithCov()
-        : tcurr(0), Rot(SO3d(Quaternd(1, 0, 0, 0))), Pos(Vector3d(0, 0, 0)), Omg(Vector3d(0, 0, 0)), Vel(Vector3d(0, 0, 0)), Cov(MatrixNd::Identity())
+        : tcurr(0), Rot(SO3d(Quaternd(1, 0, 0, 0))), Pos(Vec3(0, 0, 0)), Omg(Vec3(0, 0, 0)), Vel(Vec3(0, 0, 0)), Cov(MatrixNd::Identity())
     {}
 
-    StateWithCov(double t, const Quaternd &Q, const Vector3d &P, Vector3d W, Vector3d V, MatrixNd C)
+    StateWithCov(double t, const Quaternd &Q, const Vec3 &P, Vec3 W, Vec3 V, MatrixNd C)
         : tcurr(t), Rot(SO3d(Q)), Pos(P), Omg(W), Vel(V), Cov(C)
     {}
 
-    StateWithCov(double t, const SO3d &Q, const Vector3d &P, Vector3d W, Vector3d V, MatrixNd C)
+    StateWithCov(double t, const SO3d &Q, const Vec3 &P, Vec3 W, Vec3 V, MatrixNd C)
         : tcurr(t), Rot(Q), Pos(P), Omg(W), Vel(V), Cov(C)
     {}
 
-    StateWithCov(double t, const Quaternd &Q, const Vector3d &P, Vector3d W, Vector3d V, double sigma)
+    StateWithCov(double t, const Quaternd &Q, const Vec3 &P, Vec3 W, Vec3 V, double sigma)
         : tcurr(t), Rot(SO3d(Q)), Pos(P), Omg(W), Vel(V), Cov(MatrixNd::Identity()*sigma)
     {}
 
@@ -63,14 +66,14 @@ public:
         return *this;
     }
 
-    Matrix3d Jr(const Vector3d &phi) const
+    Matrix3d Jr(const Vec3 &phi) const
     {
         Matrix3d Jr;
         Sophus::rightJacobianSO3(phi, Jr);
         return Jr;
     }
 
-    Matrix3d JrInv(const Vector3d &phi) const
+    Matrix3d JrInv(const Vec3 &phi) const
     {
         Matrix3d Jr;
         Sophus::rightJacobianInvSO3(phi, Jr);
@@ -84,26 +87,26 @@ public:
         double dt_ = (tcurr - Xhatprev.tcurr);
 
         // Load the previous states
-        double   tc   = tcurr;
-        SO3d     Qc   = Rot;
-        Vector3d Pc   = Pos;
-        Vector3d Wc   = dt_ == 0.0 ? Vector3d(0, 0, 0) : (Xhatprev.Rot.inverse()*Rot).log() / dt_;
-        Vector3d Vc   = dt_ == 0.0 ? Vector3d(0, 0, 0) : (Pos - Xhatprev.Pos) / dt_;
+        double tc = tcurr;
+        SO3d Qc = Rot;
+        Vec3 Pc = Pos;
+        Vec3 Wc = dt_ == 0.0 ? Vec3(0, 0, 0) : (Xhatprev.Rot.inverse()*Rot).log() / dt_;
+        Vec3 Vc = dt_ == 0.0 ? Vec3(0, 0, 0) : (Pos - Xhatprev.Pos) / dt_;
         MatrixNd Covc = Cov;
 
         // Find the new delta t
         double dt = tn - tc;
 
         // Intermediary quanities
-        Vector3d dA    = Wc*dt;
-        SO3d     dQ    = SO3d::exp(Wc*dt);
-        SO3d     Qcinv = Qc.inverse();
+        Vec3 dA = Wc*dt;
+        SO3d dQ = SO3d::exp(Wc*dt);
+        SO3d Qcinv = Qc.inverse();
         
         // Predict the state 
-        SO3d     Qn = Qc*dQ;
-        Vector3d Pn = Pc + Vc*dt;
-        Vector3d Wn = Wc;
-        Vector3d Vn = Vc;
+        SO3d Qn = Qc*dQ;
+        Vec3 Pn = Pc + Vc*dt;
+        Vec3 Wn = Wc;
+        Vec3 Vn = Vc;
 
         // Calculate the transition matrix
         MatrixNd Fx = MatrixNd::Identity();
@@ -144,24 +147,15 @@ public:
 
         MatrixNd Covn = Fx*Covc*Fx.transpose() + Fm*Rm*Fm.transpose();
 
-        // printf("Fx: \n");
-        // cout << Fx << endl;
-        // printf("Fm: \n");
-        // cout << Fm << endl;
-        // printf("Covc: \n");
-        // cout << Covc << endl;
-        // printf("Covn: \n");
-        // cout << Covn << endl;
-
         return StateWithCov(tn, Qn, Pn, Wn, Vn, Covn);
     }
 
     void boxplusd(VectorNd &dX)
     {
         SO3d dQ = SO3d::exp(dX.block<3, 1>(0, 0));
-        Vector3d dP = dX.block<3, 1>(3, 0);
-        Vector3d dW = dX.block<3, 1>(6, 0);
-        Vector3d dV = dX.block<3, 1>(9, 0);
+        Vec3 dP = dX.block<3, 1>(3, 0);
+        Vec3 dW = dX.block<3, 1>(6, 0);
+        Vec3 dV = dX.block<3, 1>(9, 0);
 
         Rot *= dQ;
         Pos += dP;
@@ -183,7 +177,7 @@ public:
 
     VectorNd boxminus(StateWithCov &Xbar, MatrixNd &J)
     {
-        Vector3d Phi = (Xbar.Rot.inverse()*Rot).log();
+        Vec3 Phi = (Xbar.Rot.inverse()*Rot).log();
         VectorNd r;
         r << Phi, Pos - Xbar.Pos, Vel - Xbar.Vel, Omg - Xbar.Omg;
         
@@ -194,13 +188,13 @@ public:
         return r;
     }
     
-    Vector3d YPR()
+    Vec3 YPR()
     {
         return Util::Quat2YPR(Rot.unit_quaternion());
     }
 };
 
-class GPLO
+class GPKFLO
 {
 private:
 
@@ -237,10 +231,10 @@ private:
 public:
 
     // Destructor
-   ~GPLO() {};
+   ~GPKFLO() {};
 
     // Constructor
-    GPLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
+    GPKFLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
     : lidx(lidx_), Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
     {
         // Initialize the covariance of velocity
@@ -342,8 +336,8 @@ public:
                 if(Util::fitPlane(nbrPoints, 0.5, 0.2, Coef_[pidx].n, Coef_[pidx].plnrty))
                 {
                     Coef_[pidx].t = 0;
-                    Coef_[pidx].finW = Vector3d(pointInW.x, pointInW.y, pointInW.z);
-                    Coef_[pidx].fdsk = Vector3d(pointInB.x, pointInB.y, pointInB.z);
+                    Coef_[pidx].finW = Vec3(pointInW.x, pointInW.y, pointInW.z);
+                    Coef_[pidx].fdsk = Vec3(pointInB.x, pointInB.y, pointInB.z);
                 }
             }
             
@@ -370,12 +364,12 @@ public:
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int fidx = 0; fidx < Nf; fidx++)
         {
-            Vector3d f = Coef[fidx].fdsk;
-            Vector3d n = Coef[fidx].n.head<3>();
+            Vec3 f = Coef[fidx].fdsk;
+            Vec3 n = Coef[fidx].n.head<3>();
             double   m = Coef[fidx].n.w();
             double   w = Coef[fidx].plnrty;
             MatrixXd R = Xpred.Rot.matrix();
-            Vector3d p = Xpred.Pos;
+            Vec3 p = Xpred.Pos;
 
             RESIDUAL(fidx) = w*(n.dot(R*f + p) + m);
             JACOBIAN.block(fidx, 0, 1, 12) << -w*n.transpose()*R*Util::skewSymmetric(f)

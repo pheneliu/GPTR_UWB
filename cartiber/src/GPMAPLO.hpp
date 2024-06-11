@@ -17,12 +17,7 @@
 
 using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
 // using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
-typedef std::shared_ptr<GPLO> GPLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
-
-// ceres::LocalParameterization *analytic_local_parameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
-// ceres::LocalParameterization *autodiff_local_parameterization = new basalt::LieLocalParameterization<SO3d>();
-// ceres::LocalParameterization *local_parameterization;
 
 struct FactorMeta
 {
@@ -85,7 +80,7 @@ void RemoveResidualBlock(ceres::Problem &problem, FactorMeta &factorMeta)
         problem.RemoveResidualBlock(res_block);
 }
 
-class SGPLO
+class GPMAPLO
 {
 private:
 
@@ -129,9 +124,9 @@ private:
 public:
 
     // Destructor
-   ~SGPLO() {};
+   ~GPMAPLO() {};
 
-    SGPLO(NodeHandlePtr &nh_ptr_, vector<GaussianProcessPtr> &traj_, vector<SE3d> &T_L0_Li_)
+    GPMAPLO(NodeHandlePtr &nh_ptr_, vector<GaussianProcessPtr> &traj_, vector<SE3d> &T_L0_Li_)
         : nh_ptr(nh_ptr_), traj(traj_), T_L0_Li(T_L0_Li_)
     {
         // Trajectory estimate

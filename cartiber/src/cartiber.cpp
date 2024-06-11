@@ -25,9 +25,9 @@
 // Custom built utilities
 #include "CloudMatcher.hpp"
 #include "utility.h"
-#include "GPLO.hpp"
 #include "GaussianProcess.hpp"
-#include "SGPLO.hpp"
+#include "GPKFLO.hpp"
+#include "GPMAPLO.hpp"
 
 // Factor for optimization
 #include "factor/PoseAnalyticFactor.h"
@@ -81,9 +81,7 @@ double UW_NOISE = 10.0;
 double UV_NOISE = 10.0;
 
 // Define the posespline
-// using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
-// typedef Matrix<double, 12, 12> MatrixNd;
-typedef std::shared_ptr<GPLO> GPLOPtr;
+typedef std::shared_ptr<GPKFLO> GPKFLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 template <typename PointType>
@@ -679,18 +677,18 @@ int main(int argc, char **argv)
 
     // Find a preliminary trajectory for each lidar sequence
     mutex nh_mtx;
-    vector<GPLOPtr> gplo;
+    vector<GPKFLOPtr> gpkflo;
     vector<thread> trajEst;
     vector<CloudPosePtr> posePrior(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         // Creating the trajectory estimator
         StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-        gplo.push_back(GPLOPtr(new GPLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx)));
+        gpkflo.push_back(GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx)));
 
         // Estimate the trajectory
         posePrior[lidx] = CloudPosePtr(new CloudPose());
-        trajEst.push_back(thread(std::bind(&GPLO::FindTraj, gplo[lidx],
+        trajEst.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
                                             std::ref(kdTreeMap), std::ref(priormap),
                                             std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
                                             std::ref(posePrior[lidx]))));
@@ -700,7 +698,7 @@ int main(int argc, char **argv)
         trajEst[lidx].join();
 
     trajEst.clear();
-    gplo.clear();
+    gpkflo.clear();
 
     // Merge the time stamps
     double tmincut = cloudstamp.front().front().toSec();
@@ -818,10 +816,10 @@ int main(int argc, char **argv)
     }
 
     // Find the trajectory with joint factors
-    SGPLO sgplo(nh_ptr, traj, T_L0_Li);
+    GPMAPLO gpmaplo(nh_ptr, traj, T_L0_Li);
 
     // Find the trajectories
-    sgplo.FindTraj(kdTreeMap, priormap, clouds);
+    gpmaplo.FindTraj(kdTreeMap, priormap, clouds);
 
     ros::Rate rate(1);
     while(ros::ok())
@@ -831,13 +829,13 @@ int main(int argc, char **argv)
         // Publish the prior map for visualization
         Util::publishCloud(pmpub, *priormap, currTime, "world");
 
-        static vector<ros::Publisher> splineSamplePub;
-        if(splineSamplePub.size() == 0)
+        static vector<ros::Publisher> gpSamplePub;
+        if(gpSamplePub.size() == 0)
             for(int lidx = 0; lidx < Nlidar; lidx++)
-                splineSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
+                gpSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
 
         for(int lidx = 0; lidx < Nlidar; lidx++)
-            Util::publishCloud(splineSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
+            Util::publishCloud(gpSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
 
         // Sleep
         rate.sleep();
