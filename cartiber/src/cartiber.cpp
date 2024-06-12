@@ -816,8 +816,11 @@ int main(int argc, char **argv)
     }
 
     // Find the trajectory with joint factors
-    GPMAPLO gpmaplo(nh_ptr, traj, T_L0_Li);
-
+    vector<SE3d> T_W_Li0;
+    for(auto &tf : tf_W_Li0)
+        T_W_Li0.push_back(tf.getSE3());
+    GPMAPLO gpmaplo(nh_ptr, T_W_Li0, T_L0_Li);
+    thread process_data(&GPMAPLO::ChopTheClouds, &gpmaplo, std::ref(clouds));
     // Find the trajectories
     gpmaplo.FindTraj(kdTreeMap, priormap, clouds);
 

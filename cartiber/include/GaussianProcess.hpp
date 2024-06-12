@@ -66,6 +66,9 @@ public:
     StateStamped(double t_)
         : t(t_), R(SO3T()), O(Vec3T()), P(Vec3T()), V(Vec3T()), A(Vec3T()) {}
 
+    StateStamped(double t_, SE3d &pose)
+        : t(t_), R(pose.so3().cast<T>()), O(Vec3T()), P(pose.translation().cast<T>()), V(Vec3T()), A(Vec3T()) {}
+
     StateStamped(double t_, SO3d &R_, Vec3 &O_, Vec3 &P_, Vec3 &V_, Vec3 &A_)
         : t(t_), R(R_.cast<T>()), O(O_.cast<T>()), P(P_.cast<T>()), V(V_.cast<T>()), A(A_.cast<T>()) {}
 
@@ -84,11 +87,6 @@ public:
         this->V = Xother.V;
         this->A = Xother.A;
         return *this;
-    }
-
-    StateStamped interpolate(double s, const StateStamped &Xb)
-    {
-
     }
 };
 
@@ -116,7 +114,7 @@ public:
             for(int m = n + 1; m < N; m++)
                 Phi(n, m) = pow(dtau, m-n)/factorial(m-n);
 
-        return Phi;    
+        return Phi;
     }
 
     // Gaussian Process covariance, Q = \int{Phi*F*Qc*F'*Phi'}
@@ -127,8 +125,7 @@ public:
         MatrixXd Q(N, N);
         for(int n = 0; n < N; n++)
             for(int m = 0; m < N; m++)
-                Q(n, m) = pow(dtau, 2*N-2-n-m+1)/double(factorial(N-1-n))/double(factorial(N-1-m));
-
+                Q(n, m) = pow(dtau, 2*N-1-n-m)/double(2*N-1-n-m)/double(factorial(N-1-n))/double(factorial(N-1-m));
         // cout << "MyQ: " << Q << endl;
         return Q;
     }
@@ -633,6 +630,30 @@ public:
             V.push_back(Xn.V);
             A.push_back(Xn.A);
         }
+    }
+
+    void extendOneKnots()
+    {
+        Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();        
+        Matrix<double, 12, 1> pvac; pvac << P.back(), V.back(), A.back();
+
+        Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
+        Matrix<double, 12, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
+
+        Vec3 thetan = gamman.block<3, 1>(0, 0);
+        Vec3 thetadotn = gamman.block<3, 1>(3, 0);
+        
+        SO3d Rn = R.back()*SO3d::exp(thetan);
+        Vec3 On = gpm.Jr(thetan)*thetadotn;
+        Vec3 Pn = pvan.block<3, 1>(0, 0);
+        Vec3 Vn = pvan.block<3, 1>(3, 0);
+        Vec3 An = pvan.block<3, 1>(9, 0);
+
+        R.push_back(Rn);
+        O.push_back(On);
+        P.push_back(Pn);
+        V.push_back(Vn);
+        A.push_back(An);
     }
 
     void setKnot(int kidx, const StateStamped<double> &Xn)
