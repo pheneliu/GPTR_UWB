@@ -55,7 +55,8 @@ public:
         Info.block<9, 9>(6, 6) = kron(QP.inverse(), Matrix3d::Identity());
         
         // Find the square root info
-        sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
+        // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
+        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info.inverse()).matrixL().transpose();
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const

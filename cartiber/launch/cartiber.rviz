@@ -6,7 +6,6 @@ Panels:
       Expanded:
         - /Lidar01
         - /Lidar11
-        - /assocCloud1
       Splitter Ratio: 0.5411764979362488
     Tree Height: 746
   - Class: rviz/Selection
@@ -187,7 +186,7 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.019999999552965164
           Style: Spheres
           Topic: /lidar_0/assoc_cloud
           Unreliable: false
@@ -206,7 +205,7 @@ Visualization Manager:
           Color: 252; 175; 62
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: false
+          Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -221,7 +220,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: false
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -436,7 +435,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -445,13 +444,13 @@ Visualization Manager:
       Queue Size: 0
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.029999999329447746
+      Size (m): 0.009999999776482582
       Style: Flat Squares
-      Topic: /assoc_cloud
+      Topic: /lidar_0/assoc_cloud
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -480,7 +479,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 13.905745506286621
+      Distance: 2.619276762008667
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -488,17 +487,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 2.0335853099823
-        Y: 2.3307623863220215
-        Z: 4.76837158203125e-07
+        X: -0.519456684589386
+        Y: -0.9622795581817627
+        Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.2547965049743652
+      Pitch: 0.4447956681251526
       Target Frame: body
-      Yaw: 5.498523712158203
+      Yaw: 2.4253225326538086
     Saved: ~
 Window Geometry:
   Displays:
