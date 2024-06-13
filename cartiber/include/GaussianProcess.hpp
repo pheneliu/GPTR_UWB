@@ -632,22 +632,23 @@ public:
         }
     }
 
-    void extendOneKnots()
+    void extendOneKnot()
     {
-        Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();        
-        Matrix<double, 12, 1> pvac; pvac << P.back(), V.back(), A.back();
 
+        Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();
         Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
-        Matrix<double, 12, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
+
+        Matrix<double, 9, 1> pvac; pvac << P.back(), V.back(), A.back();
+        Matrix<double, 9, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
 
         Vec3 thetan = gamman.block<3, 1>(0, 0);
         Vec3 thetadotn = gamman.block<3, 1>(3, 0);
-        
+
         SO3d Rn = R.back()*SO3d::exp(thetan);
         Vec3 On = gpm.Jr(thetan)*thetadotn;
         Vec3 Pn = pvan.block<3, 1>(0, 0);
         Vec3 Vn = pvan.block<3, 1>(3, 0);
-        Vec3 An = pvan.block<3, 1>(9, 0);
+        Vec3 An = pvan.block<3, 1>(6, 0);
 
         R.push_back(Rn);
         O.push_back(On);
