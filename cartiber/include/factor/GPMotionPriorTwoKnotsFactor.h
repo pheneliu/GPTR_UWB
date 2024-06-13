@@ -132,7 +132,7 @@ public:
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
                 Dr_DOa.setZero();
                 Dr_DOa.block<3, 3>(0, 0) = -DtI;
-                Dr_DOa.block<3, 3>(3, 0) = JrInvthetab - Eye;
+                Dr_DOa.block<3, 3>(3, 0) = -Eye;
                 Dr_DOa = sqrtW*Dr_DOa;
             }
 
@@ -153,7 +153,7 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
                 Dr_DOb.setZero();
-                Dr_DOb.block<3, 3>(3, 0) = Eye;
+                Dr_DOb.block<3, 3>(3, 0) = JrInvthetab;
                 Dr_DOb = sqrtW*Dr_DOb;
             }
         }

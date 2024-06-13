@@ -66,10 +66,10 @@ public:
     StateStamped(double t_)
         : t(t_), R(SO3T()), O(Vec3T()), P(Vec3T()), V(Vec3T()), A(Vec3T()) {}
 
-    StateStamped(double t_, SE3d &pose)
+    StateStamped(double t_, const SE3d &pose)
         : t(t_), R(pose.so3().cast<T>()), O(Vec3T()), P(pose.translation().cast<T>()), V(Vec3T()), A(Vec3T()) {}
 
-    StateStamped(double t_, SO3d &R_, Vec3 &O_, Vec3 &P_, Vec3 &V_, Vec3 &A_)
+    StateStamped(double t_, const SO3d &R_, const Vec3 &O_, const Vec3 &P_, const Vec3 &V_, const Vec3 &A_)
         : t(t_), R(R_.cast<T>()), O(O_.cast<T>()), P(P_.cast<T>()), V(V_.cast<T>()), A(A_.cast<T>()) {}
 
     StateStamped(const StateStamped<T> &other)

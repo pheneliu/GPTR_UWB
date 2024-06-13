@@ -30,7 +30,7 @@
         <!-- GP MAP optimization params -->
         <param name="deltaT"         value="0.043"/>
         <param name="WINDOW_SIZE"    value="3"    />
-        <param name="fixed_start"    value="0.0" />
+        <param name="fixed_start"    value="0.001" />
         <param name="fixed_end"      value="-0.001" />
 
         <param name="lidar_ds_rate"  value="10"    />
@@ -41,8 +41,8 @@
         <param name="ppSigmaP"       value="-1.0" />
         
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="1.0"  />
-        <param name="mpSigmaP"       value="1.0"  />
+        <param name="mpSigmaR"       value="10"  />
+        <param name="mpSigmaP"       value="10"  />
         <param name="DK"             value="2"    />
         <param name="tshift"         value="0.025"/>
 
