@@ -191,7 +191,7 @@ public:
             vector<LidarCoef> Coef_;
             Coef_.resize(pointsCount);
 
-            // #pragma omp parallel for num_threads(MAX_THREADS)
+            #pragma omp parallel for num_threads(MAX_THREADS)
             for (int pidx = 0; pidx < pointsCount; pidx++)
             {
                 double tpoint = cloudRaw->points[pidx].t;
@@ -208,6 +208,9 @@ public:
                     pointInB.x = 0; pointInB.y = 0; pointInB.z = 0; pointInB.intensity = 0;
                     continue;
                 }
+
+                if(!Util::PointIsValid(pointInW))
+                    continue;
 
                 vector<int> knn_idx(knnSize, 0); vector<float> knn_sq_dis(knnSize, 0);
                 kdtreeMap->nearestKSearch(pointInW, knnSize, knn_idx, knn_sq_dis);
@@ -251,7 +254,6 @@ public:
         cloudDeskewedInB->resize(Npoints);
 
         SE3d T_Be_W = traj->pose(cloudRaw->points.back().t).inverse();
-
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int pidx = 0; pidx < Npoints; pidx++)
         {
@@ -259,71 +261,77 @@ public:
             PointXYZI  &po = cloudDeskewedInB->points[pidx];
 
             double ts = pi.t;
-            SE3d T_Be_Bs = T_Be_W*traj->pose(ts);
+            // if (!traj->TimeInInterval(tp))
+            // {
+            //     po.x = 0;
+            //     po.y = 0;
+            //     po.z = 0;
+            //     // po.t = pi.t;
+            //     po.intensity = pi.intensity;
+            // }
+            // else
+            // {
+                SE3d T_Be_Bs = T_Be_W*traj->pose(ts);
 
-            Vector3d pinBs(pi.x, pi.y, pi.z);
-            Vector3d pinBe = T_Be_Bs*pinBs;
+                Vector3d pinBs(pi.x, pi.y, pi.z);
+                Vector3d pinBe = T_Be_Bs*pinBs;
 
-            po.x = pinBe.x();
-            po.y = pinBe.y();
-            po.z = pinBe.z();
-            // po.t = pi.t;
-            po.intensity = pi.intensity;            
+                po.x = pinBe.x();
+                po.y = pinBe.y();
+                po.z = pinBe.z();
+                // po.t = pi.t;
+                po.intensity = pi.intensity;
+            // }
         }
     }
 
     void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options, ceres::Solver::Summary &summary,
                             GaussianProcessPtr &localTraj, double fixed_start, double fixed_end)
     {
-        int Nlidar = traj.size();
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
         options.num_threads = MAX_THREADS;
         options.max_num_iterations = 50;
 
-        ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
-        for (int lidx = 0; lidx < Nlidar; lidx++)
+        int KNOTS = localTraj->getNumKnots();
+
+        // Add the parameter blocks for rotation
+        for (int kidx = 0; kidx < KNOTS; kidx++)
         {
-            int KNOTS = localTraj->getNumKnots();
-            
-            // Add the parameter blocks for rotation
+            problem.AddParameterBlock(localTraj->getKnotSO3(kidx).data(), 4, new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>());
+            problem.AddParameterBlock(localTraj->getKnotOmg(kidx).data(), 3);
+            problem.AddParameterBlock(localTraj->getKnotPos(kidx).data(), 3);
+            problem.AddParameterBlock(localTraj->getKnotVel(kidx).data(), 3);
+            problem.AddParameterBlock(localTraj->getKnotAcc(kidx).data(), 3);
+        }
+
+        // Fix the knots
+        if (fixed_start >= 0)
             for (int kidx = 0; kidx < KNOTS; kidx++)
             {
-                problem.AddParameterBlock(localTraj->getKnotSO3(kidx).data(), 4, local_parameterization);
-                problem.AddParameterBlock(localTraj->getKnotOmg(kidx).data(), 3);
-                problem.AddParameterBlock(localTraj->getKnotPos(kidx).data(), 3);
-                problem.AddParameterBlock(localTraj->getKnotVel(kidx).data(), 3);
-                problem.AddParameterBlock(localTraj->getKnotAcc(kidx).data(), 3);                
+                if (localTraj->getKnotTime(kidx) <= localTraj->getMinTime() + fixed_start)
+                {
+                    problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
+                    // printf("Fixed knot %d\n", kidx);
+                }
             }
 
-            // Fix the knots
-            if (fixed_start >= 0)
-                for (int kidx = 0; kidx < KNOTS; kidx++)
-                {
-                    if (localTraj->getKnotTime(kidx) <= localTraj->getMinTime() + fixed_start)
-                    {
-                        problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
-                    }
-                }
-
-            if (fixed_end >= 0)
+        if (fixed_end >= 0)
+            for (int kidx = 0; kidx < KNOTS; kidx++)
             {
-                for (int kidx = 0; kidx < KNOTS; kidx++)
+                if (localTraj->getKnotTime(kidx) >= localTraj->getMaxTime() - fixed_end)
                 {
-                    if (localTraj->getKnotTime(kidx) >= localTraj->getMaxTime() - fixed_end)
-                    {
-                        problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
-                        problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
-                    }
+                    problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
+                    problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
+                    // printf("Fixed knot %d\n", kidx);
                 }
-            }    
-        }
+            }
     }
 
     void AddLidarFactors(vector<LidarCoef> &Coef, GaussianProcessPtr &traj, ceres::Problem &problem,
@@ -1441,11 +1449,11 @@ public:
                         }
                         
                         // If point is in the interval of interest, extract it
-                        if (lastCutTime <= tp && tp < lastCutTime + deltaT)
+                        if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)
                             cloudSeg->push_back(clouds[cidx]->points[pidx]);
                         
                         // If point has exceeded the interval, exit
-                        if(tp >= lastCutTime + deltaT)
+                        if(tp >= lastCutTime + deltaT - 1e-3)
                         {
                             if(pidx == clouds[cidx]->size() - 1)
                                 lastPointIdx = -1;
@@ -1521,14 +1529,14 @@ public:
                 continue;
             }
 
-            // Step 1: Extend the trajectory to the new end time
-            double tend = cloudSeg->points.back().t;
+            // Step 1: Extend the trajectory to the new end time, trim the time by millisecond
+            double TSWEND = double(int(cloudSeg->points.back().t*1e6)/1e6);
             // The trajectory must not have exceeded the new end time
-            // ROS_ASSERT_MSG(traj->getMaxTime() <= tend,
+            // ROS_ASSERT_MSG(traj->getMaxTime() <= TSWEND,
             //                "traj: %f. Seg: %f -> %f\n",
-            //                traj->getMaxTime(), cloudSeg->points.front().t, tend);
+            //                traj->getMaxTime(), cloudSeg->points.front().t, TSWEND);
             // Extend the knot by propagation
-            while(traj->getMaxTime() < tend)
+            while(traj->getMaxTime() < TSWEND)
             {
                 traj->extendOneKnot();
                 // if (traj->getMaxTime() >= tend)
@@ -1547,17 +1555,19 @@ public:
             pcl::copyPointCloud(*swCloudSeg.back(), *swCloudSegUndi.back());
 
             // Transform cloud to the world frame for association
-            SE3d pose = traj->pose(tend);
+            SE3d pose = traj->pose(TSWEND);
             pcl::transformPointCloud(*swCloudSegUndi.back(), *swCloudSegUndiInW.back(), pose.translation(), pose.so3().unit_quaternion());
 
             // Loop if the sliding window is not yet long enough
             if (WDZ < WINDOW_SIZE)
                 continue;
-            
+
             // Step 3: iterative optimization
+            static double skip_time = 4.9;
+            static int optnum = -1; optnum++;
             int max_outeritr = 3;
             int outeritr = max_outeritr;
-            while(outeritr > 0)
+            while(outeritr > 0 && traj->getMaxTime() > skip_time)
             {
                 outeritr--;
 
@@ -1567,7 +1577,7 @@ public:
                 // Step 3.2: Extract the on-window states
                 int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;                
                 double tmin = traj->getKnotTime(umin);
-                double tmax = min(traj->getMaxTime(), swCloudSeg.back()->points.back().t);
+                double tmax = min(traj->getMaxTime(), TSWEND);
                 // Find the knots related to this trajectory
                 GaussianProcessPtr localTraj(new GaussianProcess(deltaT));
                 localTraj->setStartTime(tmin);
@@ -1576,7 +1586,7 @@ public:
                 for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
                     localTraj->setKnot(kidx, traj->getKnot(kidx + umin));
 
-                StateStamped Xt0 = traj->getStateAt(tend);
+                StateStamped Xt0 = traj->getStateAt(TSWEND);
 
                 // Step 3.3: Create the ceres problem and add the knots to the param list
 
@@ -1627,7 +1637,8 @@ public:
                 // else
                 //     printf(KYEL "Skipping smoothness factors.\n" RESET);
 
-
+                TicToc tt_solve;
+                
                 // Initial cost
                 Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
                 Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
@@ -1643,7 +1654,8 @@ public:
                 Util::ComputeCeresCost(res_ids_mp, cost_mp_final, problem);
                 Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
 
-
+                tt_solve.Toc();
+                
                 // Step X: Copy the knots back to the global trajectory
                 {
                     for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
@@ -1660,9 +1672,10 @@ public:
                 for(int widx = 0; widx < WDZ; widx++)
                 {
                     Deskew(traj, swCloudSeg[widx], swCloudSegUndi[widx]);
-                    
+
                     // Transform pointcloud to the world frame
-                    myTf tf_W_Be(traj->pose(swCloudSeg[widx]->points.back().t));
+                    double tend = swCloudSeg[widx]->points.back().t;
+                    myTf tf_W_Be(traj->pose(tend));
                     pcl::transformPointCloud(*swCloudSegUndi[widx],
                                              *swCloudSegUndiInW[widx],
                                               tf_W_Be.pos, tf_W_Be.rot);
@@ -1671,20 +1684,21 @@ public:
                     Associate(kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
-                StateStamped XtK = traj->getStateAt(tend);
+                StateStamped XtK = traj->getStateAt(TSWEND);
                 // Print a report
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
                 double gpTs = localTraj->getMinTime();
                 double gpTe = localTraj->getMaxTime();
-                printf("GPMAPLO. OItr: %2d / %2d. GNItr: %2d. SW: %2d / %2d. Time: %9.3f -> %9.3f. Traj: %9.3f -> %9.3f\n"
-                       "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d. Smoothness: %4d.\n"
+                printf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Tslv: %.0f. SW: %2d / %2d. SwTraj: %9.3f -> %9.3f.\n"
+                       "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d. Smoothness: %4d. Knots: %d / %d.\n"
                        "J0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
                        "JK: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
                        "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
-                       "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n\n",
-                       outeritr + 1, max_outeritr, (int)(summary.iterations.size()), WDZ, WINDOW_SIZE, swTs, swTe, gpTs, gpTe,
-                       res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(),
+                       "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n\n" RESET,
+                       outeritr + 1 == max_outeritr ? KGRN : "", optnum,
+                       outeritr + 1, max_outeritr, (int)(summary.iterations.size()), tt_solve.GetLastStop(), WDZ, WINDOW_SIZE, swTs, swTe,
+                       res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
                        summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin, cost_sm_begin,
                        summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final, cost_sm_final,
                        Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),

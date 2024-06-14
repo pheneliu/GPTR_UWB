@@ -94,7 +94,7 @@ public:
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
 
         StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
-        
+
         Eigen::Matrix<double, 6, 1> gammaa;
         Eigen::Matrix<double, 6, 1> gammab;
         Eigen::Matrix<double, 6, 1> gammat;
@@ -168,7 +168,7 @@ public:
             Dr_DRb.setZero();
             Dr_DRb.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
         }
-        
+
         // Jacobian on Ob
         idx = ObIdx;
         if (jacobians[idx])

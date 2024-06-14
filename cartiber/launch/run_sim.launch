@@ -20,41 +20,41 @@
                                              0, 0, 0.7,  045, 45, 0
                                             ]"                   type="yaml"/>
         <!-- EKF params -->
-        <param name="leaf_size"      value="0.15" />
-        <param name="UW_NOISE"       value="10.0" />
-        <param name="UV_NOISE"       value="10.0" />
-        <param name="DEBUG_STEPS"    value="0"    />
-        <param name="MAX_ITER"       value="5"    />
-        <param name="dXmax"          value="0.2"  />
+        <param name="leaf_size"      value="0.15"   />
+        <param name="UW_NOISE"       value="10.0"   />
+        <param name="UV_NOISE"       value="10.0"   />
+        <param name="DEBUG_STEPS"    value="0"      />
+        <param name="MAX_ITER"       value="5"      />
+        <param name="dXmax"          value="0.2"    />
         
         <!-- GP MAP optimization params -->
-        <param name="deltaT"         value="0.043"/>
-        <param name="WINDOW_SIZE"    value="3"    />
-        <param name="fixed_start"    value="0.001" />
+        <param name="deltaT"         value="0.02"  />
+        <param name="WINDOW_SIZE"    value="5"     />
+        <param name="fixed_start"    value="-0.001" />
         <param name="fixed_end"      value="-0.001" />
 
-        <param name="lidar_ds_rate"  value="10"    />
-        <param name="lidar_weight"   value="1.0"  />
+        <param name="lidar_ds_rate"  value="1"     />
+        <param name="lidar_weight"   value="10.0"   />
         
         <!-- Pose prior factor -->
-        <param name="ppSigmaR"       value="-1.0" />
-        <param name="ppSigmaP"       value="-1.0" />
+        <param name="ppSigmaR"       value="-1.0"   />
+        <param name="ppSigmaP"       value="-1.0"   />
         
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="10"  />
-        <param name="mpSigmaP"       value="10"  />
-        <param name="DK"             value="2"    />
-        <param name="tshift"         value="0.025"/>
+        <param name="mpSigmaR"       value="1.0"    />
+        <param name="mpSigmaP"       value="1.0"    />
+        <param name="DK"             value="2"      />
+        <param name="tshift"         value="0.025"  />
 
         <!-- Smoothness factors -->
-        <param name="smSigmaR"       value="-10" />
-        <param name="smSigmaP"       value="-10" />
+        <param name="smSigmaR"       value="-10"    />
+        <param name="smSigmaP"       value="-10"    />
 
         <!-- Loss function threshold -->
-        <param name="ld_loss_thres"  value="1.0"   />
-        <param name="pp_loss_thres"  value="-1.0"  />
-        <param name="mp_loss_thres"  value="-1.0"  />
-        <param name="sm_loss_thres"  value="-1.0"  />
+        <param name="ld_loss_thres"  value="1.0"    />
+        <param name="pp_loss_thres"  value="-1.0"   />
+        <param name="mp_loss_thres"  value="-1.0"   />
+        <param name="sm_loss_thres"  value="-1.0"   />
 
     </node>
 

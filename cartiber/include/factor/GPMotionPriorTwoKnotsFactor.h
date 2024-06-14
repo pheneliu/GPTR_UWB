@@ -73,7 +73,7 @@ public:
         Vec3 thetab = Rab.log();
         Mat3 JrInvthetab = gpm.JrInv(thetab);
         Vec3 thetadotb = JrInvthetab*Xb.O;
-        
+
         // Rotational residual
         Vec3 rRot = thetab - Dt*Xa.O;
 
@@ -146,7 +146,7 @@ public:
                 Dr_DRb.block<3, 3>(3, 0) = Dthetadotb_DRb;
                 Dr_DRb = sqrtW*Dr_DRb;
             }
-            
+
             // dr_dOb
             idx = ObIdx;
             if(jacobians[idx])
@@ -170,7 +170,7 @@ public:
 
                 // cout << "Dr_DPsa\n" << Dr_DPsa << endl;
             }
-    
+
             idx = VaIdx;
             if(jacobians[idx])
             {
@@ -182,7 +182,7 @@ public:
 
                 // cout << "Dr_DVsa\n" << Dr_DVsa << endl;
             }
-    
+
             idx = AaIdx;
             if(jacobians[idx])
             {
@@ -209,7 +209,7 @@ public:
 
                 // cout << "Dr_DPsb\n" << Dr_DPsb << endl;
             }
-    
+
             idx = VbIdx;
             if(jacobians[idx])
             {
@@ -220,7 +220,7 @@ public:
 
                 // cout << "Dr_DPsb\n" << Dr_DVsb << endl;
             }
-    
+
             idx = AbIdx;
             if(jacobians[idx])
             {

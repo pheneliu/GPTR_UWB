@@ -5,8 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar01
-        - /Lidar11
-      Splitter Ratio: 0.5411764979362488
+        - /Lidar01/SWOpt01
+      Splitter Ratio: 0.550000011920929
     Tree Height: 746
   - Class: rviz/Selection
     Name: Selection
@@ -232,7 +232,7 @@ Visualization Manager:
           Class: rviz/PointCloud2
           Color: 252; 175; 62
           Color Transformer: FlatColor
-          Decay Time: 60
+          Decay Time: 600
           Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
@@ -241,9 +241,9 @@ Visualization Manager:
           Position Transformer: XYZ
           Queue Size: 0
           Selectable: true
-          Size (Pixels): 3
-          Size (m): 0.05000000074505806
-          Style: Flat Squares
+          Size (Pixels): 5
+          Size (m): 0.009999999776482582
+          Style: Spheres
           Topic: /lidar_0/sw_opt
           Unreliable: false
           Use Fixed Frame: true
@@ -479,7 +479,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 2.619276762008667
+      Distance: 1.1126656532287598
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -487,17 +487,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -0.519456684589386
-        Y: -0.9622795581817627
-        Z: 0
+        X: -0.0271783247590065
+        Y: 0.32813167572021484
+        Z: -3.5067358794549364e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4447956681251526
+      Pitch: 0.3947967290878296
       Target Frame: body
-      Yaw: 2.4253225326538086
+      Yaw: 5.294374465942383
     Saved: ~
 Window Geometry:
   Displays:

@@ -187,7 +187,7 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-6)
+        if(Xn < 1e-5)
             return 0.5*SO3T::hat(V);
 
         // Extract the elements of input
@@ -228,7 +228,7 @@ public:
         using Mat3T = Eigen::Matrix<T, 3, 3>;
 
         T Xn = X.norm();
-        if(Xn < 1e-6)
+        if(Xn < 1e-5)
             return -0.5*SO3T::hat(V);
 
         // Extract the elements of input
@@ -535,14 +535,20 @@ public:
         int    u  = us.first;
         double s  = us.second;
 
-        assert(u <= getNumKnots() - 1);
-
         int ua = u;  
         int ub = u+1;
 
+        if (ub >= R.size() && fabs(1.0 - s) < 1e-5)
+            return StateStamped(t0 + ua*dt, R[ua], O[ua], P[ua], V[ua], A[ua]);
+
         // Extract the states of the two adjacent knots
         StateStamped Xa = StateStamped(t0 + ua*dt, R[ua], O[ua], P[ua], V[ua], A[ua]);
+        if (fabs(s) < 1e-5)
+            return Xa;
+
         StateStamped Xb = StateStamped(t0 + ub*dt, R[ub], O[ub], P[ub], V[ub], A[ub]);
+        if (fabs(1.0 - s) < 1e-5)
+            return Xb;
 
         SO3d Rab = Xa.R.inverse()*Xb.R;
 
@@ -557,7 +563,7 @@ public:
 
         Eigen::Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
         Eigen::Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
-        
+
         Eigen::Matrix<double, 6, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
         Eigen::Matrix<double, 9, 1> pvat;   // Position, velocity, acceleration
 
