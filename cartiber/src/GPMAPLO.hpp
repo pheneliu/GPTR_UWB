@@ -2,19 +2,27 @@
 #include <Eigen/Sparse>
 #include "utility.h"
 
+/* All needed for filter of custom point type----------*/
+#include <pcl/pcl_base.h>
+#include <pcl/impl/pcl_base.hpp>
+#include <pcl/filters/filter.h>
+#include <pcl/filters/impl/filter.hpp>
+#include <pcl/filters/uniform_sampling.h>
+#include <pcl/filters/impl/uniform_sampling.hpp>
+#include <pcl/filters/impl/voxel_grid.hpp>
+#include <pcl/filters/crop_box.h>
+#include <pcl/filters/impl/crop_box.hpp>
+/* All needed for filter of custom point type----------*/
+
 #include "GaussianProcess.hpp"
 #include "factor/GPPoseFactor.h"
 #include "factor/GPPoseFactorAutodiff.h"
-
 #include "factor/GPMotionPriorFactor.h"
 #include "factor/GPMotionPriorFactorAutodiff.h"
-
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPPointToPlaneFactorAutodiff.h"
-
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
-
 #include "factor/GPSmoothnessFactor.h"
 
 #include "basalt/spline/se3_spline.h"
@@ -95,6 +103,9 @@ private:
     // Index for distinguishing between clouds
     int LIDX;
 
+    // Leaf size to downsample input pointcloud
+    double ds_size;
+
     // How many point clouds to import into the sliding window
     int WINDOW_SIZE = 10;
 
@@ -148,6 +159,9 @@ public:
         // Trajectory estimate
         nh_ptr->getParam("SPLINE_N", SPLINE_N);
         nh_ptr->getParam("deltaT", deltaT);
+
+        // Leaf size to downsample the pontclouds
+        nh_ptr->getParam("ds_size", ds_size);
 
         // Window size
         nh_ptr->getParam("WINDOW_SIZE", WINDOW_SIZE);
@@ -1529,8 +1543,10 @@ public:
                 continue;
             }
 
+            static TicToc tt_loop;
+
             // Step 1: Extend the trajectory to the new end time, trim the time by millisecond
-            double TSWEND = double(int(cloudSeg->points.back().t*1e6)/1e6);
+            double TSWEND = cloudSeg->points.back().t;
             // The trajectory must not have exceeded the new end time
             // ROS_ASSERT_MSG(traj->getMaxTime() <= TSWEND,
             //                "traj: %f. Seg: %f -> %f\n",
@@ -1542,6 +1558,13 @@ public:
                 // if (traj->getMaxTime() >= tend)
                 //     break;
             }
+
+            // Downsample the input pointcloud
+            pcl::UniformSampling<PointXYZIT> downsampler;
+            downsampler.setRadiusSearch(ds_size);
+            downsampler.setInputCloud(cloudSeg);
+            downsampler.filter(*cloudSeg);
+
 
             // Step 2: Store the cloud segment
             swCloudSeg.push_back(cloudSeg);
@@ -1686,6 +1709,7 @@ public:
 
                 StateStamped XtK = traj->getStateAt(TSWEND);
                 // Print a report
+                tt_loop.Toc();
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
                 double gpTs = localTraj->getMinTime();
@@ -1705,17 +1729,11 @@ public:
                        XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
 
 
-                // Sample and publish
+                // Sample and publish the slinding window trajectory
                 CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
-                for (int widx = 0; widx < WDZ; widx++)
-                {
-                    double tb = swCloudSeg[widx]->front().t;
-                    double te = swCloudSeg[widx]->back().t;
-                    for(double ts = tb; ts < te; ts += 0.01)
-                        if(localTraj->TimeInInterval(ts))
-                            poseSampled->points.push_back(myTf(localTraj->pose(ts)).Pose6D(ts));
-                }
-                // Create the publishers ad hoc
+                for(double ts = localTraj->getMinTime(); ts < localTraj->getMaxTime(); ts += localTraj->getDt()/5)
+                    if(localTraj->TimeInInterval(ts))
+                        poseSampled->points.push_back(myTf(localTraj->pose(ts)).Pose6D(ts));
                 static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
                 Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
 

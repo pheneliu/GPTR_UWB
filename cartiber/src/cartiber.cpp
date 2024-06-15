@@ -56,7 +56,7 @@ vector<string> pc_topics = {"/lidar_0/points"};
 vector<string> lidar_type = {"ouster"};
 
 // Get the prior map leaf size
-double leaf_size = 0.15;
+double pmap_leaf_size = 0.15;
 
 // Kdtree for priormap
 KdFLANNPtr kdTreeMap(new KdFLANN());
@@ -137,7 +137,7 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
         int Norg = pc0[lidx]->size();
 
         // Downsample the pointcloud
-        pc0[lidx] = uniformDownsample<PointXYZI>(pc0[lidx], leaf_size*2);
+        pc0[lidx] = uniformDownsample<PointXYZI>(pc0[lidx], pmap_leaf_size);
         printf("P0 lidar %d, Points: %d -> %d\n", lidx, Norg, pc0[lidx]->size());
 
         // Find ICP alignment and refine
@@ -182,34 +182,6 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     // // Return the result
     // return T_W_Li0;
 }
-
-// void deskewBySpline(CloudXYZITPtr &cloudin, CloudXYZITPtr &cloudout, PoseSplinePtr &traj)
-// {
-//     int Npoints = cloudin->size();
-//     cloudout->resize(Npoints);
-    
-//     // double t0 = cloudin->points[0].t;
-//     // myTf T_W_Bk(traj->pose(t0));
-
-//     #pragma omp parallel for num_threads(MAX_THREADS)
-//     for(int pidx = 0; pidx < Npoints; pidx++)
-//     {        
-//         PointXYZIT &pi = cloudin->points[pidx];
-//         PointXYZIT &po = cloudout->points[pidx];
-        
-//         double ts = pi.t;
-//         myTf T_W_Bs = traj->pose(ts);
-
-//         Vector3d pi_inBs(pi.x, pi.y, pi.z);
-//         Vector3d pi_inW = T_W_Bs.rot*pi_inBs + T_W_Bs.pos;
-
-//         po.x = pi_inW.x();
-//         po.y = pi_inW.y();
-//         po.z = pi_inW.z();
-//         po.t = pi.t;
-//         po.intensity = pi.intensity;
-//     }
-// }
 
 // Fit the spline with data
 string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
@@ -525,7 +497,7 @@ int main(int argc, char **argv)
         cout << type << endl;
 
     // Get the leaf size
-    nh_ptr->getParam("leaf_size", leaf_size);
+    nh_ptr->getParam("pmap_leaf_size", pmap_leaf_size);
 
     // Noise
     nh_ptr->getParam("UW_NOISE", UW_NOISE);
@@ -561,7 +533,7 @@ int main(int argc, char **argv)
 
     // Load the priormap
     CloudXYZIPtr priormap(new CloudXYZI()); pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
-    priormap = uniformDownsample<PointXYZI>(priormap, leaf_size);
+    priormap = uniformDownsample<PointXYZI>(priormap, pmap_leaf_size);
     // Create the kd tree
     printf("Building the prior map");
     kdTreeMap->setInputCloud(priormap);
@@ -575,7 +547,7 @@ int main(int argc, char **argv)
     }
 
     // Make the ikd-tree
-    // ikdtPM = ikdtreePtr(new ikdtree(0.5, 0.6, leaf_size));
+    // ikdtPM = ikdtreePtr(new ikdtree(0.5, 0.6, pmap_leaf_size));
 
     // Converting the topic to index
     map<string, int> pctopicidx; for(int idx = 0; idx < pc_topics.size(); idx++) pctopicidx[pc_topics[idx]] = idx;
