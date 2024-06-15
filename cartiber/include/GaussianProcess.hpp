@@ -199,10 +199,10 @@ public:
         T Xnp4  = Xnp3*Xn;
 
         T sXn   = sin(Xn);
-        T sXnp2 = sXn*sXn;
+        // T sXnp2 = sXn*sXn;
         
         T cXn   = cos(Xn);
-        T cXnp2 = cXn*cXn;
+        // T cXnp2 = cXn*cXn;
         
         T gXn   = (1.0 - cXn)/Xnp2;
         T DgXn_DXn = sXn/Xnp2 - 2.0*(1.0 - cXn)/Xnp3;
@@ -242,7 +242,7 @@ public:
         T sXnp2 = sXn*sXn;
         
         T cXn   = cos(Xn);
-        T cXnp2 = cXn*cXn;
+        // T cXnp2 = cXn*cXn;
         
         T gXn   = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
         T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
@@ -469,11 +469,11 @@ private:
     GPMixer gpm;
 
     // State vector
-    Eigen::aligned_deque<SO3d> R;
-    Eigen::aligned_deque<Vec3> O;
-    Eigen::aligned_deque<Vec3> P;
-    Eigen::aligned_deque<Vec3> V;
-    Eigen::aligned_deque<Vec3> A;
+    Eigen::aligned_deque<SO3d> R = Eigen::aligned_deque<SO3d>();
+    Eigen::aligned_deque<Vec3> O = Eigen::aligned_deque<Vec3>();
+    Eigen::aligned_deque<Vec3> P = Eigen::aligned_deque<Vec3>();
+    Eigen::aligned_deque<Vec3> V = Eigen::aligned_deque<Vec3>();
+    Eigen::aligned_deque<Vec3> A = Eigen::aligned_deque<Vec3>();
 
 public:
 
@@ -604,11 +604,14 @@ public:
     void setStartTime(double t)
     {
         t0 = t;
-        R  = {SO3d()};
-        O  = {Vec3(0, 0, 0)};
-        P  = {Vec3(0, 0, 0)};
-        V  = {Vec3(0, 0, 0)};
-        A  = {Vec3(0, 0, 0)};
+        if (R.size() == 0)
+        {
+            R  = {SO3d()};
+            O  = {Vec3(0, 0, 0)};
+            P  = {Vec3(0, 0, 0)};
+            V  = {Vec3(0, 0, 0)};
+            A  = {Vec3(0, 0, 0)};
+        }
     }
 
     void extendKnotsTo(double t, const StateStamped<double> &Xn=StateStamped())
@@ -640,7 +643,6 @@ public:
 
     void extendOneKnot()
     {
-
         Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();
         Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
 
@@ -661,6 +663,15 @@ public:
         P.push_back(Pn);
         V.push_back(Vn);
         A.push_back(An);
+    }
+
+    void extendOneKnot(const StateStamped<double> &Xn)
+    {
+        R.push_back(Xn.R);
+        O.push_back(Xn.O);
+        P.push_back(Xn.P);
+        V.push_back(Xn.V);
+        A.push_back(Xn.A);
     }
 
     void setKnot(int kidx, const StateStamped<double> &Xn)
