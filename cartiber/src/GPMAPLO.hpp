@@ -16,18 +16,21 @@
 
 #include "GaussianProcess.hpp"
 #include "factor/GPPoseFactor.h"
-#include "factor/GPPoseFactorAutodiff.h"
 #include "factor/GPMotionPriorFactor.h"
-#include "factor/GPMotionPriorFactorAutodiff.h"
 #include "factor/GPPointToPlaneFactor.h"
-#include "factor/GPPointToPlaneFactorAutodiff.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
-#include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
 #include "factor/GPSmoothnessFactor.h"
 
-#include "basalt/spline/se3_spline.h"
-#include "basalt/spline/ceres_spline_helper.h"
-#include "basalt/spline/ceres_local_param.hpp"
+#include "factor/GPPoseFactorAutodiff.h"
+#include "factor/GPMotionPriorFactorAutodiff.h"
+#include "factor/GPPointToPlaneFactorAutodiff.h"
+#include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
+
+#include "GNSolver.h"
+
+// #include "basalt/spline/se3_spline.h"
+// #include "basalt/spline/ceres_spline_helper.h"
+// #include "basalt/spline/ceres_local_param.hpp"
 
 using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
 // using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
@@ -112,6 +115,15 @@ private:
     // How many point clouds to import into the sliding window
     int WINDOW_SIZE = 10;
 
+    // Switch to use ceres
+    bool use_ceres = false;
+
+    // My custom Gauss Newton solver
+    GNSolver *mySolver;
+
+    // Outer iterations
+    int max_gniter = 3;
+
     // Initial pose of the lidars
     SE3d T_W_Li0;
 
@@ -157,7 +169,7 @@ public:
    ~GPMAPLO() {};
 
     GPMAPLO(NodeHandlePtr &nh_ptr_, const SE3d &T_W_Li0_, int &LIDX_)
-        : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_)
+        : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_), mySolver(new GNSolver(nh_ptr))
     {
         // Time to skip before doing the MAP optimization
         nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
@@ -171,6 +183,10 @@ public:
 
         // Window size
         nh_ptr->getParam("WINDOW_SIZE", WINDOW_SIZE);
+        use_ceres = Util::GetBoolParam(nh_ptr, "use_ceres", false);
+
+        // GN solver param
+        nh_ptr->getParam("max_gniter", max_gniter);
 
         // Fixed points on the trajectory
         nh_ptr->getParam("fixed_start", fixed_start);
@@ -261,8 +277,10 @@ public:
                 LidarCoef &coef = Coef_[pidx];
                 if (coef.t >= 0)
                 {
-                    totalFeature++;
                     Coef.push_back(coef);
+                    Coef.back().ptIdx = totalFeature;
+                    totalFeature++;
+
                 }
             }
         }
@@ -1596,6 +1614,7 @@ public:
             // Step 2.1: Associate the last pointcloud with the map
             Associate(kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
+            // Create a local trajectory for optimization
             GaussianProcessPtr localTraj(new GaussianProcess(deltaT));
             int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
             double tmin = traj->getKnotTime(umin);
@@ -1608,6 +1627,20 @@ public:
             // printf("umin: %d. tmin: %f. tmax: %f. LcKnots: %d. TrajKnots: %d\n",
             //         umin, tmin, tmax, localTraj->getNumKnots(), traj->getNumKnots());
             StateStamped Xt0 = traj->getStateAt(TSWEND);
+            // if (Xt0.P.norm() > 100.0)
+            // {   
+            //     for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
+            //     {
+            //         printf("Knot: %d\n", kidx);
+            //         Quaternd q = Xt0.R.unit_quaternion();
+            //         cout << q.x() << "," << q.y() << "," << q.z() << "," << q.w() << endl;
+            //         cout << Xt0.O.transpose() << endl;
+            //         cout << Xt0.P.transpose() << endl;
+            //         cout << Xt0.V.transpose() << endl;
+            //         cout << Xt0.A.transpose() << endl;
+            //     }
+            //     exit(-1);
+            // }
 
             int WDZ = min(int(swCloudSeg.size()), WINDOW_SIZE);
             // Loop if the sliding window is not yet long enough
@@ -1620,11 +1653,11 @@ public:
 
             // Step 3: iterative optimization -------------------------------------------------------------------------
 
+            vector<string> report(max_gniter);
+            
             static int optnum = -1; optnum++;
-            int max_outeritr = 3;
             int outeritr = 0;
-            vector<string> report(max_outeritr);
-            while(outeritr < max_outeritr && traj->getMaxTime() > SKIPPED_TIME)
+            while(outeritr < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
             {
                 TicToc tt_build;
 
@@ -1634,7 +1667,8 @@ public:
                 ceres::Problem problem;
                 ceres::Solver::Options options;
                 ceres::Solver::Summary summary;
-                CreateCeresProblem(problem, options, summary, localTraj, fixed_start, fixed_end);
+                if(use_ceres)
+                    CreateCeresProblem(problem, options, summary, localTraj, fixed_start, fixed_end);
 
                 // Test if the Jacobian works
                 // TestAnalyticJacobian(problem, localTraj, swCloudCoef[0], traj->getNumKnots());
@@ -1644,7 +1678,7 @@ public:
                 double cost_lidar_begin = -1;
                 double cost_lidar_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_lidar;
-                if (lidar_weight >= 0.0)
+                if (lidar_weight >= 0.0 && use_ceres)
                     for(int widx = 0; widx < WDZ; widx++)
                         AddLidarFactors(swCloudCoef[widx], localTraj, problem, res_ids_lidar);
                 // else
@@ -1654,7 +1688,7 @@ public:
                 double cost_pose_begin = -1;
                 double cost_pose_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_pose;
-                // if (ppSigmaR >= 0.0 && ppSigmaP >= 0.0)
+                // if (ppSigmaR >= 0.0 && ppSigmaP >= 0.0 && use_ceres)
                 //     AddPosePriorFactors(localTraj, problem, res_ids_pose);
                 // else
                 //     printf(KYEL "Skipping pose priors.\n" RESET);
@@ -1663,7 +1697,7 @@ public:
                 double cost_mp_begin = -1;
                 double cost_mp_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_mp;
-                if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0)
+                if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0 && use_ceres)
                     AddMotionPriorFactors(localTraj, problem, res_ids_mp);
                 // else
                 //     printf(KYEL "Skipping motion prior factors.\n" RESET);
@@ -1672,8 +1706,8 @@ public:
                 double cost_sm_begin = -1;
                 double cost_sm_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_sm;
-                if(smSigmaR >= 0.0 && smSigmaP >= 0.0)
-                    AddSmoothnessFactors(localTraj, problem, res_ids_sm);
+                // if(smSigmaR >= 0.0 && smSigmaP >= 0.0 && use_ceres)
+                //     AddSmoothnessFactors(localTraj, problem, res_ids_sm);
                 // else
                 //     printf(KYEL "Skipping smoothness factors.\n" RESET);
                 
@@ -1681,20 +1715,27 @@ public:
 
 
                 TicToc tt_solve;
-                // Initial cost
-                Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
-                Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
-                Util::ComputeCeresCost(res_ids_mp, cost_mp_begin, problem);
-                Util::ComputeCeresCost(res_ids_sm, cost_sm_begin, problem);
+                
+                if(use_ceres)
+                {
+                    // Initial cost
+                    Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
+                    Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
+                    Util::ComputeCeresCost(res_ids_mp, cost_mp_begin, problem);
+                    Util::ComputeCeresCost(res_ids_sm, cost_sm_begin, problem);
 
-                // Solve and visualize:
-                ceres::Solve(options, &problem, &summary);
+                    // Solve and visualize:
+                    ceres::Solve(options, &problem, &summary);
 
-                // Final cost
-                Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
-                Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
-                Util::ComputeCeresCost(res_ids_mp, cost_mp_final, problem);
-                Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
+                    // Final cost
+                    Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
+                    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+                    Util::ComputeCeresCost(res_ids_mp, cost_mp_final, problem);
+                    Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
+                }
+                else
+                    mySolver->Solve(localTraj, swCloudCoef, outeritr);
+
                 tt_solve.Toc();
                 
                 TicToc tt_aftop;
@@ -1768,21 +1809,24 @@ public:
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          RESET,
-                         outeritr == max_outeritr ? KGRN : "", optnum,
-                         outeritr, max_outeritr, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
+                         outeritr == max_gniter ? KGRN : "", optnum,
+                         outeritr, max_gniter, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
                          tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
-                         outeritr == max_outeritr ? tt_loop.Toc() : -1.0,
+                         outeritr == max_gniter ? tt_loop.Toc() : -1.0,
                          res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
                          summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin, cost_sm_begin,
                          summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final, cost_sm_final,
                          Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),
                          XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
+
+                // Print the report
+                if (outeritr == max_gniter)
+                {
+                    for(string &rep : report)
+                        cout << rep;
+                    cout << endl;
+                }
             }
-            
-            // Print the report
-            for(string &rep : report)
-                cout << rep;
-            cout << endl;
             // this_thread::sleep_for(chrono::milliseconds(100));
         }
 

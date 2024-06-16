@@ -1115,6 +1115,13 @@ namespace Util
         // return true;
     }
 
+    inline bool GetBoolParam(const NodeHandlePtr &nh, const string &param, bool default_value)
+    {
+        int param_;
+        nh->param(param, param_, default_value == true ? 1 : 0);
+        return (param_ == 0 ? false : true);
+    }
+
 }; // namespace Util
 
 

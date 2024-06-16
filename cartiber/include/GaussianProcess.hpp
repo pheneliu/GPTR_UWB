@@ -11,7 +11,6 @@ typedef Matrix3d Mat3;
 
 using namespace std;
 using namespace Eigen;
-// using namespace Sophus;
 
 template <typename MatrixType1, typename MatrixType2>
 MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
@@ -24,21 +23,8 @@ MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
     return result;
 }
 
-// Mat3 SO3Jr(const Vec3 &phi)
-// {
-//     Mat3 Jr;
-//     Sophus::rightJacobianSO3(phi, Jr);
-//     return Jr;
-// }
-
-// Mat3 SO3JrInv(const Vec3 &phi)
-// {
-//     Mat3 Jr_inv;
-//     Sophus::rightJacobianInvSO3(phi, Jr_inv);
-//     return Jr_inv;
-// }
-
 // Define of the states for convenience in initialization and copying
+#define STATE_DIM 15
 template <class T = double>
 class StateStamped
 {
@@ -67,7 +53,7 @@ public:
         : t(t_), R(SO3T()), O(Vec3T()), P(Vec3T()), V(Vec3T()), A(Vec3T()) {}
 
     StateStamped(double t_, const SE3d &pose)
-        : t(t_), R(pose.so3().cast<T>()), O(Vec3T()), P(pose.translation().cast<T>()), V(Vec3T()), A(Vec3T()) {}
+        : t(t_), R(pose.so3().cast<T>()), O(Vec3T(0, 0, 0)), P(pose.translation().cast<T>()), V(Vec3T(0, 0, 0)), A(Vec3T(0, 0, 0)) {}
 
     StateStamped(double t_, const SO3d &R_, const Vec3 &O_, const Vec3 &P_, const Vec3 &V_, const Vec3 &A_)
         : t(t_), R(R_.cast<T>()), O(O_.cast<T>()), P(P_.cast<T>()), V(V_.cast<T>()), A(A_.cast<T>()) {}
@@ -469,11 +455,11 @@ private:
     GPMixer gpm;
 
     // State vector
-    Eigen::aligned_deque<SO3d> R = Eigen::aligned_deque<SO3d>();
-    Eigen::aligned_deque<Vec3> O = Eigen::aligned_deque<Vec3>();
-    Eigen::aligned_deque<Vec3> P = Eigen::aligned_deque<Vec3>();
-    Eigen::aligned_deque<Vec3> V = Eigen::aligned_deque<Vec3>();
-    Eigen::aligned_deque<Vec3> A = Eigen::aligned_deque<Vec3>();
+    Eigen::aligned_deque<SO3d> R;
+    Eigen::aligned_deque<Vec3> O;
+    Eigen::aligned_deque<Vec3> P;
+    Eigen::aligned_deque<Vec3> V;
+    Eigen::aligned_deque<Vec3> A;
 
 public:
 
@@ -683,6 +669,15 @@ public:
         A[kidx] = Xn.A;
     }
 
+    void updateKnot(int kidx, Matrix<double, STATE_DIM, 1> dX)
+    {
+        R[kidx] = R[kidx]*SO3d::exp(dX.block<3, 1>(0, 0));
+        O[kidx] = O[kidx] + dX.block<3, 1>(3, 0);
+        P[kidx] = P[kidx] + dX.block<3, 1>(6, 0);
+        V[kidx] = V[kidx] + dX.block<3, 1>(9, 0);
+        A[kidx] = A[kidx] + dX.block<3, 1>(12, 0);
+    }
+
     // Copy constructor
     GaussianProcess &operator=(const GaussianProcess &GPother)
     {
@@ -694,3 +689,5 @@ public:
         return *this;
     }
 };
+
+typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;

@@ -12,7 +12,7 @@
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="100"/>
+        <param name="MAX_CLOUDS"     value="600"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_1/points']" type="yaml" />
@@ -32,9 +32,13 @@
         <param name="MAX_ITER"       value="5"      />
         <param name="dXmax"          value="0.2"    />
         
-        <!-- GP MAP optimization params -->
-        <param name="WINDOW_SIZE"    value="3"      />
+        <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.043"  />
+        <param name="WINDOW_SIZE"    value="3"      />
+        <param name="use_ceres"      value="1"      />
+        <param name="max_gniter"     value="3"      />
+        <param name="lambda"         value="1.0"    />
+        <param name="dxmax"          value="0.5"    />
         <param name="fixed_start"    value="-0.001" />
         <param name="fixed_end"      value="-0.001" />
         
