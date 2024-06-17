@@ -1595,15 +1595,6 @@ public:
             swCloudSegUndiInW.push_back(CloudXYZIPtr(new CloudXYZI()));
             swCloudCoef.push_back(vector<LidarCoef>());
 
-            // Shift the sliding window if length exceeds threshold
-            if (swCloudSeg.size() > WINDOW_SIZE)
-            {
-                swCloudSeg.pop_front();
-                swCloudSegUndi.pop_front();
-                swCloudSegUndiInW.pop_front();
-                swCloudCoef.pop_front();
-            }
-
             // No need to deskew for the first interval
             pcl::copyPointCloud(*swCloudSeg.back(), *swCloudSegUndi.back());
 
@@ -1656,8 +1647,8 @@ public:
             vector<string> report(max_gniter);
             
             static int optnum = -1; optnum++;
-            int outeritr = 0;
-            while(outeritr < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
+            int gniter = 0;
+            while(gniter < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
             {
                 TicToc tt_build;
 
@@ -1734,7 +1725,24 @@ public:
                     Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
                 }
                 else
-                    mySolver->Solve(localTraj, swCloudCoef, outeritr);
+                {
+                    // Check for the next base for marginalization
+                    deque<int> swAbsKidx;
+                    for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
+                        swAbsKidx.push_back(kidx);
+                    int swNextBaseKnot = -1;
+                    if (swCloudSeg.size() >= WINDOW_SIZE)
+                        swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
+
+                    vector<double> J0, JK;
+                    mySolver->Solve(localTraj, swCloudCoef, gniter, J0, JK, swAbsKidx, swNextBaseKnot);
+                    
+                    // Extract the cost (NOT CORRECT, NEED TO HAVE MARGINALIZATION TO UPDATE THE LAST COST)
+                    cost_lidar_begin = J0[0];
+                    cost_lidar_final = JK[0];
+                    cost_mp_begin = J0[1];
+                    cost_mp_final = JK[1];
+                }
 
                 tt_solve.Toc();
                 
@@ -1751,7 +1759,7 @@ public:
                     }
                 }
 
-                // Deskew the point cloud
+                // Deskew the point cloud and make new association
                 for(int widx = 0; widx < WDZ; widx++)
                 {
                     Deskew(traj, swCloudSeg[widx], swCloudSegUndi[widx]);
@@ -1767,6 +1775,7 @@ public:
                     Associate(kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
+                // Sample the latest state for report
                 StateStamped XtK = traj->getStateAt(TSWEND);
 
                 // Sample and publish the slinding window trajectory
@@ -1791,7 +1800,7 @@ public:
                 static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
                 Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
 
-                outeritr++;
+                gniter++;
 
                 tt_aftop.Toc();
 
@@ -1800,7 +1809,7 @@ public:
                 double swTe = swCloudSeg.back()->points.back().t;
                 // double gpTs = localTraj->getMinTime();
                 // double gpTe = localTraj->getMaxTime();
-                report[outeritr-1] = 
+                report[gniter-1] = 
                 myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %.0f. Tbuild: %.0f. Tslv: %.0f. Taftop: %.0f. Tlp: %.0f.\n"
                          "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d. Smoothness: %4d. Knots: %d / %d.\n"
@@ -1809,10 +1818,10 @@ public:
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          RESET,
-                         outeritr == max_gniter ? KGRN : "", optnum,
-                         outeritr, max_gniter, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
+                         gniter == max_gniter ? KGRN : "", optnum,
+                         gniter, max_gniter, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
                          tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
-                         outeritr == max_gniter ? tt_loop.Toc() : -1.0,
+                         gniter == max_gniter ? tt_loop.Toc() : -1.0,
                          res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
                          summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin, cost_sm_begin,
                          summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final, cost_sm_final,
@@ -1820,14 +1829,25 @@ public:
                          XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
 
                 // Print the report
-                if (outeritr == max_gniter)
+                if (gniter == max_gniter)
                 {
-                    for(string &rep : report)
-                        cout << rep;
-                    cout << endl;
+
                 }
             }
-            // this_thread::sleep_for(chrono::milliseconds(100));
+
+            // Print the report
+            for(string &rep : report)
+                cout << rep;
+            cout << endl;
+
+            // Shift the sliding window if length exceeds threshold
+            if (swCloudSeg.size() >= WINDOW_SIZE)
+            {
+                swCloudSeg.pop_front();
+                swCloudSegUndi.pop_front();
+                swCloudSegUndiInW.pop_front();
+                swCloudCoef.pop_front();
+            }
         }
 
         //     // Sleep for some time

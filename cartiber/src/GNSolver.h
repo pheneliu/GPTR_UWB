@@ -26,6 +26,18 @@ private:
     double lambda = 1.0;
     double dxmax = 0.5;
 
+    map<int, int> xkidx_keep; // idx of knots to keep in graph
+    map<int, int> xkidx_marg; // idx of knots to remove from graph
+
+    // Marginalization info
+    MatrixXd Hkeep;
+    VectorXd bkeep;
+    MatrixXd Jm;              // 
+    VectorXd rm;              // 
+
+    // Value of the keep state for prior
+    map<int, StateStamped<double>>  xstate_keep;
+
 public:
 
     // Destructor
@@ -47,10 +59,16 @@ public:
         VectorXd &r, MatrixXd &J, double* cost
     );
 
+    void HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r);
+
     bool Solve
     (
         GaussianProcessPtr &traj,
         deque<vector<LidarCoef>> &SwLidarCoef,
-        const int &iter
+        const int &iter,
+        vector<double> &J0,
+        vector<double> &JK,
+        const deque<int> &swAbsKidx,
+        const int &swNextBaseKnot
     );
 };

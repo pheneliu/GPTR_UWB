@@ -12,15 +12,15 @@
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="600"/>
+        <param name="MAX_CLOUDS"     value="100"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
-        <param name="pc_topics"      value="['/lidar_1/points']" type="yaml" />
-        <param name="lidar_type"     value="['ouster', 'livox']" type="yaml" />
+        <param name="pc_topics"      value="['/lidar_1/points_livox']" type="yaml" />
+        <param name="lidar_type"     value="['livox', 'livox']"        type="yaml" />
         <param name="xyzypr_W_L0"    value="[
-                                             0, 0, 0.5, -135, 00, 0,
-                                             0, 0, 0.7,  045, 45, 0
-                                            ]"                   type="yaml"/>
+                                                0, 0, 0.5, -135, 00, 0,
+                                                0, 0, 0.7,  045, 45, 0,
+                                            ]"                         type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size" value="0.15"   />
@@ -35,7 +35,7 @@
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.043"  />
         <param name="WINDOW_SIZE"    value="3"      />
-        <param name="use_ceres"      value="1"      />
+        <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="1.0"    />
         <param name="dxmax"          value="0.5"    />
