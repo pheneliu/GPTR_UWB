@@ -74,6 +74,17 @@ public:
         this->A = Xother.A;
         return *this;
     }
+
+    Matrix<double, STATE_DIM, 1> boxminus(const StateStamped &Xother) const
+    {
+        Matrix<double, STATE_DIM, 1> dX;
+        dX << (Xother.R.inverse()*R).log(),
+               O - Xother.O,
+               P - Xother.P,
+               V - Xother.V,
+               A - Xother.A;
+        return dX;
+    }
 };
 
 class GPMixer
@@ -139,7 +150,7 @@ public:
     MatrixXd LAMBDA_PVA(const double dtau)   const { return kron(LAMBDA  (dtau, 3), Mat3::Identity()); }
 
     template <class T = double>
-    Eigen::Matrix<T, 3, 3> Jr(const Eigen::Matrix<T, 3, 1> &phi) const
+    static Eigen::Matrix<T, 3, 3> Jr(const Eigen::Matrix<T, 3, 1> &phi)
     {
         Eigen::Matrix<T, 3, 3> Jr;
         Sophus::rightJacobianSO3(phi, Jr);
@@ -147,7 +158,7 @@ public:
     }
 
     template <class T = double>
-    Eigen::Matrix<T, 3, 3> JrInv(const Eigen::Matrix<T, 3, 1> &phi) const
+    static Eigen::Matrix<T, 3, 3> JrInv(const Eigen::Matrix<T, 3, 1> &phi)
     {
         Eigen::Matrix<T, 3, 3> JrInv;
         Sophus::rightJacobianInvSO3(phi, JrInv);

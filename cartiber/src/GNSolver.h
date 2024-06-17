@@ -59,6 +59,17 @@ public:
         VectorXd &r, MatrixXd &J, double* cost
     );
 
+    void EvaluatePriorFactors
+    (
+        GaussianProcessPtr &traj,
+        deque<int> swAbsKidx,
+        SparseMatrix<double> &bprior_sparse,
+        SparseMatrix<double> &Hprior_sparse,
+        VectorXd* bprior_reduced,
+        MatrixXd* Hprior_reduced,
+        double* cost
+    );
+
     void HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r);
 
     bool Solve

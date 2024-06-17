@@ -1685,8 +1685,8 @@ public:
                 //     printf(KYEL "Skipping pose priors.\n" RESET);
 
                 // Step 3.6: Add motion prior factors
-                double cost_mp_begin = -1;
-                double cost_mp_final = -1;
+                double cost_mp2k_begin = -1;
+                double cost_mp2k_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_mp;
                 if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0 && use_ceres)
                     AddMotionPriorFactors(localTraj, problem, res_ids_mp);
@@ -1712,7 +1712,7 @@ public:
                     // Initial cost
                     Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
                     Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
-                    Util::ComputeCeresCost(res_ids_mp, cost_mp_begin, problem);
+                    Util::ComputeCeresCost(res_ids_mp, cost_mp2k_begin, problem);
                     Util::ComputeCeresCost(res_ids_sm, cost_sm_begin, problem);
 
                     // Solve and visualize:
@@ -1721,7 +1721,7 @@ public:
                     // Final cost
                     Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
                     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
-                    Util::ComputeCeresCost(res_ids_mp, cost_mp_final, problem);
+                    Util::ComputeCeresCost(res_ids_mp, cost_mp2k_final, problem);
                     Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
                 }
                 else
@@ -1738,10 +1738,12 @@ public:
                     mySolver->Solve(localTraj, swCloudCoef, gniter, J0, JK, swAbsKidx, swNextBaseKnot);
                     
                     // Extract the cost (NOT CORRECT, NEED TO HAVE MARGINALIZATION TO UPDATE THE LAST COST)
+                    cost_pose_begin  = J0[2];
+                    cost_pose_final  = JK[2];
                     cost_lidar_begin = J0[0];
                     cost_lidar_final = JK[0];
-                    cost_mp_begin = J0[1];
-                    cost_mp_final = JK[1];
+                    cost_mp2k_begin  = J0[1];
+                    cost_mp2k_final  = JK[1];
                 }
 
                 tt_solve.Toc();
@@ -1823,16 +1825,10 @@ public:
                          tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
                          res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
-                         summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp_begin, cost_sm_begin,
-                         summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp_final, cost_sm_final,
+                         summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp2k_begin, cost_sm_begin,
+                         summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp2k_final, cost_sm_final,
                          Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),
                          XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
-
-                // Print the report
-                if (gniter == max_gniter)
-                {
-
-                }
             }
 
             // Print the report
@@ -1850,9 +1846,8 @@ public:
             }
         }
 
-        //     // Sleep for some time
-        //     // this_thread::sleep_for(std::chrono::milliseconds(500));
-        //     // std::cin.get();
-
+        // Sleep for some time
+        // this_thread::sleep_for(std::chrono::milliseconds(500));
+        // std::cin.get();
     }
 };

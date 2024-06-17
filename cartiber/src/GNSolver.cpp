@@ -167,6 +167,107 @@ void GNSolver::EvaluateMotionPriorFactors
         *cost = pow(r.block(RES_MP2_GBASE, 0, RES_MP2_GSIZE, 1).norm(), 2);
 }
 
+void GNSolver::EvaluatePriorFactors
+(
+    GaussianProcessPtr &traj,
+    deque<int> swAbsKidx,
+    SparseMatrix<double> &bprior_sparse,
+    SparseMatrix<double> &Hprior_sparse,
+    VectorXd* bprior_reduced,
+    MatrixXd* Hprior_reduced,
+    double* cost
+)
+{
+    // Make a dictionary of the local idx and the abs knot idx
+    map<int, int> absKidxToLocal;
+    for (int kidx = 0; kidx < swAbsKidx.size(); kidx++)
+        absKidxToLocal[swAbsKidx[kidx]] = kidx;
+
+    VectorXd rprior = VectorXd::Zero(XALL_GSIZE);
+    MatrixXd Jprior = MatrixXd::Zero(XALL_GSIZE, XALL_GSIZE);
+    VectorXd bprior = VectorXd::Zero(XALL_GSIZE);
+    MatrixXd Hprior = MatrixXd::Zero(XALL_GSIZE, XALL_GSIZE);
+    
+    // Create marginalizing factor if there is states kept from last optimization       
+    SparseMatrix<double> rprior_sparse;
+    SparseMatrix<double> Jprior_sparse;
+
+    printf("absKidx: \n");
+    for(auto &xkidx : absKidxToLocal)
+        cout << xkidx.first << ", ";
+    cout << endl;    
+
+    // Calculate the prior residual
+    for(auto &xkidx : xstate_keep)
+    {
+        int kidx = absKidxToLocal[xkidx.first];
+
+        printf("Build prior for knot %d, %d, %d.\n", kidx, xkidx.first);
+
+        const StateStamped<> &Xbar = xkidx.second;
+        const StateStamped<> &Xcur = traj->getKnot(absKidxToLocal[xkidx.first]);
+        
+        Matrix<double, STATE_DIM, 1> dX = Xcur.boxminus(Xbar);
+        rprior.block<XALL_LSIZE, 1>(kidx*XALL_LSIZE, 0) << dX;
+        Jprior.block<XALL_LSIZE, XALL_LSIZE>(kidx*XALL_LSIZE, kidx*XALL_LSIZE).setIdentity();
+
+        // Add the inverse jacobian on the SO3 state
+        Vec3 dR = dX.block<3, 1>(0, 0);
+        if (dR.norm() < 1e-3 || dR.hasNaN())
+            Jprior.block<3, 3>(kidx*XALL_LSIZE, kidx*XALL_LSIZE) = GPMixer::JrInv(dR);
+    }
+
+    // Copy the blocks in big step
+    int XKEEP_SIZE = xkidx_keep.size()*XALL_LSIZE;
+    Hprior.block(0, 0, XKEEP_SIZE, XKEEP_SIZE) = Hkeep.block(0, 0, XKEEP_SIZE, XKEEP_SIZE);
+
+    // Update the b block
+    bprior.block(0, 0, XKEEP_SIZE, 1) = bkeep.block(0, 0, XKEEP_SIZE, 1);
+
+    if (Hprior.hasNaN() || bprior.hasNaN())
+        return;
+
+    // Update the hessian
+    rprior_sparse = rprior.sparseView(); rprior_sparse.makeCompressed();
+    Jprior_sparse = Jprior.sparseView(); Jprior_sparse.makeCompressed();
+
+    bprior_sparse = bprior.sparseView(); bprior_sparse.makeCompressed();
+    Hprior_sparse = Hprior.sparseView(); Hprior_sparse.makeCompressed();
+
+    bprior_sparse = bprior_sparse - Hprior_sparse*Jprior_sparse*rprior_sparse;
+    Hprior_sparse = Jprior_sparse.transpose()*Hprior_sparse*Jprior_sparse;    
+
+    if(bprior_reduced != NULL)
+    {
+        *bprior_reduced = VectorXd(XKEEP_SIZE, 1);
+        *bprior_reduced << bprior_sparse.block(0, 0, XKEEP_SIZE, 1).toDense();
+    }
+
+    if(Hprior_reduced != NULL)
+    {
+        *Hprior_reduced = MatrixXd(XKEEP_SIZE, XKEEP_SIZE);
+        *Hprior_reduced << Hprior_sparse.block(0, 0, XKEEP_SIZE, XKEEP_SIZE).toDense();
+    }
+
+    if (cost != NULL)
+    {
+        // For cost computation
+        VectorXd rprior_reduced(XKEEP_SIZE, 1);
+        MatrixXd Jprior_reduced(XKEEP_SIZE, XKEEP_SIZE);
+        rprior_reduced << rprior.block(0, 0, XKEEP_SIZE, 1);
+        Jprior_reduced << Jprior.block(0, 0, XKEEP_SIZE, XKEEP_SIZE);
+
+        // printf("Sizes: rm: %d, %d. Jm: %d, %d. Jr: %d, %d. r: %d, %d\n",
+        //         rm.rows(), rm.cols(),
+        //         Jm.rows(), Jm.cols(),
+        //         Jprior_reduced.rows(), Jprior_reduced.cols(),
+        //         rprior_reduced.rows(), rprior_reduced.cols());
+
+        if (cost != NULL)
+            *cost = pow((rm + Jm*Jprior_reduced*rprior_reduced).norm(), 2);
+    }
+}
+
 void GNSolver::HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r)
 {
 
@@ -194,6 +295,11 @@ bool GNSolver::Solve
     const int &swNextBaseKnot
 )
 {
+    // Make a dictionary of the local idx and the abs knot idx
+    map<int, int> absKidxToLocal;
+    for (int kidx = 0; kidx < swAbsKidx.size(); kidx++)
+        absKidxToLocal[swAbsKidx[kidx]] = kidx;
+
     // Find the dimensions of the problem
     int numX = 0;
     int numLidarFactors = 0;
@@ -213,7 +319,9 @@ bool GNSolver::Solve
     // Create the big Matrices
     VectorXd RESIDUAL(RES_ALL_GSIZE, 1);
     MatrixXd JACOBIAN(RES_ALL_GSIZE, XALL_GSIZE);
-
+    SparseMatrix<double> bprior_sparse;
+    SparseMatrix<double> Hprior_sparse;
+        
     // Evaluate the lidar factors
     double J0ldr = -1;
     EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &J0ldr);
@@ -222,11 +330,23 @@ bool GNSolver::Solve
     double J0mp2 = -1;
     EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &J0mp2);
 
+    // Evaluate the motion prior factors
+    double J0mar = -1;
+    EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, NULL, NULL, &J0mar);
+
     // Build the problem and solve
     SparseMatrix<double> Jsparse = JACOBIAN.sparseView(); Jsparse.makeCompressed();
     SparseMatrix<double> Jtp = Jsparse.transpose();
     SparseMatrix<double> H = Jtp*Jsparse;
     MatrixXd b = -Jtp*RESIDUAL;
+
+    // Add the prior factor
+    if(Hprior_sparse.rows() > 0 && bprior_sparse.rows() > 0)
+    {
+        H += Hprior_sparse;
+        b += bprior_sparse;
+        // printf("Hprior: %f\n", Hprior_sparse.toDense().trace());
+    }
 
     MatrixXd dX = MatrixXd::Zero(XALL_GSIZE, 1);
     bool solver_failed = false;
@@ -263,13 +383,20 @@ bool GNSolver::Solve
         traj->updateKnot(kidx, dX.block<STATE_DIM, 1>(kidx*STATE_DIM, 0));
 
     // Perform marginalization
-    double JKldr  = -1;
+    double JKldr = -1;
     double JKmp2 = -1;
+    double JKmar = -1;
     if(iter == max_gniter - 1 && swNextBaseKnot > 0)
     {
+        RESIDUAL.setZero();
+        JACOBIAN.setZero();
+        VectorXd bprior_final_reduced;
+        MatrixXd Hprior_final_reduced;
+
         // Calculate the factors again at new linearized points
         EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &JKldr);
         EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &JKmp2);
+        EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, &bprior_final_reduced, &Hprior_final_reduced, &JKmar);
 
         // Determine the marginalized states
         if (swNextBaseKnot > 0)
@@ -411,8 +538,8 @@ bool GNSolver::Solve
     }
     
     // Update the cost
-    J0 = {J0ldr, J0mp2};
-    JK = {JKldr, JKmp2};
+    J0 = {J0ldr, J0mp2, J0mar};
+    JK = {JKldr, JKmp2, JKmar};
 
     return true;
 }
