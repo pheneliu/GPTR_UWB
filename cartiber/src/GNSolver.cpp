@@ -380,12 +380,10 @@ void GNSolver::Marginalize
 
         // Due to the simple structure of GP, the marginalized block 
         // only consists of one state that will be marginalized
-        MatrixXd Hprior = Hprior_sparse.toDense();
-        VectorXd bprior = bprior_sparse.toDense();
         MatrixXd H_xtra_(H.rows(), H.cols()); H_xtra_.setZero();
-        VectorXd b_xtra_(b.rows(), 1); b_xtra_.setZero();
-        H_xtra_.block<STATE_DIM, STATE_DIM>(0, 0) = Hprior.block<STATE_DIM, STATE_DIM>(0, 0);
-        b_xtra_.block<STATE_DIM,         1>(0, 0) = bprior.block<STATE_DIM,         1>(0, 0);
+        VectorXd b_xtra_(b.rows(),        1); b_xtra_.setZero();
+        H_xtra_.block<STATE_DIM, STATE_DIM>(0, 0) = Hprior_sparse.toDense().block<STATE_DIM, STATE_DIM>(0, 0);
+        b_xtra_.block<STATE_DIM,         1>(0, 0) = bprior_sparse.toDense().block<STATE_DIM,         1>(0, 0);
         SparseMatrix<double> H_xtra = H_xtra_.sparseView(); H_xtra.makeCompressed();
         SparseMatrix<double> b_xtra = b_xtra_.sparseView(); b_xtra.makeCompressed();
         // Adding the old marginalization to the current one.
