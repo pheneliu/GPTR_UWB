@@ -215,7 +215,7 @@ public:
                 WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
     }
 
-    void Associate(const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
+    void Associate(GaussianProcessPtr &traj, const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
                    const CloudXYZITPtr &cloudRaw, const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW,
                    vector<LidarCoef> &Coef)
     {
@@ -246,6 +246,9 @@ public:
                 }
 
                 if(!Util::PointIsValid(pointInW))
+                    continue;
+
+                if (!traj->TimeInInterval(tpoint, 1e-6))
                     continue;
 
                 vector<int> knn_idx(knnSize, 0); vector<float> knn_sq_dis(knnSize, 0);
@@ -1602,12 +1605,13 @@ public:
             SE3d pose = traj->pose(TSWEND);
             pcl::transformPointCloud(*swCloudSegUndi.back(), *swCloudSegUndiInW.back(), pose.translation(), pose.so3().unit_quaternion());
 
+            // Step 2.1: Deskew the cloud segment
             Deskew(traj, swCloudSeg.back(), swCloudSegUndi.back());
 
-            // Step 2.1: Associate the last pointcloud with the map
-            Associate(kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
+            // Step 2.2: Associate the last pointcloud with the map
+            Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
-            // Create a local trajectory for optimization
+            // Step 2.3: Create a local trajectory for optimization
             GaussianProcessPtr localTraj(new GaussianProcess(deltaT));
             int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
             double tmin = traj->getKnotTime(umin);
@@ -1617,28 +1621,8 @@ public:
                 localTraj->extendOneKnot(traj->getKnot(kidx));
             // Reset the start time
             localTraj->setStartTime(tmin);
-            // printf("umin: %d. tmin: %f. tmax: %f. LcKnots: %d. TrajKnots: %d\n",
-            //         umin, tmin, tmax, localTraj->getNumKnots(), traj->getNumKnots());
-            StateStamped Xt0 = traj->getStateAt(TSWEND);
-            // if (Xt0.P.norm() > 100.0)
-            // {   
-            //     for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
-            //     {
-            //         printf("Knot: %d\n", kidx);
-            //         Quaternd q = Xt0.R.unit_quaternion();
-            //         cout << q.x() << "," << q.y() << "," << q.z() << "," << q.w() << endl;
-            //         cout << Xt0.O.transpose() << endl;
-            //         cout << Xt0.P.transpose() << endl;
-            //         cout << Xt0.V.transpose() << endl;
-            //         cout << Xt0.A.transpose() << endl;
-            //     }
-            //     exit(-1);
-            // }
-
+            // Effective length of the sliding window
             int WDZ = min(int(swCloudSeg.size()), WINDOW_SIZE);
-            // Loop if the sliding window is not yet long enough
-            // if (WDZ < WINDOW_SIZE)
-            //     continue;
 
             tt_preopt.Toc();
 
@@ -1646,7 +1630,9 @@ public:
 
             // Step 3: iterative optimization -------------------------------------------------------------------------
 
-            vector<string> report(max_gniter);
+            // Sample the state before optimization 
+            StateStamped Xt0 = traj->getStateAt(TSWEND);
+            vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
             
             static int optnum = -1; optnum++;
             int gniter = 0;
@@ -1737,15 +1723,15 @@ public:
                         swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
 
                     vector<double> J0, JK;
-                    mySolver->Solve(localTraj, swCloudCoef, gniter, J0, JK, swAbsKidx, swNextBaseKnot);
+                    mySolver->Solve(localTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
                     
                     // Extract the cost (NOT CORRECT, NEED TO HAVE MARGINALIZATION TO UPDATE THE LAST COST)
-                    cost_pose_begin  = J0[2];
-                    cost_pose_final  = JK[2];
-                    cost_lidar_begin = J0[0];
-                    cost_lidar_final = JK[0];
-                    cost_mp2k_begin  = J0[1];
-                    cost_mp2k_final  = JK[1];
+                    cost_pose_begin  = mySolver->GetReport().J0prior;
+                    cost_pose_final  = mySolver->GetReport().JKprior;
+                    cost_lidar_begin = mySolver->GetReport().J0lidar;
+                    cost_lidar_final = mySolver->GetReport().JKlidar;
+                    cost_mp2k_begin  = mySolver->GetReport().J0mp2k;
+                    cost_mp2k_final  = mySolver->GetReport().JKmp2k;
                 }
 
                 tt_solve.Toc();
@@ -1776,7 +1762,7 @@ public:
                                               tf_W_Be.pos, tf_W_Be.rot);
                     
                     // Associate between feature and map
-                    Associate(kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
+                    Associate(localTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
                 // Sample the latest state for report

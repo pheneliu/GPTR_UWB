@@ -3,15 +3,12 @@
 // Local size at individual factors
 #define RES_LDR_LSIZE 1
 #define RES_MP2_LSIZE 15
-
 // Global size for the whole problem, to be changed in each solve
 int RES_LDR_GSIZE;
 int RES_MP2_GSIZE;
 int RES_ALL_GSIZE;
-
 int RES_LDR_GBASE;
 int RES_MP2_GBASE;
-
 // Size of each parameter block at individual level
 #define XROT_LSIZE 0
 #define XOMG_LSIZE 3
@@ -19,22 +16,8 @@ int RES_MP2_GBASE;
 #define XVEL_LSIZE 9
 #define XACC_LSIZE 12
 #define XALL_LSIZE STATE_DIM
-
-// // Size of the parameter blocks on global scale
-// int XROT_GSIZE;
-// int XOMG_GSIZE;
-// int XPOS_GSIZE;
-// int XVEL_GSIZE;
-// int XACC_GSIZE;
-// // Size of the all params
 int XALL_GSIZE;
 
-// // Offset for each type of variable
-// int XALL_GBASE;
-// int XOMG_GBASE;
-// int XPOS_GBASE;
-// int XVEL_GBASE;
-// int XACC_GBASE;
 
 void UpdateDimensions(int &numldr, int &nummp2, int &numKnots)
 {
@@ -44,20 +27,8 @@ void UpdateDimensions(int &numldr, int &nummp2, int &numKnots)
 
     RES_LDR_GBASE = 0;
     RES_MP2_GBASE = RES_LDR_GBASE + RES_LDR_GSIZE;
-
-    // XROT_GSIZE = XROT_LSIZE*numKnots;
-    // XOMG_GSIZE = XOMG_LSIZE*numKnots;
-    // XPOS_GSIZE = XPOS_LSIZE*numKnots;
-    // XVEL_GSIZE = XVEL_LSIZE*numKnots;
-    // XACC_GSIZE = XACC_LSIZE*numKnots;
     
     XALL_GSIZE = XALL_LSIZE*numKnots;
-
-    // XROT_GBASE = 0;
-    // XOMG_GBASE = XROT_GBASE + XROT_GSIZE;
-    // XPOS_GBASE = XOMG_GBASE + XOMG_GSIZE;
-    // XVEL_GBASE = XPOS_GBASE + XPOS_GSIZE;
-    // XACC_GBASE = XVEL_GBASE + XVEL_GSIZE;
 }
 
 GNSolver::~GNSolver(){};
@@ -173,8 +144,8 @@ void GNSolver::EvaluatePriorFactors
     deque<int> swAbsKidx,
     SparseMatrix<double> &bprior_sparse,
     SparseMatrix<double> &Hprior_sparse,
-    VectorXd* bprior_reduced,
-    MatrixXd* Hprior_reduced,
+    // VectorXd* bprior_reduced,
+    // MatrixXd* Hprior_reduced,
     double* cost
 )
 {
@@ -237,17 +208,17 @@ void GNSolver::EvaluatePriorFactors
     bprior_sparse = bprior_sparse - Hprior_sparse*Jprior_sparse*rprior_sparse;
     Hprior_sparse = Jprior_sparse.transpose()*Hprior_sparse*Jprior_sparse;    
 
-    if(bprior_reduced != NULL)
-    {
-        *bprior_reduced = VectorXd(XKEEP_SIZE, 1);
-        *bprior_reduced << bprior_sparse.block(0, 0, XKEEP_SIZE, 1).toDense();
-    }
+    // if(bprior_reduced != NULL)
+    // {
+    //     *bprior_reduced = VectorXd(XKEEP_SIZE, 1);
+    //     *bprior_reduced << bprior_sparse.block(0, 0, XKEEP_SIZE, 1).toDense();
+    // }
 
-    if(Hprior_reduced != NULL)
-    {
-        *Hprior_reduced = MatrixXd(XKEEP_SIZE, XKEEP_SIZE);
-        *Hprior_reduced << Hprior_sparse.block(0, 0, XKEEP_SIZE, XKEEP_SIZE).toDense();
-    }
+    // if(Hprior_reduced != NULL)
+    // {
+    //     *Hprior_reduced = MatrixXd(XKEEP_SIZE, XKEEP_SIZE);
+    //     *Hprior_reduced << Hprior_sparse.block(0, 0, XKEEP_SIZE, XKEEP_SIZE).toDense();
+    // }
 
     if (cost != NULL)
     {
@@ -270,7 +241,6 @@ void GNSolver::EvaluatePriorFactors
 
 void GNSolver::HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r)
 {
-
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> saes(H);
     Eigen::VectorXd S = Eigen::VectorXd((saes.eigenvalues().array() > 0).select(saes.eigenvalues().array(), 0));
     Eigen::VectorXd S_inv = Eigen::VectorXd((saes.eigenvalues().array() > 0).select(saes.eigenvalues().array().inverse(), 0));
@@ -280,17 +250,171 @@ void GNSolver::HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorX
 
     J = S_sqrt.asDiagonal() * saes.eigenvectors().transpose();
     r = S_inv_sqrt.asDiagonal() * saes.eigenvectors().transpose() * b;
-
 }
 
+void GNSolver::Marginalize
+(
+    GaussianProcessPtr &traj,
+    VectorXd &RESIDUAL,
+    MatrixXd &JACOBIAN,
+    SparseMatrix<double> &bprior_sparse,
+    SparseMatrix<double> &Hprior_sparse,
+    const deque<int> &swAbsKidx,
+    const int &swNextBaseKnot,
+    deque<vector<LidarCoef>> &SwLidarCoef
+)
+{
+    RESIDUAL.setZero();
+    JACOBIAN.setZero();
+    VectorXd bprior_final_reduced;
+    MatrixXd Hprior_final_reduced;
+
+    // Calculate the factors again at new linearized points
+    EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &report.JKlidar);
+    EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &report.JKmp2k);
+    EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, &report.JKprior);
+
+    // Determine the marginalized states
+    if (swNextBaseKnot > 0)
+    {
+        ROS_ASSERT(swNextBaseKnot == swAbsKidx[1]);
+
+        // Index for each coef
+        vector<int> lidarIdxBase(SwLidarCoef.size(), 0);
+        for(int widx = 1; widx < SwLidarCoef.size(); widx++)
+            lidarIdxBase[widx] += lidarIdxBase[widx-1] + SwLidarCoef[widx-1].size();
+
+        // Determine the marginalized and keep knots
+        xkidx_keep.clear();
+        xkidx_marg.clear();
+        for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+            if (swAbsKidx[kidx] < swNextBaseKnot)
+                xkidx_marg[kidx] = swAbsKidx[kidx];
+
+        // Find the marginalized lidar residuals and the adjacent knots in the first bundle
+        vector<int> res_ldr_marg;
+        {
+            auto &Coefs = SwLidarCoef[0];
+            for(int cidx = 0; cidx < Coefs.size(); cidx++)
+            {
+                LidarCoef &coef = Coefs[cidx];
+                ROS_ASSERT(cidx == coef.ptIdx);
+
+                // Skip if lidar coef is not assigned
+                if (coef.t < 0)
+                    continue;
+
+                if (!traj->TimeInInterval(coef.t, 1e-6))
+                    continue;
+
+                auto   us = traj->computeTimeIndex(coef.t);
+                int    u  = us.first;
+                double s  = us.second;
+
+                // If the base knot is in the remove set, log down the residual rows
+                if (xkidx_marg.find(u) != xkidx_marg.end())
+                {
+                    // The base row of the residual
+                    int RES_ROW_BASE = RES_LDR_GBASE + (lidarIdxBase[0] + cidx)*RES_LDR_LSIZE;
+                    // Record the rows to marginalize
+                    for(int row_idx = 0; row_idx < RES_LDR_LSIZE; row_idx++)
+                        res_ldr_marg.push_back(RES_ROW_BASE + row_idx);
+                    // If the coupled knot is not in the marginalized set, it is in the keep set
+                    for(int kidx = u; kidx < u + 2; kidx++)
+                        if(xkidx_marg.find(kidx) == xkidx_marg.end())
+                            xkidx_keep[kidx] = swAbsKidx.front() + kidx;    
+                }
+            }
+        }
+
+        // Find the marginalized motion prior residuals and the adjacent knots
+        vector<int> res_mp2_marg;
+        {
+            for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
+            {
+                if (xkidx_marg.find(kidx) != xkidx_marg.end())
+                {
+                    // The base row of the residual
+                    int RES_ROW_BASE = RES_MP2_GBASE + kidx*RES_MP2_LSIZE;
+                    // Record the rows to marginalize
+                    for(int row_idx = 0; row_idx < RES_MP2_LSIZE; row_idx++)
+                        res_mp2_marg.push_back(RES_ROW_BASE + row_idx);
+                    // If the coupled knot is not in the marginalized set, it is in the keep set
+                    for(int u = kidx; u < kidx + 2; u++)
+                        if(xkidx_marg.find(u) == xkidx_marg.end())
+                            xkidx_keep[u] = swAbsKidx.front() + u;
+                }
+            }
+        }
+
+        // In this specific LO problem, all marginalized and kept states are the first two knots
+        for (auto &xkidx : xkidx_marg)
+            ROS_ASSERT_MSG(xkidx.first == 0, "%d, %d\n", xkidx.first, xkidx.second);
+        for (auto &xkidx : xkidx_keep)    
+            ROS_ASSERT_MSG(xkidx.first == 1, "%d, %d\n", xkidx.first, xkidx.second);
+
+        int RES_MARG_GSIZE = res_ldr_marg.size() + res_mp2_marg.size();
+        int XM_XK_GSIZE = (xkidx_marg.size() + xkidx_keep.size())*STATE_DIM;
+
+        // Extract the blocks of J and r related to marginalization
+        MatrixXd Jmarg = MatrixXd::Zero(RES_MARG_GSIZE, XM_XK_GSIZE);
+        MatrixXd rmarg = MatrixXd::Zero(RES_MARG_GSIZE, 1);                
+
+        // Extract the corresponding blocks
+        int row_marg = 0;
+        for(int row : res_mp2_marg)
+        {
+            Jmarg.row(row_marg) << JACOBIAN.block(row, 0, 1, XM_XK_GSIZE);
+            rmarg.row(row_marg) = RESIDUAL.row(row);
+            row_marg++;
+        }
+        for(int row : res_ldr_marg)
+        {
+            Jmarg.row(row_marg) << JACOBIAN.block(row, 0, 1, XM_XK_GSIZE);
+            rmarg.row(row_marg) = RESIDUAL.row(row);
+            row_marg++;
+        }
+
+        // Calculate the post-optimization hessian and gradient
+        SparseMatrix<double> Jsparse = Jmarg.sparseView(); Jsparse.makeCompressed();
+        SparseMatrix<double> Jtp = Jsparse.transpose();
+        SparseMatrix<double> H = Jtp*Jsparse;
+        MatrixXd b = -Jtp*rmarg;
+
+        // Divide the Hessian into corner blocks
+        int MARG_GSIZE = xkidx_marg.size()*STATE_DIM;
+        int KEEP_GSIZE = H.cols() - MARG_GSIZE;
+        SparseMatrix<double> Hmm = H.block(0, 0, MARG_GSIZE, MARG_GSIZE);
+        SparseMatrix<double> Hmk = H.block(0, MARG_GSIZE, MARG_GSIZE, KEEP_GSIZE);
+        SparseMatrix<double> Hkm = H.block(MARG_GSIZE, 0, KEEP_GSIZE, MARG_GSIZE);
+        SparseMatrix<double> Hkk = H.block(MARG_GSIZE, MARG_GSIZE, KEEP_GSIZE, KEEP_GSIZE);
+
+        MatrixXd bm = b.block(0, 0, MARG_GSIZE, 1);
+        MatrixXd bk = b.block(MARG_GSIZE, 0, KEEP_GSIZE, 1);
+
+        // Save the schur complement
+        MatrixXd Hmminv = Hmm.toDense().inverse();
+        MatrixXd HkmHmminv = Hkm*Hmminv;
+        Hkeep = Hkk - HkmHmminv*Hmk;
+        bkeep = bk  - HkmHmminv*bm;
+
+        // Convert Hb to Jr for easier use
+        HbToJr(Hkeep, bkeep, Jm, rm);
+
+        // Store the values of the keep knots for reference in the next loop
+        xstate_keep.clear();
+        for(auto &xkidx : xkidx_keep)
+            xstate_keep[xkidx.second] = traj->getKnot(xkidx.first);
+            //           AbsKnotIdx     state value at the knot idx
+
+    }
+}
 
 bool GNSolver::Solve
 (
     GaussianProcessPtr &traj,
     deque<vector<LidarCoef>> &SwLidarCoef,
     const int &iter,
-    vector<double> &J0,
-    vector<double> &JK,
     const deque<int> &swAbsKidx,
     const int &swNextBaseKnot
 )
@@ -326,16 +450,13 @@ bool GNSolver::Solve
     JACOBIAN.setZero();
 
     // Evaluate the lidar factors
-    double J0ldr = -1;
-    EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &J0ldr);
+    EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &report.J0lidar);
 
     // Evaluate the motion prior factors
-    double J0mp2 = -1;
-    EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &J0mp2);
+    EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &report.J0mp2k);
 
     // Evaluate the motion prior factors
-    double J0mar = -1;
-    EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, NULL, NULL, &J0mar);
+    EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, &report.J0prior);
 
     // Build the problem and solve
     SparseMatrix<double> Jsparse = JACOBIAN.sparseView(); Jsparse.makeCompressed();
@@ -386,163 +507,8 @@ bool GNSolver::Solve
         traj->updateKnot(kidx, dX.block<STATE_DIM, 1>(kidx*STATE_DIM, 0));
 
     // Perform marginalization
-    double JKldr = -1;
-    double JKmp2 = -1;
-    double JKmar = -1;
     if(iter == max_gniter - 1 && swNextBaseKnot > 0)
-    {
-        RESIDUAL.setZero();
-        JACOBIAN.setZero();
-        VectorXd bprior_final_reduced;
-        MatrixXd Hprior_final_reduced;
-
-        // Calculate the factors again at new linearized points
-        EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &JKldr);
-        EvaluateMotionPriorFactors(traj, RESIDUAL, JACOBIAN, &JKmp2);
-        EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, &bprior_final_reduced, &Hprior_final_reduced, &JKmar);
-
-        // Determine the marginalized states
-        if (swNextBaseKnot > 0)
-        {
-            ROS_ASSERT(swNextBaseKnot == swAbsKidx[1]);
-            // printf("Marginalization\n");
-
-            // Index for each coef
-            vector<int> lidarIdxBase(SwLidarCoef.size(), 0);
-            for(int widx = 1; widx < SwLidarCoef.size(); widx++)
-                lidarIdxBase[widx] += lidarIdxBase[widx-1] + SwLidarCoef[widx-1].size();
-
-            // Determine the marginalized and keep knots
-            xkidx_keep.clear();
-            xkidx_marg.clear();
-            for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
-                if (swAbsKidx[kidx] < swNextBaseKnot)
-                    xkidx_marg[kidx] = swAbsKidx[kidx];
-                // else
-                //     xkidx_keep[kidx] = swAbsKidx[kidx];
-
-            // Find the marginalized lidar residuals and the adjacent knots in the first bundle
-            vector<int> res_ldr_marg;
-            {
-                auto &Coefs = SwLidarCoef[0];
-                for(int cidx = 0; cidx < Coefs.size(); cidx++)
-                {
-                    LidarCoef &coef = Coefs[cidx];
-                    ROS_ASSERT(cidx == coef.ptIdx);
-
-                    // Skip if lidar coef is not assigned
-                    if (coef.t < 0)
-                        continue;
-
-                    if (!traj->TimeInInterval(coef.t, 1e-6))
-                        continue;
-
-                    auto   us = traj->computeTimeIndex(coef.t);
-                    int    u  = us.first;
-                    double s  = us.second;
-
-                    // If the base knot is in the remove set, log down the residual rows
-                    if (xkidx_marg.find(u) != xkidx_marg.end())
-                    {
-                        // The base row of the residual
-                        int RES_ROW_BASE = RES_LDR_GBASE + (lidarIdxBase[0] + cidx)*RES_LDR_LSIZE;
-                        // Record the rows to marginalize
-                        for(int row_idx = 0; row_idx < RES_LDR_LSIZE; row_idx++)
-                            res_ldr_marg.push_back(RES_ROW_BASE + row_idx);
-                        // If the coupled knot is not in the marginalized set, it is in the keep set
-                        for(int kidx = u; kidx < u + 2; kidx++)
-                            if(xkidx_marg.find(kidx) == xkidx_marg.end())
-                                xkidx_keep[kidx] = swAbsKidx.front() + kidx;    
-                    }
-                }
-            }
-
-            // Find the marginalized motion prior residuals and the adjacent knots
-            vector<int> res_mp2_marg;
-            {
-                for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
-                {
-                    if (xkidx_marg.find(kidx) != xkidx_marg.end())
-                    {
-                        // The base row of the residual
-                        int RES_ROW_BASE = RES_MP2_GBASE + kidx*RES_MP2_LSIZE;
-                        // Record the rows to marginalize
-                        for(int row_idx = 0; row_idx < RES_MP2_LSIZE; row_idx++)
-                            res_mp2_marg.push_back(RES_ROW_BASE + row_idx);
-                        // If the coupled knot is not in the marginalized set, it is in the keep set
-                        for(int u = kidx; u < kidx + 2; u++)
-                            if(xkidx_marg.find(u) == xkidx_marg.end())
-                                xkidx_keep[u] = swAbsKidx.front() + u;
-                    }
-                }
-            }
-
-            // In this specific LO problem, all marginalized and kept states are the first two knots
-            for (auto &xkidx : xkidx_marg)
-                ROS_ASSERT_MSG(xkidx.first == 0, "%d, %d\n", xkidx.first, xkidx.second);
-            for (auto &xkidx : xkidx_keep)    
-                ROS_ASSERT_MSG(xkidx.first == 1, "%d, %d\n", xkidx.first, xkidx.second);
-
-            int RES_MARG_GSIZE = res_ldr_marg.size() + res_mp2_marg.size();
-            int XM_XK_GSIZE = (xkidx_marg.size() + xkidx_keep.size())*STATE_DIM;
-
-            // Extract the blocks of J and r related to marginalization
-            MatrixXd Jmarg = MatrixXd::Zero(RES_MARG_GSIZE, XM_XK_GSIZE);
-            MatrixXd rmarg = MatrixXd::Zero(RES_MARG_GSIZE, 1);                
-
-            // Extract the corresponding blocks
-            int row_marg = 0;
-            for(int row : res_mp2_marg)
-            {
-                Jmarg.row(row_marg) << JACOBIAN.block(row, 0, 1, XM_XK_GSIZE);
-                rmarg.row(row_marg) = RESIDUAL.row(row);
-                row_marg++;
-            }
-            for(int row : res_ldr_marg)
-            {
-                Jmarg.row(row_marg) << JACOBIAN.block(row, 0, 1, XM_XK_GSIZE);
-                rmarg.row(row_marg) = RESIDUAL.row(row);
-                row_marg++;
-            }
-
-            // Calculate the post-optimization hessian and gradient
-            SparseMatrix<double> Jsparse = Jmarg.sparseView(); Jsparse.makeCompressed();
-            SparseMatrix<double> Jtp = Jsparse.transpose();
-            SparseMatrix<double> H = Jtp*Jsparse;
-            MatrixXd b = -Jtp*rmarg;
-
-            // Divide the Hessian into corner blocks
-            int MARG_GSIZE = xkidx_marg.size()*STATE_DIM;
-            int KEEP_GSIZE = H.cols() - MARG_GSIZE;
-            SparseMatrix<double> Hmm = H.block(0, 0, MARG_GSIZE, MARG_GSIZE);
-            SparseMatrix<double> Hmk = H.block(0, MARG_GSIZE, MARG_GSIZE, KEEP_GSIZE);
-            SparseMatrix<double> Hkm = H.block(MARG_GSIZE, 0, KEEP_GSIZE, MARG_GSIZE);
-            SparseMatrix<double> Hkk = H.block(MARG_GSIZE, MARG_GSIZE, KEEP_GSIZE, KEEP_GSIZE);
-
-            MatrixXd bm = b.block(0, 0, MARG_GSIZE, 1);
-            MatrixXd bk = b.block(MARG_GSIZE, 0, KEEP_GSIZE, 1);
-
-            // Save the schur complement
-            MatrixXd Hmminv = Hmm.toDense().inverse();
-            MatrixXd HkmHmminv = Hkm*Hmminv;
-            Hkeep = Hkk - HkmHmminv*Hmk;
-            bkeep = bk  - HkmHmminv*bm;
-
-            // Convert Hb to Jr for easier use
-            HbToJr(Hkeep, bkeep, Jm, rm);
-
-            // Store the values of the keep knots for reference in the next loop
-            xstate_keep.clear();
-            for(auto &xkidx : xkidx_keep)
-                xstate_keep[xkidx.second] = traj->getKnot(xkidx.first);
-                //           AbsKnotIdx     state value at the knot idx
-
-        }
-    }
-    
-    // Update the cost
-    J0 = {J0ldr, J0mp2, J0mar};
-    JK = {JKldr, JKmp2, JKmar};
+        Marginalize(traj, RESIDUAL, JACOBIAN, bprior_sparse, Hprior_sparse, swAbsKidx, swNextBaseKnot, SwLidarCoef);
 
     return true;
 }

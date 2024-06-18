@@ -7,6 +7,19 @@
 #include "factor/GPPointToPlaneFactorTMN.hpp"
 #include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
 
+struct GNSolverReport
+{
+   double J0lidar = -1;
+   double J0mp2k  = -1;
+   double J0prior = -1;
+   double JKlidar = -1;
+   double JKmp2k  = -1;
+   double JKprior = -1;
+
+   int ldrFactors = 0;
+   int mp2Factors = 0;
+};
+
 class GNSolver
 {
 private:
@@ -16,6 +29,9 @@ private:
 
     // Lidar params
     double lidar_weight = 1.0;
+
+    // Report of the latest optimizatio
+    GNSolverReport report;
 
     // Weight for the motion prior factors
     double mpSigmaR = 1.0;
@@ -65,9 +81,21 @@ public:
         deque<int> swAbsKidx,
         SparseMatrix<double> &bprior_sparse,
         SparseMatrix<double> &Hprior_sparse,
-        VectorXd* bprior_reduced,
-        MatrixXd* Hprior_reduced,
+        // VectorXd* bprior_reduced,
+        // MatrixXd* Hprior_reduced,
         double* cost
+    );
+
+    void Marginalize
+    (
+        GaussianProcessPtr &traj,
+        VectorXd &RESIDUAL,
+        MatrixXd &JACOBIAN,
+        SparseMatrix<double> &bprior_sparse,
+        SparseMatrix<double> &Hprior_sparse,
+        const deque<int> &swAbsKidx,
+        const int &swNextBaseKnot,
+        deque<vector<LidarCoef>> &SwLidarCoef
     );
 
     void HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r);
@@ -77,9 +105,12 @@ public:
         GaussianProcessPtr &traj,
         deque<vector<LidarCoef>> &SwLidarCoef,
         const int &iter,
-        vector<double> &J0,
-        vector<double> &JK,
         const deque<int> &swAbsKidx,
         const int &swNextBaseKnot
     );
+
+    GNSolverReport &GetReport()
+    {
+        return report;
+    }
 };
