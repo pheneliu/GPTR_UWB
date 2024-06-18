@@ -42,17 +42,20 @@ private:
     double lambda = 1.0;
     double dxmax = 0.5;
 
-    map<int, int> xkidx_keep; // idx of knots to keep in graph
-    map<int, int> xkidx_marg; // idx of knots to remove from graph
+    map<int, int> knots_keep_lckidx_gbkidx; // idx of knots to keep in graph
+    map<int, int> knots_marg_lckidx_gbkidx; // idx of knots to remove from graph
 
     // Marginalization info
     MatrixXd Hkeep;
     VectorXd bkeep;
-    MatrixXd Jm;              // 
-    VectorXd rm;              // 
-
+    MatrixXd Jm;
+    VectorXd rm;
+    
     // Value of the keep state for prior
-    map<int, StateStamped<double>>  xstate_keep;
+    map<int, StateStamped<double>>  knots_keep_gbidx_state;
+
+    // Dictionary to covert absolute to local state idx
+    map<int, int> absKidxToLocal;
 
 public:
 

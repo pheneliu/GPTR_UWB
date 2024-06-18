@@ -18,7 +18,6 @@ int RES_MP2_GBASE;
 #define XALL_LSIZE STATE_DIM
 int XALL_GSIZE;
 
-
 void UpdateDimensions(int &numldr, int &nummp2, int &numKnots)
 {
     RES_LDR_GSIZE = RES_LDR_LSIZE*numldr;
@@ -149,11 +148,6 @@ void GNSolver::EvaluatePriorFactors
     double* cost
 )
 {
-    // Make a dictionary of the local idx and the abs knot idx
-    map<int, int> absKidxToLocal;
-    for (int kidx = 0; kidx < swAbsKidx.size(); kidx++)
-        absKidxToLocal[swAbsKidx[kidx]] = kidx;
-
     VectorXd rprior = VectorXd::Zero(XALL_GSIZE);
     MatrixXd Jprior = MatrixXd::Zero(XALL_GSIZE, XALL_GSIZE);
     VectorXd bprior = VectorXd::Zero(XALL_GSIZE);
@@ -169,7 +163,7 @@ void GNSolver::EvaluatePriorFactors
     // cout << endl;    
 
     // Calculate the prior residual
-    for(auto &xkidx : xstate_keep)
+    for(auto &xkidx : knots_keep_gbidx_state)
     {
         int kidx = absKidxToLocal[xkidx.first];
 
@@ -189,7 +183,7 @@ void GNSolver::EvaluatePriorFactors
     }
 
     // Copy the blocks in big step
-    int XKEEP_SIZE = xkidx_keep.size()*XALL_LSIZE;
+    int XKEEP_SIZE = knots_keep_lckidx_gbkidx.size()*XALL_LSIZE;
     Hprior.block(0, 0, XKEEP_SIZE, XKEEP_SIZE) = Hkeep.block(0, 0, XKEEP_SIZE, XKEEP_SIZE);
 
     // Update the b block
@@ -266,8 +260,8 @@ void GNSolver::Marginalize
 {
     RESIDUAL.setZero();
     JACOBIAN.setZero();
-    VectorXd bprior_final_reduced;
-    MatrixXd Hprior_final_reduced;
+    // VectorXd bprior_final_reduced;
+    // MatrixXd Hprior_final_reduced;
 
     // Calculate the factors again at new linearized points
     EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &report.JKlidar);
@@ -284,12 +278,15 @@ void GNSolver::Marginalize
         for(int widx = 1; widx < SwLidarCoef.size(); widx++)
             lidarIdxBase[widx] += lidarIdxBase[widx-1] + SwLidarCoef[widx-1].size();
 
+        // Store the states that currently couples with marginalization
+        map<int, int> knots_keep_lckidx_gbkidx_prev = knots_keep_lckidx_gbkidx;
+
         // Determine the marginalized and keep knots
-        xkidx_keep.clear();
-        xkidx_marg.clear();
+        knots_keep_lckidx_gbkidx.clear();
+        knots_marg_lckidx_gbkidx.clear(); 
         for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
             if (swAbsKidx[kidx] < swNextBaseKnot)
-                xkidx_marg[kidx] = swAbsKidx[kidx];
+                knots_marg_lckidx_gbkidx[kidx] = swAbsKidx[kidx];
 
         // Find the marginalized lidar residuals and the adjacent knots in the first bundle
         vector<int> res_ldr_marg;
@@ -312,7 +309,7 @@ void GNSolver::Marginalize
                 double s  = us.second;
 
                 // If the base knot is in the remove set, log down the residual rows
-                if (xkidx_marg.find(u) != xkidx_marg.end())
+                if (knots_marg_lckidx_gbkidx.find(u) != knots_marg_lckidx_gbkidx.end())
                 {
                     // The base row of the residual
                     int RES_ROW_BASE = RES_LDR_GBASE + (lidarIdxBase[0] + cidx)*RES_LDR_LSIZE;
@@ -321,8 +318,8 @@ void GNSolver::Marginalize
                         res_ldr_marg.push_back(RES_ROW_BASE + row_idx);
                     // If the coupled knot is not in the marginalized set, it is in the keep set
                     for(int kidx = u; kidx < u + 2; kidx++)
-                        if(xkidx_marg.find(kidx) == xkidx_marg.end())
-                            xkidx_keep[kidx] = swAbsKidx.front() + kidx;    
+                        if(knots_marg_lckidx_gbkidx.find(kidx) == knots_marg_lckidx_gbkidx.end())
+                            knots_keep_lckidx_gbkidx[kidx] = swAbsKidx.front() + kidx;    
                 }
             }
         }
@@ -332,7 +329,7 @@ void GNSolver::Marginalize
         {
             for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
             {
-                if (xkidx_marg.find(kidx) != xkidx_marg.end())
+                if (knots_marg_lckidx_gbkidx.find(kidx) != knots_marg_lckidx_gbkidx.end())
                 {
                     // The base row of the residual
                     int RES_ROW_BASE = RES_MP2_GBASE + kidx*RES_MP2_LSIZE;
@@ -341,20 +338,20 @@ void GNSolver::Marginalize
                         res_mp2_marg.push_back(RES_ROW_BASE + row_idx);
                     // If the coupled knot is not in the marginalized set, it is in the keep set
                     for(int u = kidx; u < kidx + 2; u++)
-                        if(xkidx_marg.find(u) == xkidx_marg.end())
-                            xkidx_keep[u] = swAbsKidx.front() + u;
+                        if(knots_marg_lckidx_gbkidx.find(u) == knots_marg_lckidx_gbkidx.end())
+                            knots_keep_lckidx_gbkidx[u] = swAbsKidx.front() + u;
                 }
             }
         }
 
         // In this specific LO problem, all marginalized and kept states are the first two knots
-        for (auto &xkidx : xkidx_marg)
+        for (auto &xkidx : knots_marg_lckidx_gbkidx)
             ROS_ASSERT_MSG(xkidx.first == 0, "%d, %d\n", xkidx.first, xkidx.second);
-        for (auto &xkidx : xkidx_keep)    
+        for (auto &xkidx : knots_keep_lckidx_gbkidx)    
             ROS_ASSERT_MSG(xkidx.first == 1, "%d, %d\n", xkidx.first, xkidx.second);
 
         int RES_MARG_GSIZE = res_ldr_marg.size() + res_mp2_marg.size();
-        int XM_XK_GSIZE = (xkidx_marg.size() + xkidx_keep.size())*STATE_DIM;
+        int XM_XK_GSIZE = (knots_marg_lckidx_gbkidx.size() + knots_keep_lckidx_gbkidx.size())*STATE_DIM;
 
         // Extract the blocks of J and r related to marginalization
         MatrixXd Jmarg = MatrixXd::Zero(RES_MARG_GSIZE, XM_XK_GSIZE);
@@ -381,8 +378,22 @@ void GNSolver::Marginalize
         SparseMatrix<double> H = Jtp*Jsparse;
         MatrixXd b = -Jtp*rmarg;
 
+        // Due to the simple structure of GP, the marginalized block 
+        // only consists of one state that will be marginalized
+        MatrixXd Hprior = Hprior_sparse.toDense();
+        VectorXd bprior = bprior_sparse.toDense();
+        MatrixXd H_xtra_(H.rows(), H.cols()); H_xtra_.setZero();
+        VectorXd b_xtra_(b.rows(), 1); b_xtra_.setZero();
+        H_xtra_.block<STATE_DIM, STATE_DIM>(0, 0) = Hprior.block<STATE_DIM, STATE_DIM>(0, 0);
+        b_xtra_.block<STATE_DIM,         1>(0, 0) = bprior.block<STATE_DIM,         1>(0, 0);
+        SparseMatrix<double> H_xtra = H_xtra_.sparseView(); H_xtra.makeCompressed();
+        SparseMatrix<double> b_xtra = b_xtra_.sparseView(); b_xtra.makeCompressed();
+        // Adding the old marginalization to the current one.
+        H += H_xtra;
+        b += b_xtra;
+
         // Divide the Hessian into corner blocks
-        int MARG_GSIZE = xkidx_marg.size()*STATE_DIM;
+        int MARG_GSIZE = knots_marg_lckidx_gbkidx.size()*STATE_DIM;
         int KEEP_GSIZE = H.cols() - MARG_GSIZE;
         SparseMatrix<double> Hmm = H.block(0, 0, MARG_GSIZE, MARG_GSIZE);
         SparseMatrix<double> Hmk = H.block(0, MARG_GSIZE, MARG_GSIZE, KEEP_GSIZE);
@@ -402,9 +413,9 @@ void GNSolver::Marginalize
         HbToJr(Hkeep, bkeep, Jm, rm);
 
         // Store the values of the keep knots for reference in the next loop
-        xstate_keep.clear();
-        for(auto &xkidx : xkidx_keep)
-            xstate_keep[xkidx.second] = traj->getKnot(xkidx.first);
+        knots_keep_gbidx_state.clear();
+        for(auto &xkidx : knots_keep_lckidx_gbkidx)
+            knots_keep_gbidx_state[xkidx.second] = traj->getKnot(xkidx.first);
             //           AbsKnotIdx     state value at the knot idx
 
     }
@@ -420,7 +431,7 @@ bool GNSolver::Solve
 )
 {
     // Make a dictionary of the local idx and the abs knot idx
-    map<int, int> absKidxToLocal;
+    absKidxToLocal.clear();
     for (int kidx = 0; kidx < swAbsKidx.size(); kidx++)
         absKidxToLocal[swAbsKidx[kidx]] = kidx;
 
