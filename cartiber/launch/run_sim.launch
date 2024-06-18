@@ -12,7 +12,7 @@
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="100"/>
+        <param name="MAX_CLOUDS"     value="600"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_1/points_livox']" type="yaml" />
@@ -37,22 +37,22 @@
         <param name="WINDOW_SIZE"    value="3"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
-        <param name="lambda"         value="1.0"    />
+        <param name="lambda"         value="5.0"    />
         <param name="dxmax"          value="0.5"    />
         <param name="fixed_start"    value="-0.001" />
         <param name="fixed_end"      value="-0.001" />
         
         <param name="ds_size"        value="0.1"    />
-        <param name="lidar_ds_rate"  value="3"      />
-        <param name="lidar_weight"   value="10.0"   />
+        <param name="lidar_ds_rate"  value="1"      />
+        <param name="lidar_weight"   value="5.0"   />
         
         <!-- Pose prior factor -->
         <param name="ppSigmaR"       value="-1.0"   />
         <param name="ppSigmaP"       value="-1.0"   />
         
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="1.0"    />
-        <param name="mpSigmaP"       value="1.0"    />
+        <param name="mpSigmaR"       value="5.0"    />
+        <param name="mpSigmaP"       value="5.0"    />
         <param name="DK"             value="2"      />
         <param name="tshift"         value="0.025"  />
 

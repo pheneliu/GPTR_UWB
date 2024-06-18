@@ -192,17 +192,17 @@ void GNSolver::EvaluatePriorFactors
     SparseMatrix<double> rprior_sparse;
     SparseMatrix<double> Jprior_sparse;
 
-    printf("absKidx: \n");
-    for(auto &xkidx : absKidxToLocal)
-        cout << xkidx.first << ", ";
-    cout << endl;    
+    // printf("absKidx: \n");
+    // for(auto &xkidx : absKidxToLocal)
+    //     cout << xkidx.first << ", ";
+    // cout << endl;    
 
     // Calculate the prior residual
     for(auto &xkidx : xstate_keep)
     {
         int kidx = absKidxToLocal[xkidx.first];
 
-        printf("Build prior for knot %d, %d, %d.\n", kidx, xkidx.first);
+        // printf("Build prior for knot %d, %d, %d.\n", kidx, xkidx.first);
 
         const StateStamped<> &Xbar = xkidx.second;
         const StateStamped<> &Xcur = traj->getKnot(absKidxToLocal[xkidx.first]);
@@ -321,7 +321,10 @@ bool GNSolver::Solve
     MatrixXd JACOBIAN(RES_ALL_GSIZE, XALL_GSIZE);
     SparseMatrix<double> bprior_sparse;
     SparseMatrix<double> Hprior_sparse;
-        
+
+    RESIDUAL.setZero();
+    JACOBIAN.setZero();
+
     // Evaluate the lidar factors
     double J0ldr = -1;
     EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &J0ldr);
@@ -402,7 +405,7 @@ bool GNSolver::Solve
         if (swNextBaseKnot > 0)
         {
             ROS_ASSERT(swNextBaseKnot == swAbsKidx[1]);
-            printf("Marginalization\n");
+            // printf("Marginalization\n");
 
             // Index for each coef
             vector<int> lidarIdxBase(SwLidarCoef.size(), 0);

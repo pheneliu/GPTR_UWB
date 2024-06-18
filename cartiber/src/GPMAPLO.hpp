@@ -1602,6 +1602,8 @@ public:
             SE3d pose = traj->pose(TSWEND);
             pcl::transformPointCloud(*swCloudSegUndi.back(), *swCloudSegUndiInW.back(), pose.translation(), pose.so3().unit_quaternion());
 
+            Deskew(traj, swCloudSeg.back(), swCloudSegUndi.back());
+
             // Step 2.1: Associate the last pointcloud with the map
             Associate(kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
@@ -1815,7 +1817,7 @@ public:
                 myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %.0f. Tbuild: %.0f. Tslv: %.0f. Taftop: %.0f. Tlp: %.0f.\n"
                          "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d. Smoothness: %4d. Knots: %d / %d.\n"
-                         "J0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
+                         "%sJ0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n%s"
                          "JK: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
@@ -1825,10 +1827,29 @@ public:
                          tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
                          res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
+                         cost_lidar_begin > 100.0 ? KRED : "",
                          summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp2k_begin, cost_sm_begin,
+                         gniter == max_gniter ? KGRN : "",
                          summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp2k_final, cost_sm_final,
                          Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),
                          XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
+
+                // if(gniter == max_gniter)
+                // {
+                //     // Print the report
+                //     for(string &rep : report)
+                //         cout << rep;
+                //     cout << endl;
+
+                //     // Shift the sliding window if length exceeds threshold
+                //     if (swCloudSeg.size() >= WINDOW_SIZE)
+                //     {
+                //         swCloudSeg.pop_front();
+                //         swCloudSegUndi.pop_front();
+                //         swCloudSegUndiInW.pop_front();
+                //         swCloudCoef.pop_front();
+                //     }
+                // }
             }
 
             // Print the report

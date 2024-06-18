@@ -640,20 +640,26 @@ public:
 
     void extendOneKnot()
     {
-        Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();
-        Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
+        // Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();
+        // Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
 
-        Matrix<double, 9, 1> pvac; pvac << P.back(), V.back(), A.back();
-        Matrix<double, 9, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
+        // Matrix<double, 9, 1> pvac; pvac << P.back(), V.back(), A.back();
+        // Matrix<double, 9, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
 
-        Vec3 thetan = gamman.block<3, 1>(0, 0);
-        Vec3 thetadotn = gamman.block<3, 1>(3, 0);
+        // Vec3 thetan = gamman.block<3, 1>(0, 0);
+        // Vec3 thetadotn = gamman.block<3, 1>(3, 0);
 
-        SO3d Rn = R.back()*SO3d::exp(thetan);
-        Vec3 On = gpm.Jr(thetan)*thetadotn;
-        Vec3 Pn = pvan.block<3, 1>(0, 0);
-        Vec3 Vn = pvan.block<3, 1>(3, 0);
-        Vec3 An = pvan.block<3, 1>(6, 0);
+        SO3d Rc = R.back();
+        Vec3 Oc = O.back();
+        Vec3 Pc = P.back();
+        Vec3 Vc = V.back();
+        Vec3 Ac = A.back();
+
+        SO3d Rn = Rc*SO3d::exp(Oc*dt);
+        Vec3 On = Oc;
+        Vec3 Pn = Pc + dt*Vc + 0.5*dt*dt*Ac;
+        Vec3 Vn = Vc + dt*Ac;
+        Vec3 An = Ac;
 
         R.push_back(Rn);
         O.push_back(On);
