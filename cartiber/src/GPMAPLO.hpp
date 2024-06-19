@@ -1638,101 +1638,25 @@ public:
             int gniter = 0;
             while(gniter < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
             {
-                TicToc tt_build;
-
-                // Step 3.3: Create the ceres problem and add the knots to the param list
-
-                // Create the ceres problem
-                ceres::Problem problem;
-                ceres::Solver::Options options;
-                ceres::Solver::Summary summary;
-                if(use_ceres)
-                    CreateCeresProblem(problem, options, summary, swTraj, fixed_start, fixed_end);
-
-                // Test if the Jacobian works
-                // TestAnalyticJacobian(problem, swTraj, swCloudCoef[0], traj->getNumKnots());
-                // continue;
-
-                // Step 3.4: Add the lidar factors
-                double cost_lidar_begin = -1;
-                double cost_lidar_final = -1;
-                vector<ceres::internal::ResidualBlock *> res_ids_lidar;
-                if (lidar_weight >= 0.0 && use_ceres)
-                    for(int widx = 0; widx < WDZ; widx++)
-                        AddLidarFactors(swCloudCoef[widx], swTraj, problem, res_ids_lidar);
-                // else
-                //     printf(KYEL "Skipping lidar factors.\n" RESET);
-
-                // Step 3.5: Add pose prior factors
-                double cost_pose_begin = -1;
-                double cost_pose_final = -1;
-                vector<ceres::internal::ResidualBlock *> res_ids_pose;
-                // if (ppSigmaR >= 0.0 && ppSigmaP >= 0.0 && use_ceres)
-                //     AddPosePriorFactors(swTraj, problem, res_ids_pose);
-                // else
-                //     printf(KYEL "Skipping pose priors.\n" RESET);
-
-                // Step 3.6: Add motion prior factors
-                double cost_mp2k_begin = -1;
-                double cost_mp2k_final = -1;
-                vector<ceres::internal::ResidualBlock *> res_ids_mp;
-                if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0 && use_ceres)
-                    AddMotionPriorFactors(swTraj, problem, res_ids_mp);
-                // else
-                //     printf(KYEL "Skipping motion prior factors.\n" RESET);
-
-                // Step 3.7: Add smoothness constraints factors
-                double cost_sm_begin = -1;
-                double cost_sm_final = -1;
-                vector<ceres::internal::ResidualBlock *> res_ids_sm;
-                // if(smSigmaR >= 0.0 && smSigmaP >= 0.0 && use_ceres)
-                //     AddSmoothnessFactors(swTraj, problem, res_ids_sm);
-                // else
-                //     printf(KYEL "Skipping smoothness factors.\n" RESET);
-                
-                tt_build.Toc();
-
-
                 TicToc tt_solve;
+
+                // Check for the next base for marginalization
+                deque<int> swAbsKidx;
+                for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
+                    swAbsKidx.push_back(kidx);
+                int swNextBaseKnot = -1;
+                if (swCloudSeg.size() >= WINDOW_SIZE)
+                    swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
                 
-                if(use_ceres)
-                {
-                    // Initial cost
-                    Util::ComputeCeresCost(res_ids_lidar, cost_lidar_begin, problem);
-                    Util::ComputeCeresCost(res_ids_pose, cost_pose_begin, problem);
-                    Util::ComputeCeresCost(res_ids_mp, cost_mp2k_begin, problem);
-                    Util::ComputeCeresCost(res_ids_sm, cost_sm_begin, problem);
+                // Solve
+                mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
 
-                    // Solve and visualize:
-                    ceres::Solve(options, &problem, &summary);
-
-                    // Final cost
-                    Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
-                    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
-                    Util::ComputeCeresCost(res_ids_mp, cost_mp2k_final, problem);
-                    Util::ComputeCeresCost(res_ids_sm, cost_sm_final, problem);
-                }
-                else
-                {
-                    // Check for the next base for marginalization
-                    deque<int> swAbsKidx;
-                    for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
-                        swAbsKidx.push_back(kidx);
-                    int swNextBaseKnot = -1;
-                    if (swCloudSeg.size() >= WINDOW_SIZE)
-                        swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
-
-                    vector<double> J0, JK;
-                    mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
-                    
-                    // Extract the cost (NOT CORRECT, NEED TO HAVE MARGINALIZATION TO UPDATE THE LAST COST)
-                    cost_pose_begin  = mySolver->GetReport().J0prior;
-                    cost_pose_final  = mySolver->GetReport().JKprior;
-                    cost_lidar_begin = mySolver->GetReport().J0lidar;
-                    cost_lidar_final = mySolver->GetReport().JKlidar;
-                    cost_mp2k_begin  = mySolver->GetReport().J0mp2k;
-                    cost_mp2k_final  = mySolver->GetReport().JKmp2k;
-                }
+                // Get the report
+                GNSolverReport gnreport = mySolver->GetReport();
+                // Calculate the cost
+                double J0 = gnreport.J0prior + gnreport.J0lidar + gnreport.J0mp2k;
+                double JK = gnreport.JKprior + gnreport.JKlidar + gnreport.JKmp2k;
+                JK = JK < 0 ? -1 : JK;
 
                 tt_solve.Toc();
                 
@@ -1765,30 +1689,32 @@ public:
                     Associate(swTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
-                // Sample the latest state for report
-                StateStamped XtK = traj->getStateAt(TSWEND);
+                // Prepare some visualization
+                {
+                    StateStamped XtK = traj->getStateAt(TSWEND);
 
-                // Sample and publish the slinding window trajectory
-                CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
-                for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
-                    if(swTraj->TimeInInterval(ts))
-                        poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
-                static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
-                Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
+                    // Sample and publish the slinding window trajectory
+                    CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
+                    for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
+                        if(swTraj->TimeInInterval(ts))
+                            poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
+                    static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
+                    Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
 
-                CloudXYZIPtr assoc_cloud(new CloudXYZI());
-                for (int widx = 0; widx < WDZ; widx++)
-                    for(auto &coef : swCloudCoef[widx])
-                        {
-                            PointXYZI p;
-                            p.x = coef.finW.x();
-                            p.y = coef.finW.y();
-                            p.z = coef.finW.z();
-                            p.intensity = widx;
-                            assoc_cloud->push_back(p);
-                        }
-                static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
-                Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
+                    CloudXYZIPtr assoc_cloud(new CloudXYZI());
+                    for (int widx = 0; widx < WDZ; widx++)
+                        for(auto &coef : swCloudCoef[widx])
+                            {
+                                PointXYZI p;
+                                p.x = coef.finW.x();
+                                p.y = coef.finW.y();
+                                p.z = coef.finW.z();
+                                p.intensity = widx;
+                                assoc_cloud->push_back(p);
+                            }
+                    static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+                    Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
+                }
 
                 gniter++;
 
@@ -1797,51 +1723,33 @@ public:
                 // Print a report
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
-                // double gpTs = swTraj->getMinTime();
-                // double gpTe = swTraj->getMaxTime();
                 report[gniter-1] = 
                 myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %.0f. Tbuild: %.0f. Tslv: %.0f. Taftop: %.0f. Tlp: %.0f.\n"
-                         "Factors: Lidar: %4d. Pose: %4d. Motion prior: %4d. Smoothness: %4d. Knots: %d / %d.\n"
-                         "%sJ0: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n%s"
-                         "JK: %12.3f. Ldr: %9.3f. Pose: %9.3f. MP: %9.3f. SM: %9.3f\n"
+                         "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
+                         "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
+                         "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          RESET,
                          gniter == max_gniter ? KGRN : "", optnum,
-                         gniter, max_gniter, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
-                         tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
+                         gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
+                         tt_preopt.GetLastStop(), 0, tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
-                         res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), swTraj->getNumKnots(), traj->getNumKnots(),
-                         cost_lidar_begin > 100.0 ? KRED : "",
-                         summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp2k_begin, cost_sm_begin,
-                         gniter == max_gniter ? KGRN : "",
-                         summary.final_cost, cost_lidar_final, cost_pose_final, cost_mp2k_final, cost_sm_final,
+                         gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
+                         J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
+                         JK, gnreport.JKlidar, gnreport.JKprior, gnreport.JKmp2k,
                          Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),
                          XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
-
-                // if(gniter == max_gniter)
-                // {
-                //     // Print the report
-                //     for(string &rep : report)
-                //         cout << rep;
-                //     cout << endl;
-
-                //     // Shift the sliding window if length exceeds threshold
-                //     if (swCloudSeg.size() >= WINDOW_SIZE)
-                //     {
-                //         swCloudSeg.pop_front();
-                //         swCloudSegUndi.pop_front();
-                //         swCloudSegUndiInW.pop_front();
-                //         swCloudCoef.pop_front();
-                //     }
-                // }
             }
 
             // Print the report
-            for(string &rep : report)
-                cout << rep;
-            cout << endl;
+            if(traj->getMaxTime() > SKIPPED_TIME)
+            {
+                for(string &rep : report)
+                    cout << rep;
+                cout << endl;
+            }
 
             // Shift the sliding window if length exceeds threshold
             if (swCloudSeg.size() >= WINDOW_SIZE)
@@ -1852,9 +1760,5 @@ public:
                 swCloudCoef.pop_front();
             }
         }
-
-        // Sleep for some time
-        // this_thread::sleep_for(std::chrono::milliseconds(500));
-        // std::cin.get();
     }
 };

@@ -16,8 +16,9 @@ struct GNSolverReport
    double JKmp2k  = -1;
    double JKprior = -1;
 
-   int ldrFactors = 0;
-   int mp2Factors = 0;
+   int lidarFactors = 0;
+   int mp2kFactors = 0;
+   int priorFactors = 0;
 };
 
 class GNSolver

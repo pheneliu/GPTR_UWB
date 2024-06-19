@@ -57,6 +57,9 @@ void GNSolver::EvaluateLidarFactors
     for(int widx = 1; widx < SwLidarCoef.size(); widx++)
         lidarIdxBase[widx] += lidarIdxBase[widx-1] + SwLidarCoef[widx-1].size();
 
+    // Number of lidar factors
+    report.lidarFactors = lidarIdxBase.back() + SwLidarCoef.back().size();
+
     // Create factors and calculate their residual and jacobian
     for(int widx = 0; widx < SwLidarCoef.size(); widx++)
     {
@@ -109,6 +112,9 @@ void GNSolver::EvaluateMotionPriorFactors
     VectorXd &r, MatrixXd &J, double* cost
 )
 {
+    // Number of lidar factors
+    report.mp2kFactors = traj->getNumKnots() - 1;
+
     // Add GP factors between consecutive knots
     #pragma omp parallel for num_threads(MAX_THREADS)
     for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
@@ -148,6 +154,8 @@ void GNSolver::EvaluatePriorFactors
     double* cost
 )
 {
+    report.priorFactors = 1;
+    
     VectorXd rprior = VectorXd::Zero(XALL_GSIZE);
     MatrixXd Jprior = MatrixXd::Zero(XALL_GSIZE, XALL_GSIZE);
     VectorXd bprior = VectorXd::Zero(XALL_GSIZE);
@@ -457,6 +465,10 @@ bool GNSolver::Solve
 
     RESIDUAL.setZero();
     JACOBIAN.setZero();
+
+    report.JKlidar = -1;
+    report.JKmp2k  = -1;
+    report.JKprior = -1;
 
     // Evaluate the lidar factors
     EvaluateLidarFactors(traj, SwLidarCoef, RESIDUAL, JACOBIAN, &report.J0lidar);
