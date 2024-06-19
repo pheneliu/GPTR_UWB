@@ -327,35 +327,35 @@ public:
     }
 
     void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options, ceres::Solver::Summary &summary,
-                            GaussianProcessPtr &localTraj, double fixed_start, double fixed_end)
+                            GaussianProcessPtr &swTraj, double fixed_start, double fixed_end)
     {
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
         options.num_threads = MAX_THREADS;
         options.max_num_iterations = 50;
 
-        int KNOTS = localTraj->getNumKnots();
+        int KNOTS = swTraj->getNumKnots();
 
         // Add the parameter blocks for rotation
         for (int kidx = 0; kidx < KNOTS; kidx++)
         {
-            problem.AddParameterBlock(localTraj->getKnotSO3(kidx).data(), 4, new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>());
-            problem.AddParameterBlock(localTraj->getKnotOmg(kidx).data(), 3);
-            problem.AddParameterBlock(localTraj->getKnotPos(kidx).data(), 3);
-            problem.AddParameterBlock(localTraj->getKnotVel(kidx).data(), 3);
-            problem.AddParameterBlock(localTraj->getKnotAcc(kidx).data(), 3);
+            problem.AddParameterBlock(swTraj->getKnotSO3(kidx).data(), 4, new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>());
+            problem.AddParameterBlock(swTraj->getKnotOmg(kidx).data(), 3);
+            problem.AddParameterBlock(swTraj->getKnotPos(kidx).data(), 3);
+            problem.AddParameterBlock(swTraj->getKnotVel(kidx).data(), 3);
+            problem.AddParameterBlock(swTraj->getKnotAcc(kidx).data(), 3);
         }
 
         // Fix the knots
         if (fixed_start >= 0)
             for (int kidx = 0; kidx < KNOTS; kidx++)
             {
-                if (localTraj->getKnotTime(kidx) <= localTraj->getMinTime() + fixed_start)
+                if (swTraj->getKnotTime(kidx) <= swTraj->getMinTime() + fixed_start)
                 {
-                    problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotSO3(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotOmg(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotPos(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotVel(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotAcc(kidx).data());
                     // printf("Fixed knot %d\n", kidx);
                 }
             }
@@ -363,13 +363,13 @@ public:
         if (fixed_end >= 0)
             for (int kidx = 0; kidx < KNOTS; kidx++)
             {
-                if (localTraj->getKnotTime(kidx) >= localTraj->getMaxTime() - fixed_end)
+                if (swTraj->getKnotTime(kidx) >= swTraj->getMaxTime() - fixed_end)
                 {
-                    problem.SetParameterBlockConstant(localTraj->getKnotSO3(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotOmg(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotPos(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotVel(kidx).data());
-                    problem.SetParameterBlockConstant(localTraj->getKnotAcc(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotSO3(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotOmg(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotPos(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotVel(kidx).data());
+                    problem.SetParameterBlockConstant(swTraj->getKnotAcc(kidx).data());
                     // printf("Fixed knot %d\n", kidx);
                 }
             }
@@ -1064,10 +1064,10 @@ public:
         gplidarFactorMeta.residual_blocks = res_ids_lidar;
     }
 
-    void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &localTraj, vector<LidarCoef> &Coef, const int &cidx)
+    void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, vector<LidarCoef> &Coef, const int &cidx)
     {
-        for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
-            localTraj->setKnot(kidx, StateStamped<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
+        for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
+            swTraj->setKnot(kidx, StateStamped<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
                                                              Vector3d(0, 1, 2)*sin(kidx+1),
                                                              Vector3d(4, 5, 6)*cos(kidx+1),
                                                              Vector3d(7, 8, 9)*sin(kidx+1),
@@ -1081,7 +1081,7 @@ public:
             {
                 // Test the autodiff Jacobian
                 FactorMeta gpmpFactorMetaAutodiff;
-                AddAutodiffGPMPFactor(localTraj, problem, gpmpFactorMetaAutodiff);
+                AddAutodiffGPMPFactor(swTraj, problem, gpmpFactorMetaAutodiff);
 
                 if (gpmpFactorMetaAutodiff.parameter_blocks() == 0)
                     return;
@@ -1120,7 +1120,7 @@ public:
             {
                 // Test the analytic Jacobian
                 FactorMeta gpmpFactorMetaAnalytic;
-                AddAnalyticGPMPFactor(localTraj, problem, gpmpFactorMetaAnalytic);
+                AddAnalyticGPMPFactor(swTraj, problem, gpmpFactorMetaAnalytic);
 
                 if (gpmpFactorMetaAnalytic.parameter_blocks() == 0)
                     return;
@@ -1176,7 +1176,7 @@ public:
             {
                 // Test the autodiff Jacobian
                 FactorMeta gpmp2kFactorMetaAutodiff;
-                AddAutodiffGPMP2KFactor(localTraj, problem, gpmp2kFactorMetaAutodiff);
+                AddAutodiffGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAutodiff);
 
                 if (gpmp2kFactorMetaAutodiff.parameter_blocks() == 0)
                     return;
@@ -1215,7 +1215,7 @@ public:
             {
                 // Test the analytic Jacobian
                 FactorMeta gpmp2kFactorMetaAnalytic;
-                AddAnalyticGPMP2KFactor(localTraj, problem, gpmp2kFactorMetaAnalytic);
+                AddAnalyticGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAnalytic);
 
                 if (gpmp2kFactorMetaAnalytic.parameter_blocks() == 0)
                     return;
@@ -1271,7 +1271,7 @@ public:
             {
                 // Test the autodiff Jacobian
                 FactorMeta gpposeFactorMetaAutodiff;
-                AddAutodiffGPPoseFactor(localTraj, problem, gpposeFactorMetaAutodiff);
+                AddAutodiffGPPoseFactor(swTraj, problem, gpposeFactorMetaAutodiff);
 
                 if (gpposeFactorMetaAutodiff.parameter_blocks() == 0)
                     return;
@@ -1310,7 +1310,7 @@ public:
             {
                 // Test the analytic Jacobian
                 FactorMeta gpposeFactorMetaAnalytic;
-                AddAnalyticGPPoseFactor(localTraj, problem, gpposeFactorMetaAnalytic);
+                AddAnalyticGPPoseFactor(swTraj, problem, gpposeFactorMetaAnalytic);
 
                 if (gpposeFactorMetaAnalytic.parameter_blocks() == 0)
                     return;
@@ -1366,7 +1366,7 @@ public:
             {
                 // Test the autodiff Jacobian
                 FactorMeta gplidarFactorMetaAutodiff;
-                AddAutodiffGPLidarFactor(localTraj, problem, gplidarFactorMetaAutodiff, Coef);
+                AddAutodiffGPLidarFactor(swTraj, problem, gplidarFactorMetaAutodiff, Coef);
 
                 if (gplidarFactorMetaAutodiff.parameter_blocks() == 0)
                     return;
@@ -1405,7 +1405,7 @@ public:
             {
                 // Test the analytic Jacobian
                 FactorMeta gplidarFactorMetaAnalytic;
-                AddAnalyticGPLidarFactor(localTraj, problem, gplidarFactorMetaAnalytic, Coef);
+                AddAnalyticGPLidarFactor(swTraj, problem, gplidarFactorMetaAnalytic, Coef);
 
                 if (gplidarFactorMetaAnalytic.parameter_blocks() == 0)
                     return;
@@ -1612,15 +1612,15 @@ public:
             Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
             // Step 2.3: Create a local trajectory for optimization
-            GaussianProcessPtr localTraj(new GaussianProcess(deltaT));
+            GaussianProcessPtr swTraj(new GaussianProcess(deltaT));
             int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
             double tmin = traj->getKnotTime(umin);
             double tmax = min(traj->getMaxTime(), TSWEND);
-            // Copy the knots {umin, umin+1, ...} from traj to localtraj
+            // Copy the knots {umin, umin+1, ...} from traj to swTraj
             for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
-                localTraj->extendOneKnot(traj->getKnot(kidx));
+                swTraj->extendOneKnot(traj->getKnot(kidx));
             // Reset the start time
-            localTraj->setStartTime(tmin);
+            swTraj->setStartTime(tmin);
             // Effective length of the sliding window
             int WDZ = min(int(swCloudSeg.size()), WINDOW_SIZE);
 
@@ -1647,10 +1647,10 @@ public:
                 ceres::Solver::Options options;
                 ceres::Solver::Summary summary;
                 if(use_ceres)
-                    CreateCeresProblem(problem, options, summary, localTraj, fixed_start, fixed_end);
+                    CreateCeresProblem(problem, options, summary, swTraj, fixed_start, fixed_end);
 
                 // Test if the Jacobian works
-                // TestAnalyticJacobian(problem, localTraj, swCloudCoef[0], traj->getNumKnots());
+                // TestAnalyticJacobian(problem, swTraj, swCloudCoef[0], traj->getNumKnots());
                 // continue;
 
                 // Step 3.4: Add the lidar factors
@@ -1659,7 +1659,7 @@ public:
                 vector<ceres::internal::ResidualBlock *> res_ids_lidar;
                 if (lidar_weight >= 0.0 && use_ceres)
                     for(int widx = 0; widx < WDZ; widx++)
-                        AddLidarFactors(swCloudCoef[widx], localTraj, problem, res_ids_lidar);
+                        AddLidarFactors(swCloudCoef[widx], swTraj, problem, res_ids_lidar);
                 // else
                 //     printf(KYEL "Skipping lidar factors.\n" RESET);
 
@@ -1668,7 +1668,7 @@ public:
                 double cost_pose_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_pose;
                 // if (ppSigmaR >= 0.0 && ppSigmaP >= 0.0 && use_ceres)
-                //     AddPosePriorFactors(localTraj, problem, res_ids_pose);
+                //     AddPosePriorFactors(swTraj, problem, res_ids_pose);
                 // else
                 //     printf(KYEL "Skipping pose priors.\n" RESET);
 
@@ -1677,7 +1677,7 @@ public:
                 double cost_mp2k_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_mp;
                 if(mpSigmaR >= 0.0 && mpSigmaP >= 0.0 && use_ceres)
-                    AddMotionPriorFactors(localTraj, problem, res_ids_mp);
+                    AddMotionPriorFactors(swTraj, problem, res_ids_mp);
                 // else
                 //     printf(KYEL "Skipping motion prior factors.\n" RESET);
 
@@ -1686,7 +1686,7 @@ public:
                 double cost_sm_final = -1;
                 vector<ceres::internal::ResidualBlock *> res_ids_sm;
                 // if(smSigmaR >= 0.0 && smSigmaP >= 0.0 && use_ceres)
-                //     AddSmoothnessFactors(localTraj, problem, res_ids_sm);
+                //     AddSmoothnessFactors(swTraj, problem, res_ids_sm);
                 // else
                 //     printf(KYEL "Skipping smoothness factors.\n" RESET);
                 
@@ -1723,7 +1723,7 @@ public:
                         swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
 
                     vector<double> J0, JK;
-                    mySolver->Solve(localTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
+                    mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
                     
                     // Extract the cost (NOT CORRECT, NEED TO HAVE MARGINALIZATION TO UPDATE THE LAST COST)
                     cost_pose_begin  = mySolver->GetReport().J0prior;
@@ -1737,15 +1737,15 @@ public:
                 tt_solve.Toc();
                 
                 TicToc tt_aftop;
-                // Step X: Copy the knots back to the global trajectory
+                // Step X: Copy the knots on the sliding window back to the global trajectory
                 {
-                    for(int kidx = 0; kidx < localTraj->getNumKnots(); kidx++)
+                    for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
                     {
                         double tgb = traj->getKnotTime(kidx + umin);
-                        double tlc = localTraj->getKnotTime(kidx);
+                        double tlc = swTraj->getKnotTime(kidx);
                         double ter = fabs(tlc - tgb);
                         ROS_ASSERT_MSG(ter < 1e-3, "Knot Time: %f, %f. Diff: %f.\n", tlc, tgb, ter);
-                        traj->setKnot(kidx + umin, localTraj->getKnot(kidx));
+                        traj->setKnot(kidx + umin, swTraj->getKnot(kidx));
                     }
                 }
 
@@ -1762,7 +1762,7 @@ public:
                                               tf_W_Be.pos, tf_W_Be.rot);
                     
                     // Associate between feature and map
-                    Associate(localTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
+                    Associate(swTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
                 // Sample the latest state for report
@@ -1770,9 +1770,9 @@ public:
 
                 // Sample and publish the slinding window trajectory
                 CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
-                for(double ts = localTraj->getMinTime(); ts < localTraj->getMaxTime(); ts += localTraj->getDt()/5)
-                    if(localTraj->TimeInInterval(ts))
-                        poseSampled->points.push_back(myTf(localTraj->pose(ts)).Pose6D(ts));
+                for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
+                    if(swTraj->TimeInInterval(ts))
+                        poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
                 static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
                 Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
 
@@ -1797,8 +1797,8 @@ public:
                 // Print a report
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
-                // double gpTs = localTraj->getMinTime();
-                // double gpTe = localTraj->getMaxTime();
+                // double gpTs = swTraj->getMinTime();
+                // double gpTe = swTraj->getMaxTime();
                 report[gniter-1] = 
                 myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %.0f. Tbuild: %.0f. Tslv: %.0f. Taftop: %.0f. Tlp: %.0f.\n"
@@ -1812,7 +1812,7 @@ public:
                          gniter, max_gniter, (int)(summary.iterations.size()), umin, tmin, tmax, swTs, swTe,
                          tt_preopt.GetLastStop(), tt_build.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
-                         res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), localTraj->getNumKnots(), traj->getNumKnots(),
+                         res_ids_lidar.size(), res_ids_pose.size(), res_ids_mp.size(), res_ids_sm.size(), swTraj->getNumKnots(), traj->getNumKnots(),
                          cost_lidar_begin > 100.0 ? KRED : "",
                          summary.initial_cost, cost_lidar_begin, cost_pose_begin, cost_mp2k_begin, cost_sm_begin,
                          gniter == max_gniter ? KGRN : "",

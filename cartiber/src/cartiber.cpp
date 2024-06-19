@@ -790,11 +790,18 @@ int main(int argc, char **argv)
     }
 
     // Find the trajectory with MAP optimization
-    int lidx = 0;
-    GPMAPLO gpmaplo(nh_ptr, tf_W_Li0[lidx].getSE3(), lidx);
-    thread choptheclouds(&GPMAPLO::ChopTheClouds, &gpmaplo, std::ref(clouds[lidx]));
-    // Find the trajectories
-    gpmaplo.FindTraj(kdTreeMap, priormap, clouds[lidx]);
+    vector<GPMAPLO*> gpmaplo(Nlidar);
+    vector<thread> choptheclouds(Nlidar);
+    vector<thread> findthetraj(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        gpmaplo[lidx] = new GPMAPLO(nh_ptr, tf_W_Li0[lidx].getSE3(), lidx);
+        choptheclouds[lidx] = thread(&GPMAPLO::ChopTheClouds, gpmaplo[lidx], std::ref(clouds[lidx]));
+        findthetraj[lidx] = thread(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), std::ref(clouds[lidx]));
+    }
+
+    for(auto &thr : findthetraj)
+        thr.join();
 
     ros::Rate rate(1);
     while(ros::ok())
