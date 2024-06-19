@@ -1541,8 +1541,6 @@ public:
                   const vector<CloudXYZITPtr> &clouds)
     {
         int Ncloud = clouds.size();
-        // CloudPosePtr posePrior = CloudPosePtr(new CloudPose());
-        // posePrior->resize(Ncloud);
 
         GaussianProcessPtr traj(new GaussianProcess(deltaT));
         traj->setStartTime(clouds.front()->points.front().t);
@@ -1690,31 +1688,29 @@ public:
                 }
 
                 // Prepare some visualization
-                {
-                    StateStamped XtK = traj->getStateAt(TSWEND);
+                StateStamped XtK = traj->getStateAt(TSWEND);
 
-                    // Sample and publish the slinding window trajectory
-                    CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
-                    for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
-                        if(swTraj->TimeInInterval(ts))
-                            poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
-                    static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
-                    Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
+                // Sample and publish the slinding window trajectory
+                CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
+                for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
+                    if(swTraj->TimeInInterval(ts))
+                        poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
+                static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
+                Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
 
-                    CloudXYZIPtr assoc_cloud(new CloudXYZI());
-                    for (int widx = 0; widx < WDZ; widx++)
-                        for(auto &coef : swCloudCoef[widx])
-                            {
-                                PointXYZI p;
-                                p.x = coef.finW.x();
-                                p.y = coef.finW.y();
-                                p.z = coef.finW.z();
-                                p.intensity = widx;
-                                assoc_cloud->push_back(p);
-                            }
-                    static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
-                    Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
-                }
+                CloudXYZIPtr assoc_cloud(new CloudXYZI());
+                for (int widx = 0; widx < WDZ; widx++)
+                    for(auto &coef : swCloudCoef[widx])
+                        {
+                            PointXYZI p;
+                            p.x = coef.finW.x();
+                            p.y = coef.finW.y();
+                            p.z = coef.finW.z();
+                            p.intensity = widx;
+                            assoc_cloud->push_back(p);
+                        }
+                static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+                Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
 
                 gniter++;
 
@@ -1725,7 +1721,7 @@ public:
                 double swTe = swCloudSeg.back()->points.back().t;
                 report[gniter-1] = 
                 myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
-                         "Tprop: %.0f. Tbuild: %.0f. Tslv: %.0f. Taftop: %.0f. Tlp: %.0f.\n"
+                         "Tprop: %2.0f. Tslv: %2.0f. Taftop: %2.0f. Tlp: %3.0f.\n"
                          "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
                          "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
                          "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
