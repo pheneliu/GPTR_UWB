@@ -865,10 +865,10 @@ int main(int argc, char **argv)
         
         // Create the cloud publisher and publisher thread
         // cloudsegpub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_segment", lidx), 1000);
-        choptheclouds[lidx] = thread(ChopTheClouds, std::ref(clouds[lidx]), lidx);
+        choptheclouds[lidx] = thread(ChopTheClouds, std::ref(cloudsx[lidx]), lidx);
         
         // Create the estimators
-        double t0 = clouds[lidx].front()->points.front().t;
+        double t0 = cloudsx[lidx].front()->points.front().t;
         findthetraj[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
     }
 
