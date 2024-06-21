@@ -30,9 +30,11 @@ void UpdateDimensions(int &numldr, int &nummp2, int &numKnots)
     XALL_GSIZE = XALL_LSIZE*numKnots;
 }
 
+mutex GNSolver::solver_mtx;
+
 GNSolver::~GNSolver(){};
 
-GNSolver::GNSolver(ros::NodeHandlePtr &nh_) : nh(nh_)
+GNSolver::GNSolver(ros::NodeHandlePtr &nh_, int &LIDX_) : nh(nh_), LIDX(LIDX_)
 {
     nh->getParam("/lidar_weight", lidar_weight);
 
@@ -279,7 +281,13 @@ void GNSolver::Marginalize
     // Determine the marginalized states
     if (swNextBaseKnot > 0)
     {
-        ROS_ASSERT(swNextBaseKnot == swAbsKidx[1]);
+        ROS_ASSERT_MSG(swNextBaseKnot == swAbsKidx[1], "%d, %d, %d, %f, %f, %f\n",
+                       LIDX,
+                       swNextBaseKnot,
+                       swAbsKidx[1],
+                       traj->getKnotTime(0),
+                       traj->getKnotTime(absKidxToLocal[swAbsKidx[1]]),
+                       traj->getKnotTime(absKidxToLocal[swNextBaseKnot]));
 
         // Index for each coef
         vector<int> lidarIdxBase(SwLidarCoef.size(), 0);
@@ -431,11 +439,13 @@ bool GNSolver::Solve
 (
     GaussianProcessPtr &traj,
     deque<vector<LidarCoef>> &SwLidarCoef,
-    const int &iter,
-    const deque<int> &swAbsKidx,
-    const int &swNextBaseKnot
+    const int iter,
+    const deque<int> swAbsKidx,
+    const int swNextBaseKnot
 )
 {
+    lock_guard<mutex> lg(solver_mtx);
+
     // Make a dictionary of the local idx and the abs knot idx
     absKidxToLocal.clear();
     for (int kidx = 0; kidx < swAbsKidx.size(); kidx++)

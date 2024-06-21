@@ -28,6 +28,8 @@ private:
     // Node handle to get information needed
     ros::NodeHandlePtr nh;
 
+    int LIDX;
+
     // Lidar params
     double lidar_weight = 1.0;
 
@@ -58,13 +60,15 @@ private:
     // Dictionary to covert absolute to local state idx
     map<int, int> absKidxToLocal;
 
+    static mutex solver_mtx;
+
 public:
 
     // Destructor
    ~GNSolver();
    
     // Constructor
-    GNSolver(ros::NodeHandlePtr &nh_);
+    GNSolver(ros::NodeHandlePtr &nh_, int &LIDX_);
 
     void EvaluateMotionPriorFactors
     (
@@ -108,9 +112,9 @@ public:
     (
         GaussianProcessPtr &traj,
         deque<vector<LidarCoef>> &SwLidarCoef,
-        const int &iter,
-        const deque<int> &swAbsKidx,
-        const int &swNextBaseKnot
+        const int iter,
+        const deque<int> swAbsKidx,
+        const int swNextBaseKnot
     );
 
     GNSolverReport &GetReport()

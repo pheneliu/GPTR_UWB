@@ -80,9 +80,16 @@ ikdtreePtr ikdtPM;
 double UW_NOISE = 10.0;
 double UV_NOISE = 10.0;
 
+// Mutex for the node handle
+mutex nh_mtx;
+
 // Define the posespline
 typedef std::shared_ptr<GPKFLO> GPKFLOPtr;
+typedef std::shared_ptr<GPMAPLO> GPMAPLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
+
+vector<GPMAPLOPtr> gpmaplo;
+vector<thread> choptheclouds;
 
 template <typename PointType>
 typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::PointCloud<PointType>::Ptr &cloudin, double sampling_radius)
@@ -416,7 +423,7 @@ void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPt
         const CloudXYZITPtr &cloud1 = cloudbuf1[cidx1];
         CloudXYZITPtr &cloudx = cloud21.back();
 
-        *cloudx = *cloud1;
+        // *cloudx = *cloud1;
         
         for(int cidx2 = last_cloud2; cidx2 < Ncloud2; cidx2++)
         {
@@ -446,6 +453,79 @@ void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPt
     }
 }
 
+void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
+{
+    int Ncloud = clouds.size();
+    int lastCloudIdx = 0;
+    int lastPointIdx = -1;
+    double lastCutTime = clouds.front()->points.front().t;
+
+    while(ros::ok())
+    {
+        CloudXYZITPtr cloudSeg(new CloudXYZIT());
+        
+        // Extract all the points within lastCutTime to lastCutTime + dt
+        for(int cidx = lastCloudIdx; cidx < Ncloud; cidx++)
+        {
+            // Shift the pointcloud base
+            lastCloudIdx = cidx;
+            bool segment_completed = false;
+            // Check the points from the base idx
+            for(int pidx = lastPointIdx + 1; pidx < clouds[cidx]->size(); pidx++)
+            {
+                // Update the new base
+                lastPointIdx = pidx;
+                const PointXYZIT &point = clouds[cidx]->points[pidx];
+                const double &tp = point.t;
+                // printf("Adding point: %d, %d. time: %f. Cuttime: %f. %f\n",
+                //         cidx, cloudSeg->size(), tp, lastCutTime, lastCutTime + deltaT);
+                if (tp < lastCutTime)
+                {
+                    if(pidx == clouds[cidx]->size() - 1)
+                        lastPointIdx = -1;
+                    continue;
+                }
+
+                // If point is in the interval of interest, extract it
+                if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)
+                    cloudSeg->push_back(clouds[cidx]->points[pidx]);
+
+                // If point has exceeded the interval, exit
+                if(tp >= lastCutTime + deltaT - 1e-3)
+                {
+                    if(pidx == clouds[cidx]->size() - 1)
+                        lastPointIdx = -1;
+                    segment_completed = true;
+                    break;
+                }
+                // If we have hit the end of the cloud reset the base before moving to the next cloud
+                if(pidx == clouds[cidx]->size() - 1)
+                    lastPointIdx = -1;
+            }
+
+            if (segment_completed)
+                break;
+        }
+
+        // Add the segment to the buffer
+        if (cloudSeg->size() != 0)
+        {
+            // printf("GPMAPLO %d add cloud. Time: %f\n", lidx, cloudSeg->points.front().t);
+            gpmaplo[lidx]->AddCloudSeg(cloudSeg);
+            lastCutTime += deltaT;    
+        }
+        else
+        {
+            // printf("No more points.\n");
+            // this_thread::sleep_for(chrono::milliseconds(1000));
+            lastCloudIdx = 0;
+            lastPointIdx = -1;
+        }
+
+        this_thread::sleep_for(chrono::milliseconds(int(deltaT*1000)));
+    }
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "cartiber");
@@ -456,21 +536,6 @@ int main(int argc, char **argv)
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
     printf("Lidar calibration started.\n");
-
-    // GaussianProcess gp(0.05);
-    // gp.setStartTime(43.91);
-    // gp.extendKnotsTo(57.1102, StateStamped());
-
-    // printf("gp: %f. %f -> %f. Knots: %d\n", gp.getDt(), gp.getMinTime(), gp.getMaxTime(), gp.getNumKnots());
-
-    // StateStamped Xhat = gp.getStateAt(49.69);
-
-    // cout << "Xhat.t\n" << Xhat.t << endl;
-    // cout << "Xhat.R\n" << Xhat.R.matrix() << endl;
-    // cout << "Xhat.O\n" << Xhat.O << endl;
-    // cout << "Xhat.P\n" << Xhat.P << endl;
-    // cout << "Xhat.V\n" << Xhat.V << endl;
-    // cout << "Xhat.A\n" << Xhat.A << endl;
 
     // Spline order
     nh_ptr->getParam("SPLINE_N", SPLINE_N);
@@ -650,7 +715,6 @@ int main(int argc, char **argv)
         pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
 
     // Find a preliminary trajectory for each lidar sequence
-    mutex nh_mtx;
     vector<GPKFLOPtr> gpkflo;
     vector<thread> trajEst;
     vector<CloudPosePtr> posePrior(Nlidar);
@@ -790,17 +854,25 @@ int main(int argc, char **argv)
     }
 
     // Find the trajectory with MAP optimization
-    vector<GPMAPLO*> gpmaplo(Nlidar);
-    vector<thread> choptheclouds(Nlidar);
+    // vector<ros::Publisher> cloudsegpub(Nlidar);
+    gpmaplo = vector<GPMAPLOPtr>(Nlidar);
+    choptheclouds = vector<thread>(Nlidar);
     vector<thread> findthetraj(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
-        gpmaplo[lidx] = new GPMAPLO(nh_ptr, tf_W_Li0[lidx].getSE3(), lidx);
-        choptheclouds[lidx] = thread(&GPMAPLO::ChopTheClouds, gpmaplo[lidx], std::ref(clouds[lidx]));
-        findthetraj[lidx] = thread(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), std::ref(clouds[lidx]));
+        // Create the gpmaplo objects
+        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), lidx));
+        
+        // Create the cloud publisher and publisher thread
+        // cloudsegpub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_segment", lidx), 1000);
+        choptheclouds[lidx] = thread(ChopTheClouds, std::ref(clouds[lidx]), lidx);
+        
+        // Create the estimators
+        double t0 = clouds[lidx].front()->points.front().t;
+        findthetraj[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
     }
 
-    for(auto &thr : findthetraj)
+    for(auto &thr : choptheclouds)
         thr.join();
 
     ros::Rate rate(1);

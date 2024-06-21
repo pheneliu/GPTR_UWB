@@ -6,7 +6,7 @@ Panels:
       Expanded:
         - /Lidar01
         - /Lidar11
-      Splitter Ratio: 0.5411764979362488
+      Splitter Ratio: 0.6352941393852234
     Tree Height: 746
   - Class: rviz/Selection
     Name: Selection
@@ -377,7 +377,7 @@ Visualization Manager:
           Color: 0; 255; 32
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: false
+          Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -392,7 +392,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: false
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -479,7 +479,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 4.048341751098633
+      Distance: 1.4889042377471924
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -487,17 +487,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.01871311664581299
-        Y: -0.6782070398330688
-        Z: -1.7881393432617188e-07
+        X: -0.012075930833816528
+        Y: 0.24883627891540527
+        Z: 7.152557373046875e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4447976350784302
+      Pitch: 0.30479735136032104
       Target Frame: body
-      Yaw: 2.0994157791137695
+      Yaw: 4.627593517303467
     Saved: ~
 Window Geometry:
   Displays:
@@ -515,5 +515,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1920
-  X: 0
+  X: 3840
   Y: 0

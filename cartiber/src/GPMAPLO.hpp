@@ -35,6 +35,7 @@
 using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
 // using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
+typedef std::shared_ptr<GNSolver> GNSolverPtr;
 
 struct FactorMeta
 {
@@ -119,7 +120,7 @@ private:
     bool use_ceres = false;
 
     // My custom Gauss Newton solver
-    GNSolver *mySolver;
+    GNSolverPtr mySolver;
 
     // Outer iterations
     int max_gniter = 3;
@@ -131,7 +132,7 @@ private:
     vector<SE3d> T_L0_Li;
 
     // Spline to model the trajectory of each lidar
-    vector<GaussianProcessPtr> traj;
+    GaussianProcessPtr traj;
 
     // Associate params
     int knnSize = 6;
@@ -163,14 +164,20 @@ private:
     mutex cloud_seg_buf_mtx;
     deque<CloudXYZITPtr> cloud_seg_buf;
 
+    // Publisher
+    ros::Publisher swTrajPub;
+    ros::Publisher assocCloudPub;
+
 public:
 
     // Destructor
    ~GPMAPLO() {};
 
-    GPMAPLO(NodeHandlePtr &nh_ptr_, const SE3d &T_W_Li0_, int &LIDX_)
-        : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_), mySolver(new GNSolver(nh_ptr))
+    GPMAPLO(NodeHandlePtr &nh_ptr_, mutex & nh_mtx, const SE3d &T_W_Li0_, int &LIDX_)
+        : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_)
     {
+        lock_guard<mutex> lg(nh_mtx);
+
         // Time to skip before doing the MAP optimization
         nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
 
@@ -211,15 +218,46 @@ public:
         nh_ptr->getParam("smSigmaR", smSigmaR);
         nh_ptr->getParam("smSigmaP", smSigmaP);
 
-        printf("Window size: %d. Fixes: %f, %f. DK: %f, %d. lidar_weight: %f. ppSigma: %f, %f. mpSigmaR: %f, %f\n\n",
+        swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
+        assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+        
+        // Create the solver
+        mySolver = GNSolverPtr(new GNSolver(nh_ptr, LIDX));
+
+        // Some report to confirm the params are set
+        printf("Window size: %2d. Fixes: %.3f, %.3f. DK: %.3f, %2d. lidar_weight: %.3f. ppSigma: %.3f, %.3f. mpSigmaR: %.3f, %.3f\n",
                 WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
+        // printf("GPMAPLO subscribing to %s\n\n", cloudSegTopic.c_str());
+
+    }
+
+    // void CloudSegmentCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
+    // {
+    //     CloudXYZITPtr cloudSeg(new CloudXYZIT());
+    //     pcl::fromROSMsg(*msg, *cloudSeg);
+    //     cloud_seg_buf_mtx.lock();
+    //     cloud_seg_buf.push_back(cloudSeg);
+    //     cloud_seg_buf_mtx.unlock();
+    // }
+
+    void AddCloudSeg(CloudXYZITPtr &msg)
+    {
+        lock_guard<mutex> lg(cloud_seg_buf_mtx);
+
+        // Copy the pointcloud to local memory
+        CloudXYZITPtr cloudSeg(new CloudXYZIT()); *cloudSeg = *msg;
+        // Store on the cloud segment buffer
+        cloud_seg_buf.push_back(cloudSeg);
+
+        // printf("GPMAPLO %d rec cloud. Time: %f. Size: %d.\n", LIDX, cloudSeg->points.front().t, cloud_seg_buf.size());
     }
 
     void Associate(GaussianProcessPtr &traj, const KdFLANNPtr &kdtreeMap, const CloudXYZIPtr &priormap,
                    const CloudXYZITPtr &cloudRaw, const CloudXYZIPtr &cloudInB, const CloudXYZIPtr &cloudInW,
                    vector<LidarCoef> &Coef)
     {
-        ROS_ASSERT(cloudRaw->size() == cloudInB->size());
+        ROS_ASSERT_MSG(cloudRaw->size() == cloudInB->size(),
+                       "cloudRaw: %d. cloudInB: %d", cloudRaw->size(), cloudInB->size());
 
         if (priormap->size() > knnSize)
         {
@@ -302,1253 +340,28 @@ public:
             PointXYZI  &po = cloudDeskewedInB->points[pidx];
 
             double ts = pi.t;
-            // if (!traj->TimeInInterval(tp))
-            // {
-            //     po.x = 0;
-            //     po.y = 0;
-            //     po.z = 0;
-            //     // po.t = pi.t;
-            //     po.intensity = pi.intensity;
-            // }
-            // else
-            // {
-                SE3d T_Be_Bs = T_Be_W*traj->pose(ts);
+            SE3d T_Be_Bs = T_Be_W*traj->pose(ts);
 
-                Vector3d pinBs(pi.x, pi.y, pi.z);
-                Vector3d pinBe = T_Be_Bs*pinBs;
+            Vector3d pinBs(pi.x, pi.y, pi.z);
+            Vector3d pinBe = T_Be_Bs*pinBs;
 
-                po.x = pinBe.x();
-                po.y = pinBe.y();
-                po.z = pinBe.z();
-                // po.t = pi.t;
-                po.intensity = pi.intensity;
-            // }
+            po.x = pinBe.x();
+            po.y = pinBe.y();
+            po.z = pinBe.z();
+            // po.t = pi.t;
+            po.intensity = pi.intensity;
         }
     }
 
-    void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options, ceres::Solver::Summary &summary,
-                            GaussianProcessPtr &swTraj, double fixed_start, double fixed_end)
+    void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
     {
-        options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-        options.num_threads = MAX_THREADS;
-        options.max_num_iterations = 50;
-
-        int KNOTS = swTraj->getNumKnots();
-
-        // Add the parameter blocks for rotation
-        for (int kidx = 0; kidx < KNOTS; kidx++)
-        {
-            problem.AddParameterBlock(swTraj->getKnotSO3(kidx).data(), 4, new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>());
-            problem.AddParameterBlock(swTraj->getKnotOmg(kidx).data(), 3);
-            problem.AddParameterBlock(swTraj->getKnotPos(kidx).data(), 3);
-            problem.AddParameterBlock(swTraj->getKnotVel(kidx).data(), 3);
-            problem.AddParameterBlock(swTraj->getKnotAcc(kidx).data(), 3);
-        }
-
-        // Fix the knots
-        if (fixed_start >= 0)
-            for (int kidx = 0; kidx < KNOTS; kidx++)
-            {
-                if (swTraj->getKnotTime(kidx) <= swTraj->getMinTime() + fixed_start)
-                {
-                    problem.SetParameterBlockConstant(swTraj->getKnotSO3(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotOmg(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotPos(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotVel(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotAcc(kidx).data());
-                    // printf("Fixed knot %d\n", kidx);
-                }
-            }
-
-        if (fixed_end >= 0)
-            for (int kidx = 0; kidx < KNOTS; kidx++)
-            {
-                if (swTraj->getKnotTime(kidx) >= swTraj->getMaxTime() - fixed_end)
-                {
-                    problem.SetParameterBlockConstant(swTraj->getKnotSO3(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotOmg(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotPos(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotVel(kidx).data());
-                    problem.SetParameterBlockConstant(swTraj->getKnotAcc(kidx).data());
-                    // printf("Fixed knot %d\n", kidx);
-                }
-            }
-    }
-
-    void AddLidarFactors(vector<LidarCoef> &Coef, GaussianProcessPtr &traj, ceres::Problem &problem,
-                         vector<ceres::internal::ResidualBlock *> &res_ids_lidar)
-    {
-        static int skip = -1;
-        for (auto &coef : Coef)
-        {
-            // Skip if lidar coef is not assigned
-            if (coef.t < 0)
-                continue;
-
-            if (!traj->TimeInInterval(coef.t, 1e-6))
-                continue;
-
-            skip++;
-            if (skip % lidar_ds_rate != 0)
-                continue;
-
-            auto   us = traj->computeTimeIndex(coef.t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            vector<double *> factor_param_blocks;
-
-            // Add the parameter blocks for rotation
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            double ld_loss_thres = -1.0;
-            nh_ptr->getParam("ld_loss_thres", ld_loss_thres);
-            ceres::LossFunction *lidar_loss_function = ld_loss_thres <= 0 ? NULL : new ceres::HuberLoss(ld_loss_thres);
-            ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, lidar_weight*coef.plnrty, traj->getDt(), s);
-            auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
-            res_ids_lidar.push_back(res);
-
-            // printf("Adding lidar factor %d. s: %f. u: %d, dt: %f\n", res_ids_lidar.size(), s, u, traj->getDt());
-        }
-    }
-
-    void AddPosePriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
-                             vector<ceres::internal::ResidualBlock *> &res_ids_pose)
-    {
-        double dt_ = traj->getDt()/7;
-        // Add the pose factors with priors sampled from previous spline
-        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
-        {
-            // Continue if sample is in the window
-            if (!traj->TimeInInterval(t, 1e-6))
-                continue;
-
-            auto   us = traj->computeTimeIndex(t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            vector<double *> factor_param_blocks;
-            // Find the coupled poses
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            double pp_loss_thres = -1.0;
-            nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
-            ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
-            ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), ppSigmaR, ppSigmaP, traj->getDt(), s);
-            auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
-            res_ids_pose.push_back(res_block);
-        }
-    }
-
-    void AddMotionPriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
-                               vector<ceres::internal::ResidualBlock *> &res_ids_gp)
-    {
-        // Add GP factors between consecutive knots
-        for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
-        {
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-            {
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            // Create the factors
-            double mp_loss_thres = -1;
-            nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            res_ids_gp.push_back(res_block);
-        }
-
-        // // Add the GP factors based on knot difference
-        // for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
-        // {
-        //     double ts = traj->getKnotTime(kidx) + tshift;
-        //     double tf = traj->getKnotTime(kidx + DK) + tshift;
-
-        //     if (!traj->TimeInInterval(ts, 1e-6) || !traj->TimeInInterval(tf, 1e-6))
-        //         continue;
-
-        //     // Find the coupled control points
-        //     auto   uss = traj->computeTimeIndex(ts);
-        //     int    us  = uss.first;
-        //     double ss  = uss.second;
-
-        //     auto   usf = traj->computeTimeIndex(tf);
-        //     int    uf  = usf.first;
-        //     double sf  = usf.second;
-
-        //     // Confirm that basea and baseb are DK knots apart
-        //     ROS_ASSERT(uf - us == DK && DK > 1);
-
-        //     vector<double *> factor_param_blocks;
-
-        //     // Add the parameter blocks
-        //     for (int knot_idx = us; knot_idx < us + 2; knot_idx++)
-        //     {
-        //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-        //     }
-
-        //     for (int knot_idx = uf; knot_idx < uf + 2; knot_idx++)
-        //     {
-        //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-        //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-        //     }
-
-        //     // Create the factor
-        //     double mp_loss_thres = -1;
-        //     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-        //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-        //     ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
-        //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-        //     res_ids_gp.push_back(res_block);
-        // }
-    }
-
-    void AddSmoothnessFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
-                              vector<ceres::internal::ResidualBlock *> &res_ids_sm)
-    {
-        // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->getNumKnots() - 2; kidx++)
-        {
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = kidx; knot_idx < kidx + 3; knot_idx++)
-            {
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-            }
-
-            // Create the factor
-            double sm_loss_thres = -1;
-            nh_ptr->getParam("sm_loss_thres", sm_loss_thres);
-            ceres::LossFunction *sm_loss_function = sm_loss_thres <= 0 ? NULL : new ceres::HuberLoss(sm_loss_thres);
-            ceres::CostFunction *cost_function = new GPSmoothnessFactor(smSigmaR, smSigmaP, traj->getDt());
-            auto res_block = problem.AddResidualBlock(cost_function, sm_loss_function, factor_param_blocks);
-            res_ids_sm.push_back(res_block);
-        }
-    }
-
-    void AddExtrinsicPoseFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                 vector<ceres::internal::ResidualBlock *> &res_ids_lidar)
-    {
-        // Add the extrinsic factors at fix intervals
-        for (double t = traj->getMinTime(); t < traj->getMaxTime() - 0.05; t += 0.05)
-        {
-            
-        }
-    }
-
-    void AddAutodiffGPMPFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_gp;
-
-        // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
-        {
-            double ts = traj->getKnotTime(kidx) + tshift;
-            double tf = traj->getKnotTime(kidx + DK) + tshift;
-
-            if (!traj->TimeInInterval(ts, 1e-6) || !traj->TimeInInterval(tf, 1e-6))
-                continue;
-
-            // Find the coupled control points
-            auto   uss = traj->computeTimeIndex(ts);
-            int    us  = uss.first;
-            double ss  = uss.second;
-
-            auto   usf = traj->computeTimeIndex(tf);
-            int    uf  = usf.first;
-            double sf  = usf.second;
-
-            // Confirm that basea and baseb are DK knots apart
-            ROS_ASSERT(uf - us == DK && DK > 1);
-
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            GPMotionPriorFactorAutodiff *GPMPFactor = new GPMotionPriorFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
-            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorFactorAutodiff>(GPMPFactor);
-            cost_function->SetNumResiduals(15);
-
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = us; knot_idx < us + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-
-                cost_function->AddParameterBlock(4);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-            }
-
-            for (int knot_idx = uf; knot_idx < uf + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-
-                cost_function->AddParameterBlock(4);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-            }
-
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_gp.push_back(res_block);
-        }
-
-        gpmpFactorMeta.so3_parameter_blocks = so3_param;
-        gpmpFactorMeta.r3_parameter_blocks = r3_param;
-        gpmpFactorMeta.residual_blocks = res_ids_gp;
-
-        // printf("Autodiff params: %d, %d, %d, %d, %d, %d\n",
-        //         so3_param.size(), gpmpFactorMeta.so3_parameter_blocks.size(),
-        //         r3_param.size(), gpmpFactorMeta.r3_parameter_blocks.size(),
-        //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
-
-    }
-
-    void AddAnalyticGPMPFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_gp;
-
-        // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->getNumKnots() - DK; kidx++)
-        {
-            double ts = traj->getKnotTime(kidx) + tshift;
-            double tf = traj->getKnotTime(kidx + DK) + tshift;
-
-            if (!traj->TimeInInterval(ts, 1e-6) || !traj->TimeInInterval(tf, 1e-6))
-                continue;
-
-            // Find the coupled control points
-            auto   uss = traj->computeTimeIndex(ts);
-            int    us  = uss.first;
-            double ss  = uss.second;
-
-            auto   usf = traj->computeTimeIndex(tf);
-            int    uf  = usf.first;
-            double sf  = usf.second;
-
-            // Confirm that basea and baseb are DK knots apart
-            ROS_ASSERT(uf - us == DK && DK > 1);
-
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = us; knot_idx < us + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            for (int knot_idx = uf; knot_idx < uf + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_gp.push_back(res_block);
-        }
-        
-        gpmpFactorMeta.so3_parameter_blocks = so3_param;
-        gpmpFactorMeta.r3_parameter_blocks = r3_param;
-        gpmpFactorMeta.residual_blocks = res_ids_gp;
-
-        // printf("Analytic params: %d, %d, %d, %d, %d, %d\n",
-        //         so3_param.size(), gpmpFactorMeta.so3_parameter_blocks.size(),
-        //         r3_param.size(), gpmpFactorMeta.r3_parameter_blocks.size(),
-        //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
-    }
-
-    void AddAutodiffGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_gp;
-
-        // Add the GP factors based on knot difference
-        for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
-        {
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            GPMotionPriorTwoKnotsFactorAutodiff *GPMPFactor = new GPMotionPriorTwoKnotsFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt());
-            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorTwoKnotsFactorAutodiff>(GPMPFactor);
-            cost_function->SetNumResiduals(15);
-
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-
-                cost_function->AddParameterBlock(4);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-            }
-
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_gp.push_back(res_block);
-        }
-
-        gpmpFactorMeta.so3_parameter_blocks = so3_param;
-        gpmpFactorMeta.r3_parameter_blocks = r3_param;
-        gpmpFactorMeta.residual_blocks = res_ids_gp;
-
-        // printf("Autodiff params: %d, %d, %d, %d, %d, %d\n",
-        //         so3_param.size(), gpmpFactorMeta.so3_parameter_blocks.size(),
-        //         r3_param.size(), gpmpFactorMeta.r3_parameter_blocks.size(),
-        //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
-
-    }
-
-    void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_gp;
-
-        // Add GP factors between consecutive knots
-        for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
-        {
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks
-            for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            // Create the factors
-            double mp_loss_thres = -1;
-            nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-
-            res_ids_gp.push_back(res_block);
-        }
-        
-        gpmpFactorMeta.so3_parameter_blocks = so3_param;
-        gpmpFactorMeta.r3_parameter_blocks = r3_param;
-        gpmpFactorMeta.residual_blocks = res_ids_gp;
-
-        // printf("Analytic params: %d, %d, %d, %d, %d, %d\n",
-        //         so3_param.size(), gpmpFactorMeta.so3_parameter_blocks.size(),
-        //         r3_param.size(), gpmpFactorMeta.r3_parameter_blocks.size(),
-        //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
-    }
-
-    void AddAutodiffGPPoseFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                 FactorMeta &gpposeFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_pose;
-
-        double dt_ = traj->getDt()/7;
-        // Add the pose factors with priors sampled from previous spline
-        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
-        {
-            // Continue if sample is in the window
-            if (!traj->TimeInInterval(t, 1e-6))
-                continue;
-
-            auto   us = traj->computeTimeIndex(t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            GPPoseFactorAutodiff *GPPoseFactor = new GPPoseFactorAutodiff(traj->pose(t), 100.0, 100.0, traj->getDt(), s);
-            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPPoseFactorAutodiff>(GPPoseFactor);
-            cost_function->SetNumResiduals(6);
-
-            vector<double *> factor_param_blocks;
-            // Find the coupled poses
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-
-                cost_function->AddParameterBlock(4);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-            }
-
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_pose.push_back(res_block);
-        }
-
-        gpposeFactorMeta.so3_parameter_blocks = so3_param;
-        gpposeFactorMeta.r3_parameter_blocks = r3_param;
-        gpposeFactorMeta.residual_blocks = res_ids_pose;
-    }
-
-    void AddAnalyticGPPoseFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                 FactorMeta &gpposeFactorMeta)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_pose;
-
-        double dt_ = traj->getDt()/7;
-        // Add the pose factors with priors sampled from previous spline
-        for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
-        {
-            // Continue if sample is in the window
-            if (!traj->TimeInInterval(t, 1e-6))
-                continue;
-
-            auto   us = traj->computeTimeIndex(t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            vector<double *> factor_param_blocks;
-            // Find the coupled poses
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-
-            // Create the factor
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), 100.0, 100.0, traj->getDt(), s);
-            auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_pose.push_back(res_block);
-        }
-
-        gpposeFactorMeta.so3_parameter_blocks = so3_param;
-        gpposeFactorMeta.r3_parameter_blocks = r3_param;
-        gpposeFactorMeta.residual_blocks = res_ids_pose;
-    }
-
-    void AddAutodiffGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                  FactorMeta &gplidarFactorMeta,
-                                  vector<LidarCoef> &Coef)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_lidar;
-
-        int skip = -1;
-        for (auto &coef : Coef)
-        {
-            // Skip if lidar coef is not assigned
-            if (coef.t < 0)
-                continue;
-
-            if (!traj->TimeInInterval(coef.t, 1e-6))
-                continue;
-
-            skip++;
-            if (skip % lidar_ds_rate != 0)
-                continue;
-            
-            auto   us = traj->computeTimeIndex(coef.t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            double lidar_loss_thres = -1.0;
-            double gp_loss_thres = -1;
-            ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-            GPPointToPlaneFactorAutodiff *GPLidarFactor = new GPPointToPlaneFactorAutodiff(coef.finW, coef.f, coef.n, coef.plnrty, traj->getDt(), s);
-            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPPointToPlaneFactorAutodiff>(GPLidarFactor);
-            cost_function->SetNumResiduals(1);
-
-            vector<double *> factor_param_blocks;
-            // Add the parameter blocks for rotation
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-
-                cost_function->AddParameterBlock(4);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-                cost_function->AddParameterBlock(3);
-            }
-            
-            auto res = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
-            res_ids_lidar.push_back(res);
-        }
-
-        gplidarFactorMeta.so3_parameter_blocks = so3_param;
-        gplidarFactorMeta.r3_parameter_blocks = r3_param;
-        gplidarFactorMeta.residual_blocks = res_ids_lidar;
-    }
-
-    void AddAnalyticGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
-                                  FactorMeta &gplidarFactorMeta,
-                                  vector<LidarCoef> &Coef)
-    {
-        vector<double *> so3_param;
-        vector<double *> r3_param;
-        vector<ceres::ResidualBlockId> res_ids_lidar;
-
-        int skip = -1;
-        for (auto &coef : Coef)
-        {
-            // Skip if lidar coef is not assigned
-            if (coef.t < 0)
-                continue;
-
-            if (!traj->TimeInInterval(coef.t, 1e-6))
-                continue;
-
-            skip++;
-            if (skip % lidar_ds_rate != 0)
-                continue;
-            
-            auto   us = traj->computeTimeIndex(coef.t);
-            int    u  = us.first;
-            double s  = us.second;
-
-            vector<double *> factor_param_blocks;
-
-            // Add the parameter blocks for rotation
-            for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-            {
-                so3_param.push_back(traj->getKnotSO3(knot_idx).data());
-                r3_param.push_back(traj->getKnotOmg(knot_idx).data());
-                r3_param.push_back(traj->getKnotPos(knot_idx).data());
-                r3_param.push_back(traj->getKnotVel(knot_idx).data());
-                r3_param.push_back(traj->getKnotAcc(knot_idx).data());
-
-                factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-            }
-            
-            double lidar_loss_thres = -1.0;
-            ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-            ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, coef.plnrty, traj->getDt(), s);
-            auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
-            res_ids_lidar.push_back(res);
-        }
-
-        gplidarFactorMeta.so3_parameter_blocks = so3_param;
-        gplidarFactorMeta.r3_parameter_blocks = r3_param;
-        gplidarFactorMeta.residual_blocks = res_ids_lidar;
-    }
-
-    void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, vector<LidarCoef> &Coef, const int &cidx)
-    {
-        for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
-            swTraj->setKnot(kidx, StateStamped<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
-                                                             Vector3d(0, 1, 2)*sin(kidx+1),
-                                                             Vector3d(4, 5, 6)*cos(kidx+1),
-                                                             Vector3d(7, 8, 9)*sin(kidx+1),
-                                                             Vector3d(10, 11, 12)*cos(kidx+1)));
-
-        // Motion priors
-        {
-            double time_autodiff;
-            VectorXd residual_autodiff_;
-            MatrixXd Jacobian_autodiff_;
-            {
-                // Test the autodiff Jacobian
-                FactorMeta gpmpFactorMetaAutodiff;
-                AddAutodiffGPMPFactor(swTraj, problem, gpmpFactorMetaAutodiff);
-
-                if (gpmpFactorMetaAutodiff.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_autodiff;
-                double cost_autodiff;
-                vector <double> residual_autodiff;
-                MatrixXd J_autodiff;
-
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpmpFactorMetaAutodiff, 0,
-                                      cost_autodiff, residual_autodiff, J_autodiff);
-
-                RemoveResidualBlock(problem, gpmpFactorMetaAutodiff);
-
-                printf(KCYN "Motion Prior Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_autodiff.rows(), J_autodiff.cols(),
-                       gpmpFactorMetaAutodiff.parameter_blocks(),
-                       cost_autodiff, time_autodiff = tt_autodiff.Toc());
-
-                residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-                Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-                // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
-                // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-                // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-            }
-
-            double time_analytic;
-            VectorXd residual_analytic_;
-            MatrixXd Jacobian_analytic_;
-            {
-                // Test the analytic Jacobian
-                FactorMeta gpmpFactorMetaAnalytic;
-                AddAnalyticGPMPFactor(swTraj, problem, gpmpFactorMetaAnalytic);
-
-                if (gpmpFactorMetaAnalytic.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_analytic;
-                double cost_analytic;
-                vector <double> residual_analytic;
-                MatrixXd J_analytic;
-                
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpmpFactorMetaAnalytic, 1,
-                                      cost_analytic, residual_analytic, J_analytic);
-
-                RemoveResidualBlock(problem, gpmpFactorMetaAnalytic);
-
-                printf(KMAG "Motion Prior Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_analytic.rows(), J_analytic.cols(),
-                       gpmpFactorMetaAnalytic.parameter_blocks(),
-                       cost_analytic, time_analytic = tt_analytic.Toc());
-
-                residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-                Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-                // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
-                // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-                // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-                // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-            }
-
-            // Compare the two jacobians
-            VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-            MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-
-            // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-            // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-
-            // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-            //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-
-            printf(KGRN "CIDX: %d. MotionPrior Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n" RESET,
-                   cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-        }
-
-        // Motion priors
-        {
-            double time_autodiff;
-            VectorXd residual_autodiff_;
-            MatrixXd Jacobian_autodiff_;
-            {
-                // Test the autodiff Jacobian
-                FactorMeta gpmp2kFactorMetaAutodiff;
-                AddAutodiffGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAutodiff);
-
-                if (gpmp2kFactorMetaAutodiff.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_autodiff;
-                double cost_autodiff;
-                vector <double> residual_autodiff;
-                MatrixXd J_autodiff;
-
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpmp2kFactorMetaAutodiff, 0,
-                                      cost_autodiff, residual_autodiff, J_autodiff);
-
-                RemoveResidualBlock(problem, gpmp2kFactorMetaAutodiff);
-
-                printf(KCYN "Motion Prior 2Knot Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_autodiff.rows(), J_autodiff.cols(),
-                       gpmp2kFactorMetaAutodiff.parameter_blocks(),
-                       cost_autodiff, time_autodiff = tt_autodiff.Toc());
-
-                residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-                Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-                // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_autodiff_ = J_autodiff.block(0, 0, 6, 15);
-                // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-                // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-            }
-
-            double time_analytic;
-            VectorXd residual_analytic_;
-            MatrixXd Jacobian_analytic_;
-            {
-                // Test the analytic Jacobian
-                FactorMeta gpmp2kFactorMetaAnalytic;
-                AddAnalyticGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAnalytic);
-
-                if (gpmp2kFactorMetaAnalytic.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_analytic;
-                double cost_analytic;
-                vector <double> residual_analytic;
-                MatrixXd J_analytic;
-                
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpmp2kFactorMetaAnalytic, 1,
-                                      cost_analytic, residual_analytic, J_analytic);
-
-                RemoveResidualBlock(problem, gpmp2kFactorMetaAnalytic);
-
-                printf(KMAG "Motion Prior 2Knot Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_analytic.rows(), J_analytic.cols(),
-                       gpmp2kFactorMetaAnalytic.parameter_blocks(),
-                       cost_analytic, time_analytic = tt_analytic.Toc());
-
-                residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-                Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-                // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_analytic_ = J_analytic.block(0, 0,  6, 15);
-                // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-                // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-                // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-            }
-
-            // Compare the two jacobians
-            VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-            MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-
-            // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-            // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-
-            // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-            //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-
-            printf(KGRN "CIDX: %d. MotionPrior 2K Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n" RESET,
-                   cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-        }
-
-        // Pose factors
-        {
-            double time_autodiff;
-            VectorXd residual_autodiff_;
-            MatrixXd Jacobian_autodiff_;
-            {
-                // Test the autodiff Jacobian
-                FactorMeta gpposeFactorMetaAutodiff;
-                AddAutodiffGPPoseFactor(swTraj, problem, gpposeFactorMetaAutodiff);
-
-                if (gpposeFactorMetaAutodiff.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_autodiff;
-                double cost_autodiff;
-                vector <double> residual_autodiff;
-                MatrixXd J_autodiff;
-
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpposeFactorMetaAutodiff, 0,
-                                      cost_autodiff, residual_autodiff, J_autodiff);
-
-                RemoveResidualBlock(problem, gpposeFactorMetaAutodiff);
-
-                printf(KCYN "Pose Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_autodiff.rows(), J_autodiff.cols(),
-                       gpposeFactorMetaAutodiff.parameter_blocks(),
-                       cost_autodiff, time_autodiff = tt_autodiff.Toc());
-
-                residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-                Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-                // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
-                // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-                // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-            }
-
-            double time_analytic;
-            VectorXd residual_analytic_;
-            MatrixXd Jacobian_analytic_;
-            {
-                // Test the analytic Jacobian
-                FactorMeta gpposeFactorMetaAnalytic;
-                AddAnalyticGPPoseFactor(swTraj, problem, gpposeFactorMetaAnalytic);
-
-                if (gpposeFactorMetaAnalytic.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_analytic;
-                double cost_analytic;
-                vector <double> residual_analytic;
-                MatrixXd J_analytic;
-                
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gpposeFactorMetaAnalytic, 1,
-                                      cost_analytic, residual_analytic, J_analytic);
-
-                RemoveResidualBlock(problem, gpposeFactorMetaAnalytic);
-
-                printf(KMAG "Pose Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_analytic.rows(), J_analytic.cols(),
-                       gpposeFactorMetaAnalytic.parameter_blocks(),
-                       cost_analytic, time_analytic = tt_analytic.Toc());
-
-                residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-                Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-                // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
-                // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-                // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-                // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-            }
-
-            // Compare the two jacobians
-            VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-            MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-
-            // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-            // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-
-            // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-            //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-
-            printf(KGRN "CIDX: %d. Pose Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n" RESET,
-                   cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-        }
-
-        // Lidar factors
-        {
-            double time_autodiff;
-            VectorXd residual_autodiff_;
-            MatrixXd Jacobian_autodiff_;
-            {
-                // Test the autodiff Jacobian
-                FactorMeta gplidarFactorMetaAutodiff;
-                AddAutodiffGPLidarFactor(swTraj, problem, gplidarFactorMetaAutodiff, Coef);
-
-                if (gplidarFactorMetaAutodiff.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_autodiff;
-                double cost_autodiff;
-                vector <double> residual_autodiff;
-                MatrixXd J_autodiff;
-
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gplidarFactorMetaAutodiff, 0,
-                                      cost_autodiff, residual_autodiff, J_autodiff);
-
-                RemoveResidualBlock(problem, gplidarFactorMetaAutodiff);
-
-                printf(KCYN "Lidar Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_autodiff.rows(), J_autodiff.cols(),
-                       gplidarFactorMetaAutodiff.parameter_blocks(),
-                       cost_autodiff, time_autodiff = tt_autodiff.Toc());
-
-                residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-                Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-                // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
-                // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-                // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-            }
-
-            double time_analytic;
-            VectorXd residual_analytic_;
-            MatrixXd Jacobian_analytic_;
-            {
-                // Test the analytic Jacobian
-                FactorMeta gplidarFactorMetaAnalytic;
-                AddAnalyticGPLidarFactor(swTraj, problem, gplidarFactorMetaAnalytic, Coef);
-
-                if (gplidarFactorMetaAnalytic.parameter_blocks() == 0)
-                    return;
-
-                TicToc tt_analytic;
-                double cost_analytic;
-                vector <double> residual_analytic;
-                MatrixXd J_analytic;
-                
-                int count = 100;
-                while(count-- > 0)
-                    GetFactorJacobian(problem, gplidarFactorMetaAnalytic, 1,
-                                      cost_analytic, residual_analytic, J_analytic);
-
-                RemoveResidualBlock(problem, gplidarFactorMetaAnalytic);
-
-                printf(KMAG "Lidar Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                       J_analytic.rows(), J_analytic.cols(),
-                       gplidarFactorMetaAnalytic.parameter_blocks(),
-                       cost_analytic, time_analytic = tt_analytic.Toc());
-
-                residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-                Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-                // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-                // Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
-                // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-                // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-                // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-
-                // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-                // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-            }
-
-            // Compare the two jacobians
-            VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-            MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-
-            // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-            // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-
-            // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-            //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-
-            printf(KGRN "CIDX: %d. Lidar Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,
-                   cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-        }
-    }
-    
-    void ChopTheClouds(const vector<CloudXYZITPtr> &clouds)
-    {
-        int Ncloud = clouds.size();
-        static int lastCloudIdx;
-        static int lastPointIdx;
-        static double lastCutTime = clouds.front()->points.front().t;
-
-        while(ros::ok())
-        {
-            if (cloud_seg_buf.size() < 57)
-            {
-                CloudXYZITPtr cloudSeg(new CloudXYZIT());
-                // Extract all the points within lastCutTime to lastCutTime + dt
-                for(int cidx = lastCloudIdx; cidx < Ncloud; cidx++)
-                {
-                    // Shift the pointcloud base
-                    lastCloudIdx = cidx;
-                    bool segment_completed = false;
-                    // Check the points from the base idx
-                    for(int pidx = lastPointIdx + 1; pidx < clouds[cidx]->size(); pidx++)
-                    {
-                        // Update the new base
-                        lastPointIdx = pidx;
-                        const PointXYZIT &point = clouds[cidx]->points[pidx];
-                        const double &tp = point.t;
-                        // printf("Adding point: %d, %d. time: %f. Cuttime: %f. %f\n",
-                        //        cidx, cloudSeg->size(), tp, lastCutTime, lastCutTime + deltaT);
-                        if (tp < lastCutTime)
-                        {
-                            if(pidx == clouds[cidx]->size() - 1)
-                                lastPointIdx = -1;
-                            
-                            continue;
-                        }
-                        
-                        // If point is in the interval of interest, extract it
-                        if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)
-                            cloudSeg->push_back(clouds[cidx]->points[pidx]);
-                        
-                        // If point has exceeded the interval, exit
-                        if(tp >= lastCutTime + deltaT - 1e-3)
-                        {
-                            if(pidx == clouds[cidx]->size() - 1)
-                                lastPointIdx = -1;
-                            
-                            segment_completed = true;
-                            
-                            break;
-                        }
-
-                        // If we have hit the end of the cloud reset the base before moving to the next cloud
-                        if(pidx == clouds[cidx]->size() - 1)
-                            lastPointIdx = -1;
-                    }
-                    if (segment_completed)
-                        break;
-                }
-
-                // Add the segment to the buffer
-                if (cloudSeg->size() != 0)
-                {
-                    std::lock_guard<mutex> lg(cloud_seg_buf_mtx);
-                    cloud_seg_buf.push_back(cloudSeg);
-                    
-                    // printf("Chopper cloud_seg_buf: %d, %d. cloudSeg: %d. Intv: %f, %f. CutTime: %f, %f\n",
-                    //         cloud_seg_buf.size(),
-                    //         cloud_seg_buf.back()->size(),
-                    //         cloudSeg->size(),
-                    //         cloudSeg->points.front().t,
-                    //         cloudSeg->points.back().t,
-                    //         lastCutTime, lastCutTime + deltaT);
-                            
-                    lastCutTime += deltaT;    
-                }
-                else
-                {
-                    printf("No more points.\n");
-                    this_thread::sleep_for(chrono::milliseconds(1000));
-                }
-            }
-        }
-    }
-
-    void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
-                  const vector<CloudXYZITPtr> &clouds)
-    {
-        int Ncloud = clouds.size();
-
-        GaussianProcessPtr traj(new GaussianProcess(deltaT));
-        traj->setStartTime(clouds.front()->points.front().t);
-        traj->setKnot(0, StateStamped(clouds.front()->points.front().t, T_W_Li0));
-
-        static deque<CloudXYZITPtr> swCloudSeg;
-        static deque<CloudXYZIPtr > swCloudSegUndi;
-        static deque<CloudXYZIPtr > swCloudSegUndiInW;
+        traj = GaussianProcessPtr(new GaussianProcess(deltaT));
+        traj->setStartTime(t0);
+        traj->setKnot(0, StateStamped(t0, T_W_Li0));
+
+        deque<CloudXYZITPtr> swCloudSeg;
+        deque<CloudXYZIPtr > swCloudSegUndi;
+        deque<CloudXYZIPtr > swCloudSegUndiInW;
         deque<vector<LidarCoef>> swCloudCoef;
 
         // Check the buffer
@@ -1575,7 +388,7 @@ public:
 
 
             // Step 1: Extend the trajectory to the new end time, trim the time by millisecond ------------------------
-            
+
             double TSWEND = cloudSeg->points.back().t;
             // Extend the knot by propagation
             while(traj->getMaxTime() < TSWEND)
@@ -1631,8 +444,8 @@ public:
             // Sample the state before optimization 
             StateStamped Xt0 = traj->getStateAt(TSWEND);
             vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
-            
-            static int optnum = -1; optnum++;
+
+            int optnum = -1; optnum++;
             int gniter = 0;
             while(gniter < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
             {
@@ -1645,7 +458,7 @@ public:
                 int swNextBaseKnot = -1;
                 if (swCloudSeg.size() >= WINDOW_SIZE)
                     swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
-                
+
                 // Solve
                 mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
 
@@ -1682,7 +495,7 @@ public:
                     pcl::transformPointCloud(*swCloudSegUndi[widx],
                                              *swCloudSegUndiInW[widx],
                                               tf_W_Be.pos, tf_W_Be.rot);
-                    
+
                     // Associate between feature and map
                     Associate(swTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
@@ -1695,7 +508,7 @@ public:
                 for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
                     if(swTraj->TimeInInterval(ts))
                         poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
-                static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
+                // static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
                 Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
 
                 CloudXYZIPtr assoc_cloud(new CloudXYZI());
@@ -1709,7 +522,7 @@ public:
                             p.intensity = widx;
                             assoc_cloud->push_back(p);
                         }
-                static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+                // static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
                 Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
 
                 gniter++;
@@ -1720,7 +533,7 @@ public:
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
                 report[gniter-1] = 
-                myprintf("%sGPMAPLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
+                myprintf("%sGPMAP%dLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %2.0f. Tslv: %2.0f. Taftop: %2.0f. Tlp: %3.0f.\n"
                          "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
                          "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
@@ -1728,7 +541,7 @@ public:
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
                          RESET,
-                         gniter == max_gniter ? KGRN : "", optnum,
+                         gniter == max_gniter ? KGRN : "", LIDX, optnum,
                          gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
                          tt_preopt.GetLastStop(), 0, tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
@@ -1747,7 +560,7 @@ public:
                 cout << endl;
             }
 
-            // Shift the sliding window if length exceeds threshold
+            // Step 4: Shift the sliding window if length exceeds threshold
             if (swCloudSeg.size() >= WINDOW_SIZE)
             {
                 swCloudSeg.pop_front();
