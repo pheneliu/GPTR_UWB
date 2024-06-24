@@ -122,3 +122,5 @@ public:
         return report;
     }
 };
+
+typedef std::shared_ptr<GNSolver> GNSolverPtr;

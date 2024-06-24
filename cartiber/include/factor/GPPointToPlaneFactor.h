@@ -114,7 +114,7 @@ public:
             return true;
 
         Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
-        Matrix<double, 1, 3> Dr_DPt  = n.transpose();
+        Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
 
         size_t idx;
 

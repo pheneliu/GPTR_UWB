@@ -2,7 +2,7 @@
 
 // Local size at individual factors
 #define RES_LDR_LSIZE 1
-#define RES_MP2_LSIZE 15
+#define RES_MP2_LSIZE 18
 // Global size for the whole problem, to be changed in each solve
 int RES_LDR_GSIZE;
 int RES_MP2_GSIZE;
@@ -10,11 +10,12 @@ int RES_ALL_GSIZE;
 int RES_LDR_GBASE;
 int RES_MP2_GBASE;
 // Size of each parameter block at individual level
-#define XROT_LSIZE 0
-#define XOMG_LSIZE 3
-#define XPOS_LSIZE 6
-#define XVEL_LSIZE 9
-#define XACC_LSIZE 12
+// #define XROT_LSIZE 0
+// #define XOMG_LSIZE 3
+// #define XALP_LSIZE 6
+// #define XPOS_LSIZE 9
+// #define XVEL_LSIZE 12
+// #define XACC_LSIZE 15
 #define XALL_LSIZE STATE_DIM
 int XALL_GSIZE;
 
@@ -85,7 +86,7 @@ void GNSolver::EvaluateLidarFactors
             double s  = us.second;
 
             typedef GPPointToPlaneFactorTMN ppFactor;
-            ppFactor factor = ppFactor(coef.finW, coef.f, coef.n, coef.plnrty*lidar_weight, traj->getDt(), s);
+            ppFactor factor = ppFactor(coef.f, coef.n, coef.plnrty*lidar_weight, traj->getDt(), s);
 
             // Calculate the residual and jacobian
             factor.Evaluate(traj->getKnot(u), traj->getKnot(u+1));

@@ -95,87 +95,106 @@ public:
 
         // Jacobian on Ra
         idx = RaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DRa(jacobian.block<1, 3>(0, idx));
-        Dr_DRa.setZero();
-        Dr_DRa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DRa(jacobian.block<1, 3>(0, idx));
+            Dr_DRa.setZero();
+            Dr_DRa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
+        }
 
 
         // Jacobian on Oa
         idx = OaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DOa(jacobian.block<1, 3>(0, idx));
-        Dr_DOa.setZero();
-        Dr_DOa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DOa(jacobian.block<1, 3>(0, idx));
+            Dr_DOa.setZero();
+            Dr_DOa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+        }
 
 
         // Jacobian on Sa
         idx = SaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DSa(jacobian.block<1, 3>(0, idx));
-        Dr_DSa.setZero();
-        Dr_DSa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DSa(jacobian.block<1, 3>(0, idx));
+            Dr_DSa.setZero();
+            Dr_DSa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
+        }
 
 
         // Jacobian on Pa
         idx = PaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DPa(jacobian.block<1, 3>(0, idx));
-        Dr_DPa.setZero();
-        Dr_DPa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Pidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DPa(jacobian.block<1, 3>(0, idx));
+            Dr_DPa.setZero();
+            Dr_DPa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Pidx];
+        }
 
 
         // Jacobian on Va
         idx = VaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DVa(jacobian.block<1, 3>(0, idx));
-        Dr_DVa.setZero();
-        Dr_DVa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Vidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DVa(jacobian.block<1, 3>(0, idx));
+            Dr_DVa.setZero();
+            Dr_DVa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Vidx];
+        }
 
 
         // Jacobian on Aa
         idx = AaIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DAa(jacobian.block<1, 3>(0, idx));
-        Dr_DAa.setZero();
-        Dr_DAa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Aidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DAa(jacobian.block<1, 3>(0, idx));
+            Dr_DAa.setZero();
+            Dr_DAa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Aidx];
+        }
 
 
         // Jacobian on Rb
         idx = RbIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DRb(jacobian.block<1, 3>(0, idx));
-        Dr_DRb.setZero();
-        Dr_DRb.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DRb(jacobian.block<1, 3>(0, idx));
+            Dr_DRb.setZero();
+            Dr_DRb.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
+        }
 
 
         // Jacobian on Ob
         idx = ObIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DOb(jacobian.block<1, 3>(0, idx));
-        Dr_DOb.setZero();
-        Dr_DOb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DOb(jacobian.block<1, 3>(0, idx));
+            Dr_DOb.setZero();
+            Dr_DOb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
+        }
 
-
-        // Jacobian on Ob
+        // Jacobian on Sb
         idx = SbIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DSb(jacobian.block<1, 3>(0, idx));
-        Dr_DSb.setZero();
-        Dr_DSb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
-
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DSb(jacobian.block<1, 3>(0, idx));
+            Dr_DSb.setZero();
+            Dr_DSb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
+        }
 
         // Jacobian on Pb
         idx = PbIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DPb(jacobian.block<1, 3>(0, idx));
-        Dr_DPb.setZero();
-        Dr_DPb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Pidx];
-
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DPb(jacobian.block<1, 3>(0, idx));
+            Dr_DPb.setZero();
+            Dr_DPb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Pidx];
+        }
 
         // Jacobian on Vb
         idx = VbIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DVb(jacobian.block<1, 3>(0, idx));
-        Dr_DVb.setZero();
-        Dr_DVb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Vidx];
-
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DVb(jacobian.block<1, 3>(0, idx));
+            Dr_DVb.setZero();
+            Dr_DVb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Vidx];
+        }
 
         // Jacobian on Ab
         idx = AbIdx;
-        Eigen::Block<MatJ, 1, 3> Dr_DAb(jacobian.block<1, 3>(0, idx));
-        Dr_DAb.setZero();
-        Dr_DAb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
-
+        {
+            Eigen::Block<MatJ, 1, 3> Dr_DAb(jacobian.block<1, 3>(0, idx));
+            Dr_DAb.setZero();
+            Dr_DAb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
+        }
 
         return true;
     }
@@ -227,6 +246,5 @@ private:
     // Interpolation param
     double Dt;
     double s;
-
     GPMixer gpm;
 };

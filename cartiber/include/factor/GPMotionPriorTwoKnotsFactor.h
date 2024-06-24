@@ -54,8 +54,8 @@ public:
         Info.block<9, 9>(9, 9) = kron(QP, Matrix3d::Identity());
         
         // Find the square root info
-        sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
-        // sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
+        // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
+        sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -291,12 +291,12 @@ public:
 
 private:
 
-    const int Ridx = 0;
-    const int Oidx = 1;
-    const int Sidx = 2;
-    const int Pidx = 3;
-    const int Vidx = 4;
-    const int Aidx = 5;
+    // const int Ridx = 0;
+    // const int Oidx = 1;
+    // const int Sidx = 2;
+    // const int Pidx = 3;
+    // const int Vidx = 4;
+    // const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;

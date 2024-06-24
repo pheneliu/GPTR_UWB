@@ -53,8 +53,8 @@
         <param name="ppSigmaP"       value="-1.0"   />
         
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="5.0"    />
-        <param name="mpSigmaP"       value="5.0"    />
+        <param name="mpSigmaR"       value="1.0"    />
+        <param name="mpSigmaP"       value="1.0"    />
         <param name="DK"             value="2"      />
         <param name="tshift"         value="0.025"  />
 

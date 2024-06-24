@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Lidar01
         - /Lidar11
+        - /Lidar11/AssocCloud11
       Splitter Ratio: 0.6352941393852234
     Tree Height: 746
   - Class: rviz/Selection
@@ -479,7 +480,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 3.550363540649414
+      Distance: 3.7519922256469727
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -487,17 +488,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -0.014514565467834473
-        Y: 0.5778599977493286
-        Z: -7.152557373046875e-07
+        X: -0.037383586168289185
+        Y: -0.09339916706085205
+        Z: 2.980232238769531e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5647966861724854
+      Pitch: 1.514797329902649
       Target Frame: body
-      Yaw: 1.781221866607666
+      Yaw: 0.6525986194610596
     Saved: ~
 Window Geometry:
   Displays:
