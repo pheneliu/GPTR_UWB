@@ -39,9 +39,8 @@ class GPPointToPlaneFactorAutodiff
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GPPointToPlaneFactorAutodiff(const Vector3d &finW_, const Vector3d &f_, const Vector4d &coef, double w_, double Dt_, double s_)
-    :   finW       (finW_            ),
-        f          (f_               ),
+    GPPointToPlaneFactorAutodiff(const Vector3d &f_, const Vector4d &coef, double w_, double Dt_, double s_)
+    :   f          (f_               ),
         n          (coef.head<3>()   ),
         m          (coef.tail<1>()(0)),
         w          (w_               ),
@@ -69,9 +68,9 @@ public:
 
         StateStamped<T> Xt(s*Dt); vector<vector<Mat3T>> DXt_DXa; vector<vector<Mat3T>> DXt_DXb;
         
-        Eigen::Matrix<T, 6, 1> gammaa;
-        Eigen::Matrix<T, 6, 1> gammab;
-        Eigen::Matrix<T, 6, 1> gammat;
+        Eigen::Matrix<T, 9, 1> gammaa;
+        Eigen::Matrix<T, 9, 1> gammab;
+        Eigen::Matrix<T, 9, 1> gammat;
 
         gpm.ComputeXtAndDerivs<T>(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
@@ -85,9 +84,6 @@ public:
     }
 
 private:
-
-    // Feature coordinates in world frame
-    Vector3d finW;
 
     // Feature coordinates in body frame
     Vector3d f;
@@ -105,24 +101,26 @@ private:
     
     const int Ridx = 0;
     const int Oidx = 1;
-    const int Pidx = 2;
-    const int Vidx = 3;
-    const int Aidx = 4;
+    const int Sidx = 2;
+    const int Pidx = 3;
+    const int Vidx = 4;
+    const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;
-    const int PaIdx = 2;
-    const int VaIdx = 3;
-    const int AaIdx = 4;
+    const int SaIdx = 2;
+    const int PaIdx = 3;
+    const int VaIdx = 4;
+    const int AaIdx = 5;
 
-    const int RbIdx = 5;
-    const int ObIdx = 6;
-    const int PbIdx = 7;
-    const int VbIdx = 8;
-    const int AbIdx = 9;
+    const int RbIdx = 6;
+    const int ObIdx = 7;
+    const int SbIdx = 8;
+    const int PbIdx = 9;
+    const int VbIdx = 10;
+    const int AbIdx = 11;
 
     // Spline param
-    int    N;
     double Dt;
     double s;
 

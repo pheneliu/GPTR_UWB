@@ -43,10 +43,9 @@ public:
     ~GPPointToPlaneFactor() {};
 
     // Constructor
-    GPPointToPlaneFactor(const Vector3d &finW_, const Vector3d &f_, const Vector4d &coef, double w_,
+    GPPointToPlaneFactor(const Vector3d &f_, const Vector4d &coef, double w_,
                          double Dt_, double s_)
-    :   finW       (finW_            ),
-        f          (f_               ),
+    :   f          (f_               ),
         n          (coef.head<3>()   ),
         m          (coef.tail<1>()(0)),
         w          (w_               ),
@@ -62,6 +61,8 @@ public:
         mutable_parameter_block_sizes()->push_back(4);
         // Angular velocity of the first knot
         mutable_parameter_block_sizes()->push_back(3);
+        // Angular acceleration of the first knot
+        mutable_parameter_block_sizes()->push_back(3);
         // Position of the first knot
         mutable_parameter_block_sizes()->push_back(3);
         // Velocity of the first knot
@@ -72,6 +73,8 @@ public:
         // Rotation of the second knot
         mutable_parameter_block_sizes()->push_back(4);
         // Angular velocity of the second knot
+        mutable_parameter_block_sizes()->push_back(3);
+        // Angular acceleration of the second knot
         mutable_parameter_block_sizes()->push_back(3);
         // Position of the second knot
         mutable_parameter_block_sizes()->push_back(3);
@@ -95,9 +98,9 @@ public:
 
         StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
 
-        Eigen::Matrix<double, 6, 1> gammaa;
-        Eigen::Matrix<double, 6, 1> gammab;
-        Eigen::Matrix<double, 6, 1> gammat;
+        Eigen::Matrix<double, 9, 1> gammaa;
+        Eigen::Matrix<double, 9, 1> gammab;
+        Eigen::Matrix<double, 9, 1> gammat;
 
         gpm.ComputeXtAndDerivs(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
@@ -131,6 +134,15 @@ public:
             Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
             Dr_DOa.setZero();
             Dr_DOa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+        }
+
+        // Jacobian on Sa
+        idx = SaIdx;
+        if (jacobians[idx])
+        {
+            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DSa(jacobians[idx]);
+            Dr_DSa.setZero();
+            Dr_DSa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
         }
 
         // Jacobian on Pa
@@ -178,6 +190,15 @@ public:
             Dr_DOb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
         }
 
+        // Jacobian on Sb
+        idx = SbIdx;
+        if (jacobians[idx])
+        {
+            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
+            Dr_DSb.setZero();
+            Dr_DSb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
+        }
+
         // Jacobian on Pb
         idx = PbIdx;
         if (jacobians[idx])
@@ -210,9 +231,6 @@ public:
 
 private:
 
-    // Feature coordinates in world frame
-    Vector3d finW;
-
     // Feature coordinates in body frame
     Vector3d f;
 
@@ -229,24 +247,26 @@ private:
     
     const int Ridx = 0;
     const int Oidx = 1;
-    const int Pidx = 2;
-    const int Vidx = 3;
-    const int Aidx = 4;
+    const int Sidx = 2;
+    const int Pidx = 3;
+    const int Vidx = 4;
+    const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;
-    const int PaIdx = 2;
-    const int VaIdx = 3;
-    const int AaIdx = 4;
+    const int SaIdx = 2;
+    const int PaIdx = 3;
+    const int VaIdx = 4;
+    const int AaIdx = 5;
 
-    const int RbIdx = 5;
-    const int ObIdx = 6;
-    const int PbIdx = 7;
-    const int VbIdx = 8;
-    const int AbIdx = 9;
+    const int RbIdx = 6;
+    const int ObIdx = 7;
+    const int SbIdx = 8;
+    const int PbIdx = 9;
+    const int VbIdx = 10;
+    const int AbIdx = 11;
 
     // Spline param
-    int    N;
     double Dt;
     double s;
 

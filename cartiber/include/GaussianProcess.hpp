@@ -180,7 +180,57 @@ public:
     }
 
     template <class T = double>
-    Eigen::Matrix<T, 3, 3> DJrXV_DX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V) const
+    Eigen::Matrix<T, 3, 3> Fu(const Eigen::Matrix<T, 3, 1> &U, const Eigen::Matrix<T, 3, 1> &V) const
+    {
+        // Extract the elements of input
+        T ux = U(0); T uy = U(1); T uz = U(2);
+        T vx = V(0); T vy = V(1); T vz = V(2);
+
+        Eigen::Matrix<T, 3, 3> Fu_;
+        Fu_ << uy*vy +     uz*vz, ux*vy - 2.0*uy*vx, ux*vz - 2.0*uz*vx,
+               uy*vx - 2.0*ux*vy, ux*vx +     uz*vz, uy*vz - 2.0*uz*vy,
+               uz*vx - 2.0*ux*vz, uz*vy - 2.0*uy*vz, ux*vx +     uy*vy;
+        return Fu_; 
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> Fv(const Eigen::Matrix<T, 3, 1> &U, const Eigen::Matrix<T, 3, 1> &V) const
+    {
+        return Sophus::SO3<T>::hat(U)*Sophus::SO3<T>::hat(U);
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> Fuu(const Eigen::Matrix<T, 3, 1> &U, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    {
+        // Extract the elements of input
+        // T ux = U(0); T uy = U(1); T uz = U(2);
+        T vx = V(0); T vy = V(1); T vz = V(2);
+        T ax = A(0); T ay = A(1); T az = A(2);
+
+        Eigen::Matrix<T, 3, 3> Fuu_;
+        Fuu_ << ay*vy +     az*vz, ax*vy - 2.0*ay*vx, ax*vz - 2.0*az*vx,
+                ay*vx - 2.0*ax*vy, ax*vx +     az*vz, ay*vz - 2.0*az*vy,
+                az*vx - 2.0*ax*vz, az*vy - 2.0*ay*vz, ax*vx +     ay*vy; 
+        return Fuu_; 
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> Fuv(const Eigen::Matrix<T, 3, 1> &U, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    {
+        // Extract the elements of input
+        T ux = U(0); T uy = U(1); T uz = U(2);
+        // T vx = V(0); T vy = V(1); T vz = V(2);
+        T ax = A(0); T ay = A(1); T az = A(2);
+
+        Eigen::Matrix<T, 3, 3> Fuv_;
+        Fuv_ << -2.0*ay*uy - 2.0*az*uz,      ax*uy +     ay*ux,      ax*uz +     az*ux,
+                     ax*uy +     ay*ux, -2.0*ax*ux - 2.0*az*uz,      ay*uz +     az*uy,
+                     ax*uz +     az*ux,      ay*uz +     az*uy, -2.0*ax*ux - 2.0*ay*uy;
+        return Fuv_; 
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> DJrXV_DX(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V) const
     {
         using SO3T  = Sophus::SO3<T>;
         using Vec3T = Eigen::Matrix<T, 3, 1>;
@@ -190,10 +240,6 @@ public:
 
         if(Xn < 1e-5)
             return 0.5*SO3T::hat(V);
-
-        // Extract the elements of input
-        T tx = X(0); T ty = X(1); T tz = X(2);
-        T vx = V(0); T vy = V(1); T vz = V(2);
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -214,54 +260,13 @@ public:
         Vec3T Xb = X/Xn;
         
         Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
-        Mat3T DXsksqV_DX;
-        DXsksqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
-                       ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
-                       tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
+        Mat3T DXsksqV_DX = Fu<T>(X, V);
 
         return SO3T::hat(V)*gXn - SO3T::hat(X)*V*DgXn_DXn*Xb.transpose() + DXsksqV_DX*hXn + XsksqV*DhXn_DXn*Xb.transpose();
     }
 
     template <class T = double>
-    Eigen::Matrix<T, 3, 3> DJrInvXV_DX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V) const
-    {
-        using SO3T  = Sophus::SO3<T>;
-        using Vec3T = Eigen::Matrix<T, 3, 1>;
-        using Mat3T = Eigen::Matrix<T, 3, 3>;
-
-        T Xn = X.norm();
-        if(Xn < 1e-5)
-            return -0.5*SO3T::hat(V);
-
-        // Extract the elements of input
-        T tx = X(0); T ty = X(1); T tz = X(2);
-        T vx = V(0); T vy = V(1); T vz = V(2);
-
-        T Xnp2 = Xn*Xn;
-        T Xnp3 = Xnp2*Xn;
-        
-        T sXn = sin(Xn);
-        T sXnp2 = sXn*sXn;
-        
-        T cXn = cos(Xn);
-        // T cXnp2 = cXn*cXn;
-        
-        T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
-        T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
-
-        Vec3T Xb = X/Xn;
-
-        Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
-        Mat3T DXsksqV_DX;
-        DXsksqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
-                       ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
-                       tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
-
-        return -0.5*SO3T::hat(V) + DXsksqV_DX*gXn + XsksqV*DgXn_DXn*Xb.transpose();
-    }
-
-    template <class T = double>
-    Eigen::Matrix<T, 3, 3> DDJrXVA_DXDX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    Eigen::Matrix<T, 3, 3> DDJrXVA_DXDX(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
     {
         using SO3T = Sophus::SO3<T>;
         using Vec3T = Eigen::Matrix<T, 3, 1>;
@@ -271,11 +276,6 @@ public:
 
         if(Xn < 1e-5)
             return Mat3T::Zero();
-
-        // Extract the elements of input
-        T tx = X(0); T ty = X(1); T tz = X(2);
-        T vx = V(0); T vy = V(1); T vz = V(2);
-        T ax = A(0); T ay = A(1); T az = A(2);
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -294,23 +294,17 @@ public:
 
         T hXn = (Xn - sXn)/Xnp3;
         T DhXn_DXn = (1.0 - cXn)/Xnp3 - 3.0*(Xn - sXn)/Xnp4;
-        T DDhXn_DXnDXn = 6.0/Xnp4 + sXn/Xnp3 + 6.0*cXn/Xnp4 - 12*sXn/Xnp5;
+        T DDhXn_DXnDXn = 6.0/Xnp4 + sXn/Xnp3 + 6.0*cXn/Xnp4 - 12.0*sXn/Xnp5;
 
         Vec3T Xb = X/Xn;
         Mat3T DXb_DX = 1.0/Xn*(Mat3T::Identity(3, 3) - Xb*Xb.transpose());
 
         Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
-        Mat3T DXsksqV_DX;
-        DXsksqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
-                      ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
-                      tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
-        Mat3T DDXsksqVA_DXDX;
-        DDXsksqVA_DXDX << ay*vy + az*vz,     ax*vy - 2.0*ay*vx, ax*vz - 2.0*az*vx,
-                          ay*vx - 2.0*ax*vy, ax*vx + az*vz,     ay*vz - 2.0*az*vy,
-                          az*vx - 2.0*ax*vz, az*vy - 2.0*ay*vz, ax*vx + ay*vy; 
+        Mat3T DXsksqV_DX = Fu(X, V);
+        Mat3T DDXsksqVA_DXDX = Fuu(X, V, A);
 
         Mat3T Vsk = SO3T::hat(V);
-        double AtpXb = A.transpose()*Xb;
+        T AtpXb = A.transpose()*Xb;
         Eigen::Matrix<T, 1, 3> AtpDXb = A.transpose()*DXb_DX;
 
         return  Vsk*A*DgXn_DXn*Xb.transpose()
@@ -328,7 +322,7 @@ public:
     }
 
     template <class T = double>
-    Eigen::Matrix<T, 3, 3> DDJrInvXVA_DXDX(Eigen::Matrix<T, 3, 1> X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    Eigen::Matrix<T, 3, 3> DDJrXVA_DXDV(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
     {
         using SO3T = Sophus::SO3<T>;
         using Vec3T = Eigen::Matrix<T, 3, 1>;
@@ -339,10 +333,78 @@ public:
         if(Xn < 1e-5)
             return Mat3T::Zero();
 
-        // Extract the elements of input
-        T tx = X(0); T ty = X(1); T tz = X(2);
-        T vx = V(0); T vy = V(1); T vz = V(2);
-        T ax = A(0); T ay = A(1); T az = A(2);
+        T Xnp2 = Xn*Xn;
+        T Xnp3 = Xnp2*Xn;
+        T Xnp4 = Xnp3*Xn;
+        // T Xnp5 = Xnp4*Xn;
+
+        T sXn = sin(Xn);
+        // T sXnp2 = sXn*sXn;
+        
+        T cXn = cos(Xn);
+        // T cXnp2 = cXn*cXn;
+        
+        T gXn = (1.0 - cXn)/Xnp2;
+        T DgXn_DXn = sXn/Xnp2 - 2.0*(1.0 - cXn)/Xnp3;
+        // T DDgXn_DXnDXn = cXn/Xnp2 - 4.0*sXn/Xnp3 + 6.0*(1.0 - cXn)/Xnp4;
+
+        T hXn = (Xn - sXn)/Xnp3;
+        T DhXn_DXn = (1.0 - cXn)/Xnp3 - 3.0*(Xn - sXn)/Xnp4;
+        // T DDhXn_DXnDXn = 6.0/Xnp4 + sXn/Xnp3 + 6.0*cXn/Xnp4 - 12*sXn/Xnp5;
+
+        Vec3T Xb = X/Xn;
+        // Mat3T DXb_DX = 1.0/Xn*(Mat3T::Identity(3, 3) - Xb*Xb.transpose());
+
+        Mat3T DXsksqV_DV = Fv(X, V);
+        Mat3T DDXsksqVA_DXDV = Fuv(X, V, A);
+
+        T AtpXb = A.transpose()*Xb;
+
+        return -SO3T::hat(A)*gXn - SO3T::hat(X)*DgXn_DXn*AtpXb + DDXsksqVA_DXDV*hXn + DXsksqV_DV*DhXn_DXn*AtpXb;
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> DJrInvXV_DX(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V) const
+    {
+        using SO3T  = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
+        T Xn = X.norm();
+        if(Xn < 1e-5)
+            return -0.5*SO3T::hat(V);
+
+        T Xnp2 = Xn*Xn;
+        T Xnp3 = Xnp2*Xn;
+        
+        T sXn = sin(Xn);
+        T sXnp2 = sXn*sXn;
+        
+        T cXn = cos(Xn);
+        // T cXnp2 = cXn*cXn;
+        
+        T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
+        T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
+
+        Vec3T Xb = X/Xn;
+
+        Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
+        Mat3T DXsksqV_DX = Fu(X, V);
+
+        return -0.5*SO3T::hat(V) + DXsksqV_DX*gXn + XsksqV*DgXn_DXn*Xb.transpose();
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> DDJrInvXVA_DXDX(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    {
+        using SO3T = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
+        T Xn = X.norm();
+
+        if(Xn < 1e-5)
+            return Mat3T::Zero();
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -351,11 +413,11 @@ public:
 
         T sXn = sin(Xn);
         T sXnp2 = sXn*sXn;
-        T s2Xn = sin(2*Xn);
+        T s2Xn = sin(2.0*Xn);
         
         T cXn = cos(Xn);
         T cXnp2 = cXn*cXn;
-        T c2Xn = cos(2*Xn);
+        T c2Xn = cos(2.0*Xn);
         
         T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
         T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
@@ -365,17 +427,11 @@ public:
         Mat3T DXb_DX = 1.0/Xn*(Mat3T::Identity(3, 3) - Xb*Xb.transpose());
 
         Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
-        Mat3T DXsksqV_DX;
-        DXsksqV_DX << ty*vy + tz*vz,     tx*vy - 2.0*ty*vx, tx*vz - 2.0*tz*vx,
-                      ty*vx - 2.0*tx*vy, tx*vx + tz*vz,     ty*vz - 2.0*tz*vy,
-                      tz*vx - 2.0*tx*vz, tz*vy - 2.0*ty*vz, tx*vx + ty*vy;
-        Mat3T DDXsksqVA_DXDX;
-        DDXsksqVA_DXDX << ay*vy + az*vz,     ax*vy - 2.0*ay*vx, ax*vz - 2.0*az*vx,
-                          ay*vx - 2.0*ax*vy, ax*vx + az*vz,     ay*vz - 2.0*az*vy,
-                          az*vx - 2.0*ax*vz, az*vy - 2.0*ay*vz, ax*vx + ay*vy; 
+        Mat3T DXsksqV_DX = Fu(X, V);
+        Mat3T DDXsksqVA_DXDX = Fuu(X, V, A);
 
         Mat3T Vsk = SO3T::hat(V);
-        double AtpXb = A.transpose()*Xb;
+        T AtpXb = A.transpose()*Xb;
         Eigen::Matrix<T, 1, 3> AtpDXb = A.transpose()*DXb_DX;
 
         return   DDXsksqVA_DXDX*gXn
@@ -384,6 +440,47 @@ public:
                + DXsksqV_DX*AtpXb*DgXn_DXn
                + XsksqV*AtpDXb*DgXn_DXn
                + XsksqV*AtpXb*Xb.transpose()*DDgXn_DXnDXn;
+    }
+
+    template <class T = double>
+    Eigen::Matrix<T, 3, 3> DDJrInvXVA_DXDV(const Eigen::Matrix<T, 3, 1> &X, const Eigen::Matrix<T, 3, 1> &V, const Eigen::Matrix<T, 3, 1> &A) const
+    {
+        using SO3T = Sophus::SO3<T>;
+        using Vec3T = Eigen::Matrix<T, 3, 1>;
+        using Mat3T = Eigen::Matrix<T, 3, 3>;
+
+        T Xn = X.norm();
+
+        if(Xn < 1e-5)
+            return Mat3T::Zero();
+
+        T Xnp2 = Xn*Xn;
+        T Xnp3 = Xnp2*Xn;
+        T Xnp4 = Xnp3*Xn;
+        // T Xnp5 = Xnp4*Xn;
+
+        T sXn = sin(Xn);
+        T sXnp2 = sXn*sXn;
+        // T s2Xn = sin(2*Xn);
+        
+        T cXn = cos(Xn);
+        // T cXnp2 = cXn*cXn;
+        // T c2Xn = cos(2*Xn);
+        
+        T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
+        T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
+        // T DDgXn_DXnDXn = (Xn + 6.0*s2Xn - 12.0*sXn - Xn*c2Xn + Xnp3*cXn + 2.0*Xnp2*sXn + Xnp3)/(Xnp4*(s2Xn - 2.0*sXn));
+
+        Vec3T Xb = X/Xn;
+        // Mat3T DXb_DX = 1.0/Xn*(Mat3T::Identity(3, 3) - Xb*Xb.transpose());
+
+        Mat3T DXsksqV_DV = Fv(X, V);
+        // Mat3T DXsksqV_DX = Fu(X, V);
+        Mat3T DDXsksqVA_DXDV = Fuv(X, V, A);
+
+        T AtpXb = A.transpose()*Xb;
+
+        return 0.5*SO3T::hat(A) + DDXsksqVA_DXDV*gXn + DXsksqV_DV*DgXn_DXn*AtpXb;
     }
 
     template <class T = double>
@@ -419,70 +516,38 @@ public:
         Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI_PVA(tau).cast<T>();
 
         // Extract the blocks of SO3 states
-        Mat3T LAM_ROS11 = LAM_ROSt.block(0, 0, 3, 3);
-        Mat3T LAM_ROS12 = LAM_ROSt.block(0, 3, 3, 3);
-        Mat3T LAM_ROS13 = LAM_ROSt.block(0, 6, 3, 3);
-
-        Mat3T LAM_ROS21 = LAM_ROSt.block(3, 0, 3, 3);
-        Mat3T LAM_ROS22 = LAM_ROSt.block(3, 3, 3, 3);
-        Mat3T LAM_ROS23 = LAM_ROSt.block(3, 6, 3, 3);
-
-        Mat3T LAM_ROS31 = LAM_ROSt.block(6, 0, 3, 3);
-        Mat3T LAM_ROS32 = LAM_ROSt.block(6, 3, 3, 3);
-        Mat3T LAM_ROS33 = LAM_ROSt.block(6, 6, 3, 3);
-
-        Mat3T PSI_ROS11 = PSI_ROSt.block(0, 0, 3, 3);
-        Mat3T PSI_ROS12 = PSI_ROSt.block(0, 3, 3, 3);
-        Mat3T PSI_ROS13 = PSI_ROSt.block(0, 6, 3, 3);
-
-        Mat3T PSI_ROS21 = PSI_ROSt.block(3, 0, 3, 3);
-        Mat3T PSI_ROS22 = PSI_ROSt.block(3, 3, 3, 3);
-        Mat3T PSI_ROS23 = PSI_ROSt.block(3, 6, 3, 3);
-
-        Mat3T PSI_ROS31 = PSI_ROSt.block(6, 0, 3, 3);
-        Mat3T PSI_ROS32 = PSI_ROSt.block(6, 3, 3, 3);
-        Mat3T PSI_ROS33 = PSI_ROSt.block(6, 6, 3, 3);
+        Mat3T LAM_ROS11 = LAM_ROSt.block(0, 0, 3, 3); Mat3T LAM_ROS12 = LAM_ROSt.block(0, 3, 3, 3); Mat3T LAM_ROS13 = LAM_ROSt.block(0, 6, 3, 3);
+        Mat3T LAM_ROS21 = LAM_ROSt.block(3, 0, 3, 3); Mat3T LAM_ROS22 = LAM_ROSt.block(3, 3, 3, 3); Mat3T LAM_ROS23 = LAM_ROSt.block(3, 6, 3, 3);
+        Mat3T LAM_ROS31 = LAM_ROSt.block(6, 0, 3, 3); Mat3T LAM_ROS32 = LAM_ROSt.block(6, 3, 3, 3); Mat3T LAM_ROS33 = LAM_ROSt.block(6, 6, 3, 3);
+        
+        Mat3T PSI_ROS11 = PSI_ROSt.block(0, 0, 3, 3); Mat3T PSI_ROS12 = PSI_ROSt.block(0, 3, 3, 3); Mat3T PSI_ROS13 = PSI_ROSt.block(0, 6, 3, 3);
+        Mat3T PSI_ROS21 = PSI_ROSt.block(3, 0, 3, 3); Mat3T PSI_ROS22 = PSI_ROSt.block(3, 3, 3, 3); Mat3T PSI_ROS23 = PSI_ROSt.block(3, 6, 3, 3);
+        Mat3T PSI_ROS31 = PSI_ROSt.block(6, 0, 3, 3); Mat3T PSI_ROS32 = PSI_ROSt.block(6, 3, 3, 3); Mat3T PSI_ROS33 = PSI_ROSt.block(6, 6, 3, 3);
 
         // Extract the blocks of R3 states
-        Mat3T LAM_PVA11 = LAM_PVAt.block(0, 0, 3, 3);
-        Mat3T LAM_PVA12 = LAM_PVAt.block(0, 3, 3, 3);
-        Mat3T LAM_PVA13 = LAM_PVAt.block(0, 6, 3, 3);
+        Mat3T LAM_PVA11 = LAM_PVAt.block(0, 0, 3, 3); Mat3T LAM_PVA12 = LAM_PVAt.block(0, 3, 3, 3); Mat3T LAM_PVA13 = LAM_PVAt.block(0, 6, 3, 3);
+        Mat3T LAM_PVA21 = LAM_PVAt.block(3, 0, 3, 3); Mat3T LAM_PVA22 = LAM_PVAt.block(3, 3, 3, 3); Mat3T LAM_PVA23 = LAM_PVAt.block(3, 6, 3, 3);
+        Mat3T LAM_PVA31 = LAM_PVAt.block(6, 0, 3, 3); Mat3T LAM_PVA32 = LAM_PVAt.block(6, 3, 3, 3); Mat3T LAM_PVA33 = LAM_PVAt.block(6, 6, 3, 3);
 
-        Mat3T LAM_PVA21 = LAM_PVAt.block(3, 0, 3, 3);
-        Mat3T LAM_PVA22 = LAM_PVAt.block(3, 3, 3, 3);
-        Mat3T LAM_PVA23 = LAM_PVAt.block(3, 6, 3, 3);
-
-        Mat3T LAM_PVA31 = LAM_PVAt.block(6, 0, 3, 3);
-        Mat3T LAM_PVA32 = LAM_PVAt.block(6, 3, 3, 3);
-        Mat3T LAM_PVA33 = LAM_PVAt.block(6, 6, 3, 3);
-
-        Mat3T PSI_PVA11 = PSI_PVAt.block(0, 0, 3, 3);
-        Mat3T PSI_PVA12 = PSI_PVAt.block(0, 3, 3, 3);
-        Mat3T PSI_PVA13 = PSI_PVAt.block(0, 6, 3, 3);
-
-        Mat3T PSI_PVA21 = PSI_PVAt.block(3, 0, 3, 3);
-        Mat3T PSI_PVA22 = PSI_PVAt.block(3, 3, 3, 3);
-        Mat3T PSI_PVA23 = PSI_PVAt.block(3, 6, 3, 3);
-
-        Mat3T PSI_PVA31 = PSI_PVAt.block(6, 0, 3, 3);
-        Mat3T PSI_PVA32 = PSI_PVAt.block(6, 3, 3, 3);
-        Mat3T PSI_PVA33 = PSI_PVAt.block(6, 6, 3, 3);
+        Mat3T PSI_PVA11 = PSI_PVAt.block(0, 0, 3, 3); Mat3T PSI_PVA12 = PSI_PVAt.block(0, 3, 3, 3); Mat3T PSI_PVA13 = PSI_PVAt.block(0, 6, 3, 3);
+        Mat3T PSI_PVA21 = PSI_PVAt.block(3, 0, 3, 3); Mat3T PSI_PVA22 = PSI_PVAt.block(3, 3, 3, 3); Mat3T PSI_PVA23 = PSI_PVAt.block(3, 6, 3, 3);
+        Mat3T PSI_PVA31 = PSI_PVAt.block(6, 0, 3, 3); Mat3T PSI_PVA32 = PSI_PVAt.block(6, 3, 3, 3); Mat3T PSI_PVA33 = PSI_PVAt.block(6, 6, 3, 3);
 
         // Find the relative rotation 
         Sophus::SO3<T> Rab = Xa.R.inverse()*Xb.R;
 
         // Calculate the SO3 knots in relative form
-        Vec3T thetaa     = Vec3T::Zero();
-        Vec3T thetadota  = Xa.O;
-        Vec3T thetaddota = Xa.S - 0.5*SO3T::hat(Xa.O)*thetadota;
+        Vec3T Thea     = Vec3T::Zero();
+        Vec3T Thedota  = Xa.O;
+        Vec3T Theddota = Xa.S;
 
-        Vec3T thetab     = Rab.log();
-        Vec3T thetadotb  = JrInv(thetab)*Xb.O;
-        Vec3T thetaddotb = JrInv(thetab)*Xb.S + DJrInvXV_DX(thetab, Xb.O)*thetadotb;
+        Vec3T Theb     = Rab.log();
+        Vec3T Thedotb  = JrInv(Theb)*Xb.O;
+        Vec3T Theddotb = JrInv(Theb)*Xb.S + DJrInvXV_DX(Theb, Xb.O)*Thedotb;
 
         // Put them in vector form
-        Vec9T gammaa; gammaa << thetaa, thetadota, thetaddota;
-        Vec9T gammab; gammab << thetab, thetadotb, thetaddotb;
+        Vec9T gammaa; gammaa << Thea, Thedota, Theddota;
+        Vec9T gammab; gammab << Theb, Thedotb, Theddotb;
 
         // Calculate the knot euclid states and put them in vector form
         Vec9T pvaa; pvaa << Xa.P, Xa.V, Xa.A;
@@ -493,14 +558,14 @@ public:
         Vec9T pvat   = LAM_PVAt*pvaa   + PSI_PVAt*pvab;
 
         // Retrive the interpolated SO3 in relative form
-        Vec3T thetat     = gammat.block(0, 0, 3, 1);
-        Vec3T thetadott  = gammat.block(3, 0, 3, 1);
-        Vec3T thetaddott = gammat.block(6, 0, 3, 1);
+        Vec3T Thet     = gammat.block(0, 0, 3, 1);
+        Vec3T Thedott  = gammat.block(3, 0, 3, 1);
+        Vec3T Theddott = gammat.block(6, 0, 3, 1);
 
         // Assign the interpolated state
-        Rt = Xa.R*Sophus::SO3<T>::exp(thetat);
-        Ot = Jr(thetat)*thetadott;
-        St = Jr(thetat)*thetaddott + DJrXV_DX(thetat, thetadott)*thetadott;
+        Rt = Xa.R*Sophus::SO3<T>::exp(Thet);
+        Ot = Jr(Thet)*Thedott;
+        St = Jr(Thet)*Theddott + DJrXV_DX(Thet, Thedott)*Thedott;
         Pt = pvat.block(0, 0, 3, 1);
         Vt = pvat.block(3, 0, 3, 1);
         At = pvat.block(6, 0, 3, 1);
@@ -517,35 +582,82 @@ public:
         const int VIDX = 4;
         const int AIDX = 5;
 
+        Mat3T JrInvTheb =  JrInv(Theb);
+        Mat3T DTheb_DRa = -JrInvTheb*Rab.inverse().matrix();
+        Mat3T DTheb_DRb =  JrInvTheb;
+
         // Intermediaries to be reused
+        Mat3T DJrInvThebOb_DTheb = DJrInvXV_DX(Theb, Xb.O);
+        Mat3T DJrInvThebSb_DTheb = DJrInvXV_DX(Theb, Xb.S);
+        Mat3T DDJrInvThebObThedotb_DThebDTheb = DDJrInvXVA_DXDX(Theb, Xb.O, Thedotb);
+        Mat3T DDJrInvThebObThedotb_DThebDOb = DDJrInvXVA_DXDV(Theb, Xb.O, Thedotb);
+        Mat3T DTheddotb_DTheb = DJrInvThebSb_DTheb + DDJrInvThebObThedotb_DThebDTheb + DJrInvThebOb_DTheb*DJrInvThebOb_DTheb;
 
-        Mat3T Jrthetat = Jr(thetat);
-        Mat3T JrInvthetab = JrInv(thetab);
+        Mat3T DJrThetTheddott_DThet = DJrXV_DX(Thet, Theddott);
+        Mat3T DDJrThetThedottThedott_DThetDThet = DDJrXVA_DXDX(Thet, Theddott, Theddott);
+        Mat3T DDJrThetThedottThedott_DThetDThedott = DDJrXVA_DXDV(Thet, Theddott, Theddott) + DJrXV_DX(Thet, Thedott);
 
-        Mat3T Dthetat_Dthetab = (PSI_ROS11 + PSI_ROS12*DJrInvXV_DX(thetab, Xb.O));
-        Mat3T Dthetadott_Dthetab = (PSI_ROS21 + PSI_ROS22*DJrInvXV_DX(thetab, Xb.O));
+        Mat3T DThet_DTheb = PSI_ROS11 + PSI_ROS12*DJrInvThebOb_DTheb + PSI_ROS13*DTheddotb_DTheb;
+        Mat3T DThedott_DTheb = PSI_ROS21 + PSI_ROS22*DJrInvThebOb_DTheb + PSI_ROS23*DTheddotb_DTheb;
+        Mat3T DTheddott_DTheb = PSI_ROS31 + PSI_ROS32*DJrInvThebOb_DTheb + PSI_ROS33*DTheddotb_DTheb;
+        // Mat3T DJrThetTheddot_DThet = DJrXV_DX(Thet, Thet);
 
-        Mat3T Dthetab_DRa = -JrInvthetab*Rab.inverse().matrix();
-        Mat3T Dthetat_DRa = Dthetat_Dthetab*Dthetab_DRa;
+        Mat3T DTheddotb_DOb = DDJrInvThebObThedotb_DThebDOb + DJrInvThebOb_DTheb*JrInvTheb;
 
-        Mat3T Dthetab_DRb = JrInvthetab;
-        Mat3T Dthetat_DRb = Dthetat_Dthetab*Dthetab_DRb;
+        // Dependance of thetat on the states
+        Mat3T DThet_DRa = DThet_DTheb*DTheb_DRa;
+        Mat3T DThet_DRb = DThet_DTheb*DTheb_DRb;
+        Mat3T DThet_DOa = LAM_ROS12;
+        Mat3T DThet_DOb = PSI_ROS12*JrInvTheb + PSI_ROS13*DTheddotb_DOb;
+        Mat3T DThet_DSa = LAM_ROS13;
+        Mat3T DThet_DSb = PSI_ROS13*JrInvTheb;
 
-        Mat3T Domgt_Dthetat = DJrXV_DX(thetat, thetadott);
+        Mat3T DThedott_DRa = DThedott_DTheb*DTheb_DRa;
+        Mat3T DThedott_DRb = DThedott_DTheb*DTheb_DRb;
+        Mat3T DThedott_DOa = LAM_ROS22;
+        Mat3T DThedott_DOb = PSI_ROS22*JrInvTheb + PSI_ROS23*DTheddotb_DOb;
+        Mat3T DThedott_DSa = LAM_ROS23;
+        Mat3T DThedott_DSb = PSI_ROS23*JrInvTheb;
+
+        Mat3T DTheddott_DRa = DTheddott_DTheb*DTheb_DRa;
+        Mat3T DTheddott_DRb = DTheddott_DTheb*DTheb_DRb;
+        Mat3T DTheddott_DOa = LAM_ROS32;
+        Mat3T DTheddott_DOb = PSI_ROS32*JrInvTheb + PSI_ROS33*DTheddotb_DOb;
+        Mat3T DTheddott_DSa = LAM_ROS33;
+        Mat3T DTheddott_DSb = PSI_ROS33*JrInvTheb;
+
+        Mat3T JrThet = Jr(Thet);
+        Mat3T JrInvThet = JrInv(Thet);
+
+        // // Dependance of Ot on the states
+        Mat3T DJrThetThedott_DThet = DJrXV_DX(Thet, Thedott);
+        // Mat3T DOt_DThedott = JrThet;        
         
         // DRt_DRa
-        DXt_DXa[RIDX][RIDX] = Sophus::SO3<T>::exp(-thetat).matrix() + Jrthetat*Dthetat_DRa;
+        DXt_DXa[RIDX][RIDX] = Sophus::SO3<T>::exp(-Thet).matrix() + JrThet*DThet_DRa;
         // DRt_DOa
-        DXt_DXa[RIDX][OIDX] = Jrthetat*LAM_ROS12;
+        DXt_DXa[RIDX][OIDX] = JrThet*DThet_DOa;
+        // DRt_DSa
+        DXt_DXa[RIDX][SIDX] = JrThet*DThet_DSa;
         // DRt_DPa DRt_DVa DRt_DAa are all zeros
         
-        // DOt_Ra still needs to be computed
-        DXt_DXa[OIDX][RIDX] = Domgt_Dthetat*Dthetat_DRa + Jrthetat*Dthetadott_Dthetab*Dthetab_DRa;
-        // DOt_Oa still needs to be computed
-        DXt_DXa[OIDX][OIDX] = Domgt_Dthetat*LAM_ROS12 + Jrthetat*LAM_ROS22;
+        // DOt_Ra
+        DXt_DXa[OIDX][RIDX] = DJrThetThedott_DThet*DThet_DRa + JrThet*DThedott_DRa;
+        // DOt_Oa
+        DXt_DXa[OIDX][OIDX] = DJrThetThedott_DThet*DThet_DOa + JrThet*DThedott_DOa;
+        // DOt_Sa
+        DXt_DXa[OIDX][SIDX] = DJrThetThedott_DThet*DThet_DSa + JrThet*DThedott_DSa;
         // DOt_DPa DOt_DVa DOt_DAa are all zeros
 
-        // DPt_DRa DPt_DOa are all all zeros
+        // DSt_Ra
+        DXt_DXa[SIDX][RIDX] = DJrThetTheddott_DThet*DThet_DRa + JrInvThet*DTheddott_DRa + DDJrThetThedottThedott_DThetDThet*DThet_DRa + DDJrThetThedottThedott_DThetDThedott*DThedott_DRa;
+        // DSt_Oa
+        DXt_DXa[SIDX][OIDX] = DJrThetTheddott_DThet*DThet_DOa + JrInvThet*DTheddott_DOa + DDJrThetThedottThedott_DThetDThet*DThet_DOa + DDJrThetThedottThedott_DThetDThedott*DThedott_DOa;
+        // DSt_Sa
+        DXt_DXa[SIDX][SIDX] = DJrThetTheddott_DThet*DThet_DSa + JrInvThet*DTheddott_DSa + DDJrThetThedottThedott_DThetDThet*DThet_DSa + DDJrThetThedottThedott_DThetDThedott*DThedott_DSa;
+        // DSt_DPa DSt_DVa DSt_DAa are all zeros
+
+
         // DPt_DPa
         DXt_DXa[PIDX][PIDX] = LAM_PVA11;
         // DPt_DVa
@@ -569,21 +681,31 @@ public:
 
 
 
-
         // DRt_DRb
-        DXt_DXb[RIDX][RIDX] = Jrthetat*Dthetat_DRb;
+        DXt_DXb[RIDX][RIDX] = JrThet*DThet_DRb;
         // DRt_DOb
-        DXt_DXb[RIDX][OIDX] = Jrthetat*PSI_ROS12*JrInvthetab;
+        DXt_DXb[RIDX][OIDX] = JrThet*DThet_DOb;
+        // DRt_DSb
+        DXt_DXb[RIDX][SIDX] = JrThet*DThet_DSb;
         // DRt_DPb DRt_DVb DRt_DAb are all zeros
         
-        // TODO:
-        // DOt_Rb still needs to be computed
-        DXt_DXb[OIDX][RIDX] = Domgt_Dthetat*Dthetat_DRb + Jrthetat*Dthetadott_Dthetab*Dthetab_DRb;
-        // DOt_Ob still needs to be computed
-        DXt_DXb[OIDX][OIDX] = Domgt_Dthetat*PSI_ROS12*JrInvthetab + Jrthetat*PSI_ROS22*JrInvthetab;
+        // DOt_Rb
+        DXt_DXb[OIDX][RIDX] = DJrThetThedott_DThet*DThet_DRb + JrThet*DThedott_DRb;
+        // DOt_Ob
+        DXt_DXb[OIDX][OIDX] = DJrThetThedott_DThet*DThet_DOb + JrThet*DThedott_DOb;
+        // DOt_Sb
+        DXt_DXb[OIDX][SIDX] = DJrThetThedott_DThet*DThet_DSb + JrThet*DThedott_DSb;
         // DOt_DPb DOt_DVb DOt_DAb are all zeros
 
-        // DPt_DRb DPt_DOb are all all zeros
+        // DSt_Rb
+        DXt_DXb[SIDX][RIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DRb + DDJrThetThedottThedott_DThetDThedott*DThedott_DRb + JrInvThet*DTheddott_DRb;
+        // DSt_Ob
+        DXt_DXb[SIDX][OIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DOb + DDJrThetThedottThedott_DThetDThedott*DThedott_DOb + JrInvThet*DTheddott_DOb;
+        // DSt_Sb
+        DXt_DXb[SIDX][SIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DSb + DDJrThetThedottThedott_DThetDThedott*DThedott_DSb + JrInvThet*DTheddott_DSb;
+        // DSt_DPb DSt_DVb DSt_DAb are all zeros
+
+
         // DPt_DPb
         DXt_DXb[PIDX][PIDX] = PSI_PVA11;
         // DRt_DPb
@@ -675,13 +797,6 @@ public:
         return make_pair(u, s);
     }
 
-    Mat3 JrInv(const Vec3 &phi) const
-    {
-        Mat3 JrInv;
-        Sophus::rightJacobianInvSO3(phi, JrInv);
-        return JrInv;
-    }
-
     StateStamped<double> getStateAt(double t)
     {
         // Find the index of the interval to find interpolation
@@ -707,34 +822,35 @@ public:
         SO3d Rab = Xa.R.inverse()*Xb.R;
 
         // Relative angle between two knots
-        Vec3 thetaa     = Vec3::Zero();
-        Vec3 thetadota  = Xa.O;
-        Vec3 thetaddota = Xa.S - 0.5*SO3d::hat(thetadota)*thetadota;
-        Vec3 thetab     = Rab.log();
-        Vec3 thetadotb  = JrInv(thetab)*Xb.O;
-        Vec3 thetaddotb = JrInv(thetab)*Xb.S;
+        Vec3 Thea     = Vec3::Zero();
+        Vec3 Thedota  = Xa.O;
+        Vec3 Theddota = Xa.S;
 
-        Eigen::Matrix<double, 6, 1> gammaa; gammaa << thetaa, thetadota;
-        Eigen::Matrix<double, 6, 1> gammab; gammab << thetab, thetadotb;
+        Vec3 Theb     = Rab.log();
+        Vec3 Thedotb  = gpm.JrInv(Theb)*Xb.O;
+        Vec3 Theddotb = gpm.JrInv(Theb)*Xb.S + gpm.DJrInvXV_DX(Theb, Xb.O)*Thedotb;
+
+        Eigen::Matrix<double, 9, 1> gammaa; gammaa << Thea, Thedota, Theddota;
+        Eigen::Matrix<double, 9, 1> gammab; gammab << Theb, Thedotb, Theddotb;
 
         Eigen::Matrix<double, 9, 1> pvaa; pvaa << Xa.P, Xa.V, Xa.A;
         Eigen::Matrix<double, 9, 1> pvab; pvab << Xb.P, Xb.V, Xb.A;
 
-        Eigen::Matrix<double, 6, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
+        Eigen::Matrix<double, 9, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
         Eigen::Matrix<double, 9, 1> pvat;   // Position, velocity, acceleration
 
         gammat = gpm.LAM_ROS(s*dt) * gammaa + gpm.PSI_ROS(s*dt) * gammab;
         pvat   = gpm.LAM_PVA(s*dt) * pvaa   + gpm.PSI_PVA(s*dt) * pvab;
 
         // Retrive the interpolated SO3 in relative form
-        Vec3 thetat     = gammat.block(0, 0, 3, 1);
-        Vec3 thetadott  = gammat.block(3, 0, 3, 1);
-        Vec3 thetaddott = gammat.block(6, 0, 3, 1);
+        Vec3 Thet     = gammat.block(0, 0, 3, 1);
+        Vec3 Thedott  = gammat.block(3, 0, 3, 1);
+        Vec3 Theddott = gammat.block(6, 0, 3, 1);
 
         // Assign the interpolated state
-        SO3d Rt = Xa.R*SO3d::exp(thetat);
-        Vec3 Ot = gpm.Jr(thetat)*thetadott;
-        Vec3 St = gpm.Jr(thetat)*thetaddott + gpm.DJrXV_DX(thetat, thetadott)*thetaddott;
+        SO3d Rt = Xa.R*SO3d::exp(Thet);
+        Vec3 Ot = gpm.Jr(Thet)*Thedott;
+        Vec3 St = gpm.Jr(Thet)*Theddott + gpm.DJrXV_DX(Thet, Thedott)*Theddott;
         Vec3 Pt = pvat.block<3, 1>(0, 0);
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
@@ -767,6 +883,7 @@ public:
         {
             R  = {SO3d()};
             O  = {Vec3(0, 0, 0)};
+            S  = {Vec3(0, 0, 0)};
             P  = {Vec3(0, 0, 0)};
             V  = {Vec3(0, 0, 0)};
             A  = {Vec3(0, 0, 0)};
@@ -794,6 +911,7 @@ public:
         {
             R.push_back(Xn.R);
             O.push_back(Xn.O);
+            S.push_back(Xn.S);
             P.push_back(Xn.P);
             V.push_back(Xn.V);
             A.push_back(Xn.A);
@@ -802,29 +920,23 @@ public:
 
     void extendOneKnot()
     {
-        // Matrix<double, 6, 1> gammac; gammac << Vector3d(0, 0, 0), O.back();
-        // Matrix<double, 6, 1> gamman = gpm.TransMat_RO(dt)*gammac;
-
-        // Matrix<double, 9, 1> pvac; pvac << P.back(), V.back(), A.back();
-        // Matrix<double, 9, 1> pvan = gpm.TransMat_PVA(dt)*pvac;
-
-        // Vec3 thetan = gamman.block<3, 1>(0, 0);
-        // Vec3 thetadotn = gamman.block<3, 1>(3, 0);
-
         SO3d Rc = R.back();
         Vec3 Oc = O.back();
+        Vec3 Sc = S.back();
         Vec3 Pc = P.back();
         Vec3 Vc = V.back();
         Vec3 Ac = A.back();
 
-        SO3d Rn = Rc*SO3d::exp(Oc*dt);
-        Vec3 On = Oc;
+        SO3d Rn = Rc*SO3d::exp(dt*Oc + 0.5*dt*dt*Sc);
+        Vec3 On = Oc + dt*Sc;
+        Vec3 Sn = Sc;
         Vec3 Pn = Pc + dt*Vc + 0.5*dt*dt*Ac;
         Vec3 Vn = Vc + dt*Ac;
         Vec3 An = Ac;
 
         R.push_back(Rn);
         O.push_back(On);
+        S.push_back(Sn);
         P.push_back(Pn);
         V.push_back(Vn);
         A.push_back(An);
@@ -834,6 +946,7 @@ public:
     {
         R.push_back(Xn.R);
         O.push_back(Xn.O);
+        S.push_back(Xn.S);
         P.push_back(Xn.P);
         V.push_back(Xn.V);
         A.push_back(Xn.A);
@@ -843,6 +956,7 @@ public:
     {
         R[kidx] = Xn.R;
         O[kidx] = Xn.O;
+        S[kidx] = Xn.S;
         P[kidx] = Xn.P;
         V[kidx] = Xn.V;
         A[kidx] = Xn.A;
@@ -852,9 +966,25 @@ public:
     {
         R[kidx] = R[kidx]*SO3d::exp(dX.block<3, 1>(0, 0));
         O[kidx] = O[kidx] + dX.block<3, 1>(3, 0);
-        P[kidx] = P[kidx] + dX.block<3, 1>(6, 0);
-        V[kidx] = V[kidx] + dX.block<3, 1>(9, 0);
-        A[kidx] = A[kidx] + dX.block<3, 1>(12, 0);
+        S[kidx] = S[kidx] + dX.block<3, 1>(6, 0);
+        P[kidx] = P[kidx] + dX.block<3, 1>(9, 0);
+        V[kidx] = V[kidx] + dX.block<3, 1>(12, 0);
+        A[kidx] = A[kidx] + dX.block<3, 1>(15, 0);
+    }
+
+    void genRandomTrajectory(int n, double scale = 5.0)
+    {
+        R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear();
+
+        for(int kidx = 0; kidx < n; kidx++)
+        {
+            R.push_back(SO3d::exp(Vec3::Random()* M_PI));
+            O.push_back(Vec3::Random() * scale);
+            S.push_back(Vec3::Random() * scale);
+            P.push_back(Vec3::Random() * scale);
+            V.push_back(Vec3::Random() * scale);
+            A.push_back(Vec3::Random() * scale);
+        }
     }
 
     // Copy constructor
@@ -862,11 +992,13 @@ public:
     {
         this->R = GPother.R;
         this->O = GPother.O;
+        this->S = GPother.S;
         this->P = GPother.P;
         this->V = GPother.V;
         this->A = GPother.A;        
         return *this;
     }
+    
 };
 
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;

@@ -19,10 +19,9 @@ public:
     ~GPPointToPlaneFactorTMN() {};
 
     // Constructor
-    GPPointToPlaneFactorTMN(const Vector3d &finW_, const Vector3d &f_, const Vector4d &coef, double w_,
+    GPPointToPlaneFactorTMN(const Vector3d &f_, const Vector4d &coef, double w_,
                             double Dt_, double s_)
-    :   finW       (finW_            ),
-        f          (f_               ),
+    :   f          (f_               ),
         n          (coef.head<3>()   ),
         m          (coef.tail<1>()(0)),
         w          (w_               ),
@@ -74,9 +73,9 @@ public:
 
         StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
 
-        Eigen::Matrix<double, 6, 1> gammaa;
-        Eigen::Matrix<double, 6, 1> gammab;
-        Eigen::Matrix<double, 6, 1> gammat;
+        Eigen::Matrix<double, 9, 1> gammaa;
+        Eigen::Matrix<double, 9, 1> gammab;
+        Eigen::Matrix<double, 9, 1> gammat;
 
         gpm.ComputeXtAndDerivs(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
@@ -106,6 +105,13 @@ public:
         Eigen::Block<MatJ, 1, 3> Dr_DOa(jacobian.block<1, 3>(0, idx));
         Dr_DOa.setZero();
         Dr_DOa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+
+
+        // Jacobian on Sa
+        idx = SaIdx;
+        Eigen::Block<MatJ, 1, 3> Dr_DSa(jacobian.block<1, 3>(0, idx));
+        Dr_DSa.setZero();
+        Dr_DSa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
 
 
         // Jacobian on Pa
@@ -141,6 +147,13 @@ public:
         Eigen::Block<MatJ, 1, 3> Dr_DOb(jacobian.block<1, 3>(0, idx));
         Dr_DOb.setZero();
         Dr_DOb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
+
+
+        // Jacobian on Ob
+        idx = SbIdx;
+        Eigen::Block<MatJ, 1, 3> Dr_DSb(jacobian.block<1, 3>(0, idx));
+        Dr_DSb.setZero();
+        Dr_DSb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
 
 
         // Jacobian on Pb
@@ -192,21 +205,24 @@ private:
     
     const int Ridx = 0;
     const int Oidx = 1;
-    const int Pidx = 2;
-    const int Vidx = 3;
-    const int Aidx = 4;
+    const int Sidx = 2;
+    const int Pidx = 3;
+    const int Vidx = 4;
+    const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 3;
-    const int PaIdx = 6;
-    const int VaIdx = 9;
-    const int AaIdx = 12;
+    const int SaIdx = 6;
+    const int PaIdx = 9;
+    const int VaIdx = 12;
+    const int AaIdx = 15;
 
-    const int RbIdx = 15;
-    const int ObIdx = 18;
-    const int PbIdx = 21;
-    const int VbIdx = 24;
-    const int AbIdx = 27;
+    const int RbIdx = 18;
+    const int ObIdx = 21;
+    const int SbIdx = 24;
+    const int PbIdx = 27;
+    const int VbIdx = 30;
+    const int AbIdx = 33;
 
     // Interpolation param
     double Dt;

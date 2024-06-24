@@ -12,7 +12,7 @@ using SE3d = Sophus::SE3<double>;
 
 class GPMotionPriorTwoKnotsFactorTMN
 {
-typedef Eigen::Matrix<double, 15, 2*STATE_DIM> MatJ;
+typedef Eigen::Matrix<double, STATE_DIM, 2*STATE_DIM> MatJ;
 public:
 
     GPMotionPriorTwoKnotsFactorTMN(double wR_, double wP_, double Dt_)
@@ -36,7 +36,7 @@ public:
         // }
 
         // Calculate the information matrix
-        Matrix<double, 15, 15> Info;
+        Matrix<double, STATE_DIM, STATE_DIM> Info;
         Info.setZero();
 
         double Dtpow[7];
@@ -44,9 +44,10 @@ public:
             Dtpow[j] = pow(Dt, j);
 
         Matrix2d QR;
-        QR << 1.0/3.0*Dtpow[3]*wR, 1.0/2.0*Dtpow[2]*wR,
-              1.0/2.0*Dtpow[2]*wR,         Dtpow[1]*wR;
-        Info.block<6, 6>(0, 0) = kron(QR, Matrix3d::Identity());
+        QR << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
+              1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
+              1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
+        Info.block<9, 9>(0, 0) = kron(QR, Matrix3d::Identity());
 
         Matrix3d QP;
         QP << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
@@ -55,8 +56,8 @@ public:
         Info.block<9, 9>(6, 6) = kron(QP, Matrix3d::Identity());
         
         // Find the square root info
-        // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
-        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info.inverse()).matrixL().transpose();
+        // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
+        sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
 
         residual.setZero();
         jacobian.setZero();
@@ -78,6 +79,7 @@ public:
         Vec3 thetab = Rab.log();
         Mat3 JrInvthetab = gpm.JrInv(thetab);
         Vec3 thetadotb = JrInvthetab*Xb.O;
+        Vec3 thetaddotb = JrInvthetab*Xb.O;
 
         // Rotational residual
         Vec3 rRot = thetab - Dt*Xa.O;

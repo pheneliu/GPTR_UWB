@@ -43,31 +43,31 @@ public:
     :   wR          (wR_             ),
         wP          (wP_             ),
         Dt          (Dt_             ),
-        dtsf        (Dt_             ),
         gpm         (Dt_             )
     {
         // Calculate the information matrix
-        Matrix<double, 15, 15> Info;
+        Matrix<double, STATE_DIM, STATE_DIM> Info;
         Info.setZero();
 
         double Dtpow[7];
         for(int j = 0; j < 7; j++)
             Dtpow[j] = pow(Dt, j);
 
-        Matrix2d QR;
-        QR << 1.0/3.0*Dtpow[3]*wR, 1.0/2.0*Dtpow[2]*wR,
-              1.0/2.0*Dtpow[2]*wR,         Dtpow[1]*wR;
-        Info.block<6, 6>(0, 0) = kron(QR, Matrix3d::Identity());
+        Matrix3d QR;
+        QR << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
+              1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
+              1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
+        Info.block<9, 9>(0, 0) = kron(QR, Matrix3d::Identity());
 
         Matrix3d QP;
         QP << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
               1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
               1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
-        Info.block<9, 9>(6, 6) = kron(QP, Matrix3d::Identity());
+        Info.block<9, 9>(9, 9) = kron(QP, Matrix3d::Identity());
         
         // Find the square root info
-        // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);
-        sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info.inverse()).matrixL().transpose();
+        sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
+        // sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
     }
 
     template <class T>
@@ -87,19 +87,28 @@ public:
 
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
 
-        SO3T  Rab = Xa.R.inverse()*Xb.R;
-        Vec3T thetab = Rab.log();
-        Mat3T JrInvthetab = gpm.JrInv(thetab);
-        Vec3T thetadotb = JrInvthetab*Xb.O;
-        
+        SO3T Rab = Xa.R.inverse()*Xb.R;
+        Vec3T Theb = Rab.log();
+
+        Mat3T JrInvTheb = gpm.JrInv(Theb);
+        Mat3T DJrInvThebOb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.O);
+
+        Vec3T Thedotb = JrInvTheb*Xb.O;
+        Vec3T Theddotb = DJrInvThebOb_DTheb*Thedotb + JrInvTheb*Xb.S;
+
+        double Dtsq = Dt*Dt;
+
         // Rotational residual
-        Vec3T rRot = thetab - Dt*Xa.O;
+        Vec3T rRot = Theb - Dt*Xa.O - 0.5*Dtsq*Xa.S;
 
         // Rotational rate residual
-        Vec3T rRdot = thetadotb - Xa.O;
+        Vec3T rRdot = Thedotb - Xa.O - Dt*Xa.S;
+
+        // Rotational acc residual
+        Vec3T rRddot = Theddotb - Xa.S;
 
         // Positional residual
-        Vec3T rPos = Xb.P - (Xa.P + Dt*Xa.V + Dt*Dt/2*Xa.A);
+        Vec3T rPos = Xb.P - (Xa.P + Dt*Xa.V + 0.5*Dtsq*Xa.A);
 
         // Velocity residual
         Vec3T rVel = Xb.V - (Xa.V + Dt*Xa.A);
@@ -108,8 +117,8 @@ public:
         Vec3T rAcc = Xb.A - Xa.A;
 
         // Residual
-        Eigen::Map<Matrix<T, 15, 1>> residual(residuals);
-        residual << rRot, rRdot, rPos, rVel, rAcc;
+        Eigen::Map<Matrix<T, STATE_DIM, 1>> residual(residuals);
+        residual << rRot, rRdot, rRddot, rPos, rVel, rAcc;
         residual = sqrtW*residual;
 
         /* #endregion Calculate the residual ------------------------------------------------------------------------*/
@@ -121,31 +130,34 @@ private:
 
     const int Ridx = 0;
     const int Oidx = 1;
-    const int Pidx = 2;
-    const int Vidx = 3;
-    const int Aidx = 4;
+    const int Sidx = 2;
+    const int Pidx = 3;
+    const int Vidx = 4;
+    const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;
-    const int PaIdx = 2;
-    const int VaIdx = 3;
-    const int AaIdx = 4;
+    const int SaIdx = 2;
+    const int PaIdx = 3;
+    const int VaIdx = 4;
+    const int AaIdx = 5;
 
-    const int RbIdx = 5;
-    const int ObIdx = 6;
-    const int PbIdx = 7;
-    const int VbIdx = 8;
-    const int AbIdx = 9;
+    const int RbIdx = 6;
+    const int ObIdx = 7;
+    const int SbIdx = 8;
+    const int PbIdx = 9;
+    const int VbIdx = 10;
+    const int AbIdx = 11;
 
     double wR;
     double wP;
 
-    // Matrix<double, 15, 15> Info;
-    Matrix<double, 15, 15> sqrtW;
-
-    double Dt;     // Knot length
-    // double ss;     // Normalized time (t - ts)/Dt
-    // double sf;     // Normalized time (t - ts)/Dt
-    double dtsf;   // Time difference ts - tf
+    // Square root information
+    Matrix<double, STATE_DIM, STATE_DIM> sqrtW;
+    
+    // Knot length
+    double Dt;
+    
+    // Mixer for gaussian process
     GPMixer gpm;
 };

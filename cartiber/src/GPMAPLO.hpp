@@ -37,67 +37,6 @@ using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 // typedef std::shared_ptr<GNSolver> GNSolverPtr;
 
-struct FactorMeta
-{
-    vector<double *> so3_parameter_blocks;
-    vector<double *> r3_parameter_blocks;
-    vector<ceres::ResidualBlockId> residual_blocks;
-
-    int parameter_blocks()
-    {
-        return (so3_parameter_blocks.size() + r3_parameter_blocks.size());
-    }
-};
-
-Eigen::MatrixXd GetJacobian(ceres::CRSMatrix &J)
-{
-    Eigen::MatrixXd dense_jacobian(J.num_rows, J.num_cols);
-    dense_jacobian.setZero();
-    for (int r = 0; r < J.num_rows; ++r)
-    {
-        for (int idx = J.rows[r]; idx < J.rows[r + 1]; ++idx)
-        {
-            const int c = J.cols[idx];
-            dense_jacobian(r, c) = J.values[idx];
-        }
-    }
-
-    return dense_jacobian;
-}
-
-void GetFactorJacobian(ceres::Problem &problem, FactorMeta &factorMeta,
-                       int local_pamaterization_type,
-                       double &cost, vector<double> &residual,
-                       MatrixXd &Jacobian)
-{
-    ceres::LocalParameterization *localparameterization;
-    for(auto parameter : factorMeta.so3_parameter_blocks)
-    {
-        if (local_pamaterization_type == 0)
-        {
-            localparameterization = new basalt::LieLocalParameterization<SO3d>();
-            problem.SetParameterization(parameter, localparameterization);
-        }
-        else
-        {   
-            localparameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
-            problem.SetParameterization(parameter, localparameterization);
-        }
-    }
-
-    ceres::Problem::EvaluateOptions e_option;
-    ceres::CRSMatrix Jacobian_;
-    e_option.residual_blocks = factorMeta.residual_blocks;
-    problem.Evaluate(e_option, &cost, &residual, NULL, &Jacobian_);
-    Jacobian = GetJacobian(Jacobian_);
-}
-
-void RemoveResidualBlock(ceres::Problem &problem, FactorMeta &factorMeta)
-{
-    for(auto res_block : factorMeta.residual_blocks)
-        problem.RemoveResidualBlock(res_block);
-}
-
 class GPMAPLO
 {
 private:
