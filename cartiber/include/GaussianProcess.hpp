@@ -238,7 +238,7 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-5)
+        if(Xn < 1e-4)
             return 0.5*SO3T::hat(V);
 
         T Xnp2 = Xn*Xn;
@@ -274,8 +274,8 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-5)
-            return Mat3T::Zero();
+        if(Xn < 1e-4)
+            return Fuu(X, V, A)/6.0;
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -330,8 +330,8 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-5)
-            return Mat3T::Zero();
+        if(Xn < 1e-4)
+            return -0.5*SO3T::hat(A);
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -371,7 +371,7 @@ public:
         using Mat3T = Eigen::Matrix<T, 3, 3>;
 
         T Xn = X.norm();
-        if(Xn < 1e-5)
+        if(Xn < 1e-4)
             return -0.5*SO3T::hat(V);
 
         T Xnp2 = Xn*Xn;
@@ -403,8 +403,8 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-5)
-            return Mat3T::Zero();
+        if(Xn < 1e-4)
+            return Fuu(X, V, A)/12.0;
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
@@ -451,8 +451,8 @@ public:
 
         T Xn = X.norm();
 
-        if(Xn < 1e-5)
-            return Mat3T::Zero();
+        if(Xn < 1e-4)
+            return 0.5*SO3T::hat(A);
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;

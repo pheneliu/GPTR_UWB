@@ -113,7 +113,6 @@ public:
         Mat3 DtI = Vec3(Dt, Dt, Dt).asDiagonal();
         double DtsqDiv2 = 0.5*Dtsq;
         Mat3 DtsqDiv2I = Vec3(DtsqDiv2, DtsqDiv2, DtsqDiv2).asDiagonal();
-        Mat3 Zero = Mat3::Zero();
 
         // Reusable Jacobians
         Mat3 DTheb_DRa = -JrInvTheb*Rab.inverse().matrix();

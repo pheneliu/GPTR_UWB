@@ -8,13 +8,15 @@
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
     <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
           launch-prefix="valgrind"> -->
+    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+          launch-prefix="gdb -ex run - -args"> -->
 
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
 
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="600"/>
+        <param name="MAX_CLOUDS"     value="300"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
@@ -35,11 +37,11 @@
         <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.01102"   />
-        <param name="WINDOW_SIZE"    value="10"     />
+        <param name="deltaT"         value="0.04357"/>
+        <param name="WINDOW_SIZE"    value="03"     />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
-        <param name="lambda"         value="5.0"    />
+        <param name="lambda"         value="0.0"    />
         <param name="dxmax"          value="0.5"    />
         <param name="fixed_start"    value="-0.001" />
         <param name="fixed_end"      value="-0.001" />

@@ -61,14 +61,6 @@ public:
 
     bool Evaluate(const StateStamped<double> &Xa, const StateStamped<double> &Xb, bool computeJacobian=true)
     {
-        /* #region Map the memory to control points -----------------------------------------------------------------*/
-
-        // Map parameters to the control point states
-        // StateStamped Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
-        // StateStamped Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
-
-        /* #endregion Map the memory to control points --------------------------------------------------------------*/
-
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
 
         StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;

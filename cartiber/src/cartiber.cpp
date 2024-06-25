@@ -475,8 +475,10 @@ void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
             {
                 // Update the new base
                 lastPointIdx = pidx;
+                
                 const PointXYZIT &point = clouds[cidx]->points[pidx];
                 const double &tp = point.t;
+
                 // printf("Adding point: %d, %d. time: %f. Cuttime: %f. %f\n",
                 //         cidx, cloudSeg->size(), tp, lastCutTime, lastCutTime + deltaT);
                 if (tp < lastCutTime)
@@ -485,6 +487,10 @@ void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
                         lastPointIdx = -1;
                     continue;
                 }
+
+                // If point is too close, ignore
+                if (Util::pointDistance(point) < 0.1)
+                    continue;
 
                 // If point is in the interval of interest, extract it
                 if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)

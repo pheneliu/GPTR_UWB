@@ -64,14 +64,6 @@ public:
 
     virtual bool Evaluate(const StateStamped<double> &Xa, const StateStamped<double> &Xb, bool computeJacobian=true)
     {
-        /* #region Map the memory to control points -----------------------------------------------------------------*/
-
-        // Map parameters to the control point states
-        // StateStamped Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
-        // StateStamped Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
-
-        /* #endregion Map the memory to control points --------------------------------------------------------------*/
-
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
 
         SO3d Rab = Xa.R.inverse()*Xb.R;
@@ -116,7 +108,6 @@ public:
         Mat3 DtI = Vec3(Dt, Dt, Dt).asDiagonal();
         double DtsqDiv2 = 0.5*Dtsq;
         Mat3 DtsqDiv2I = Vec3(DtsqDiv2, DtsqDiv2, DtsqDiv2).asDiagonal();
-        Mat3 Zero = Mat3::Zero();
 
         // Reusable Jacobians
         Mat3 DTheb_DRa = -JrInvTheb*Rab.inverse().matrix();
