@@ -26,7 +26,7 @@ MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
 // Define of the states for convenience in initialization and copying
 #define STATE_DIM 18
 template <class T = double>
-class StateStamped
+class GPState
 {
 
 public:
@@ -44,28 +44,28 @@ public:
     Vec3T A;
 
     // Destructor
-    ~StateStamped(){};
+    ~GPState(){};
     
     // Constructor
-    StateStamped()
+    GPState()
         : t(0), R(SO3T()), O(Vec3T(0, 0, 0)), S(Vec3T(0, 0, 0)), P(Vec3T(0, 0, 0)), V(Vec3T(0, 0, 0)), A(Vec3T(0, 0, 0)) {}
     
-    StateStamped(double t_)
+    GPState(double t_)
         : t(t_), R(SO3T()), O(Vec3T()), S(Vec3T()), P(Vec3T()), V(Vec3T()), A(Vec3T()) {}
 
-    StateStamped(double t_, const SE3d &pose)
+    GPState(double t_, const SE3d &pose)
         : t(t_), R(pose.so3().cast<T>()), O(Vec3T(0, 0, 0)), S(Vec3T(0, 0, 0)), P(pose.translation().cast<T>()), V(Vec3T(0, 0, 0)), A(Vec3T(0, 0, 0)) {}
 
-    StateStamped(double t_, const SO3d &R_, const Vec3 &O_, const Vec3 &S_, const Vec3 &P_, const Vec3 &V_, const Vec3 &A_)
+    GPState(double t_, const SO3d &R_, const Vec3 &O_, const Vec3 &S_, const Vec3 &P_, const Vec3 &V_, const Vec3 &A_)
         : t(t_), R(R_.cast<T>()), O(O_.cast<T>()), S(S_.cast<T>()), P(P_.cast<T>()), V(V_.cast<T>()), A(A_.cast<T>()) {}
 
-    StateStamped(const StateStamped<T> &other)
+    GPState(const GPState<T> &other)
         : t(other.t), R(other.R), O(other.O), S(other.S), P(other.P), V(other.V), A(other.A) {}
 
-    StateStamped(double t_, const StateStamped<T> &other)
+    GPState(double t_, const GPState<T> &other)
         : t(t_), R(other.R), O(other.O), S(other.S), P(other.P), V(other.V), A(other.A) {}
 
-    StateStamped &operator=(const StateStamped &Xother)
+    GPState &operator=(const GPState &Xother)
     {
         this->t = Xother.t;
         this->R = Xother.R;
@@ -77,7 +77,7 @@ public:
         return *this;
     }
 
-    Matrix<double, STATE_DIM, 1> boxminus(const StateStamped &Xother) const
+    Matrix<double, STATE_DIM, 1> boxminus(const GPState &Xother) const
     {
         Matrix<double, STATE_DIM, 1> dX;
         dX << (Xother.R.inverse()*R).log(),
@@ -169,7 +169,7 @@ public:
     }
 
     template <class T = double>
-    void MapParamToState(T const *const *parameters, int base, StateStamped<T> &X) const
+    void MapParamToState(T const *const *parameters, int base, GPState<T> &X) const
     {
         X.R = Eigen::Map<Sophus::SO3<T> const>(parameters[base + 0]);
         X.O = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[base + 1]);
@@ -484,9 +484,9 @@ public:
     }
 
     template <class T = double>
-    void ComputeXtAndDerivs(const StateStamped<T> &Xa,
-                            const StateStamped<T> &Xb,
-                                  StateStamped<T> &Xt,
+    void ComputeXtAndDerivs(const GPState<T> &Xa,
+                            const GPState<T> &Xb,
+                                  GPState<T> &Xt,
                             vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa,
                             vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb,
                             Eigen::Matrix<T, 9, 1> &gammaa_,
@@ -797,7 +797,7 @@ public:
         return make_pair(u, s);
     }
 
-    StateStamped<double> getStateAt(double t)
+    GPState<double> getStateAt(double t)
     {
         // Find the index of the interval to find interpolation
         auto   us = computeTimeIndex(t);
@@ -808,14 +808,14 @@ public:
         int ub = u+1;
 
         if (ub >= R.size() && fabs(1.0 - s) < 1e-5)
-            return StateStamped(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
+            return GPState(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
 
         // Extract the states of the two adjacent knots
-        StateStamped Xa = StateStamped(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
+        GPState Xa = GPState(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
         if (fabs(s) < 1e-5)
             return Xa;
 
-        StateStamped Xb = StateStamped(t0 + ub*dt, R[ub], O[ub], S[ua], P[ub], V[ub], A[ub]);
+        GPState Xb = GPState(t0 + ub*dt, R[ub], O[ub], S[ua], P[ub], V[ub], A[ub]);
         if (fabs(1.0 - s) < 1e-5)
             return Xb;
 
@@ -855,17 +855,17 @@ public:
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
 
-        return StateStamped<double>(t, Rt, Ot, St, Pt, Vt, At);
+        return GPState<double>(t, Rt, Ot, St, Pt, Vt, At);
     }
 
-    StateStamped<double> getKnot(int kidx)
+    GPState<double> getKnot(int kidx)
     {
-        return StateStamped(getKnotTime(kidx), R[kidx], O[kidx], S[kidx], P[kidx], V[kidx], A[kidx]);
+        return GPState(getKnotTime(kidx), R[kidx], O[kidx], S[kidx], P[kidx], V[kidx], A[kidx]);
     }
 
     SE3d pose(double t)
     {
-        StateStamped X = getStateAt(t);
+        GPState X = getStateAt(t);
         return SE3d(X.R, X.P);
     }
 
@@ -890,7 +890,7 @@ public:
         }
     }
 
-    void extendKnotsTo(double t, const StateStamped<double> &Xn=StateStamped())
+    void extendKnotsTo(double t, const GPState<double> &Xn=GPState())
     {
         if(t0 == 0)
         {
@@ -942,7 +942,7 @@ public:
         A.push_back(An);
     }
 
-    void extendOneKnot(const StateStamped<double> &Xn)
+    void extendOneKnot(const GPState<double> &Xn)
     {
         R.push_back(Xn.R);
         O.push_back(Xn.O);
@@ -952,7 +952,7 @@ public:
         A.push_back(Xn.A);
     }
 
-    void setKnot(int kidx, const StateStamped<double> &Xn)
+    void setKnot(int kidx, const GPState<double> &Xn)
     {
         R[kidx] = Xn.R;
         O[kidx] = Xn.O;

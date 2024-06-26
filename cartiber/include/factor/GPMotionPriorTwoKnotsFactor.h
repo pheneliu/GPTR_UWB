@@ -63,8 +63,8 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        StateStamped Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
-        StateStamped Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
+        GPState Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
+        GPState Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 

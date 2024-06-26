@@ -62,7 +62,7 @@ public:
         jacobian.setZero();
     }
 
-    virtual bool Evaluate(const StateStamped<double> &Xa, const StateStamped<double> &Xb, bool computeJacobian=true)
+    virtual bool Evaluate(const GPState<double> &Xa, const GPState<double> &Xb, bool computeJacobian=true)
     {
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
 

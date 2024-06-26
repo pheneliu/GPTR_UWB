@@ -59,11 +59,11 @@ public:
         jacobian.setZero();
     }
 
-    bool Evaluate(const StateStamped<double> &Xa, const StateStamped<double> &Xb, bool computeJacobian=true)
+    bool Evaluate(const GPState<double> &Xa, const GPState<double> &Xb, bool computeJacobian=true)
     {
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
 
-        StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
+        GPState Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
 
         Eigen::Matrix<double, 9, 1> gammaa;
         Eigen::Matrix<double, 9, 1> gammab;

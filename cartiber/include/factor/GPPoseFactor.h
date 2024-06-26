@@ -50,14 +50,14 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        StateStamped Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
-        StateStamped Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
+        GPState Xa(0);  gpm.MapParamToState(parameters, RaIdx, Xa);
+        GPState Xb(Dt); gpm.MapParamToState(parameters, RbIdx, Xb);
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
         
-        StateStamped Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
+        GPState Xt(s*Dt); vector<vector<Matrix3d>> DXt_DXa; vector<vector<Matrix3d>> DXt_DXb;
 
         Eigen::Matrix<double, 6, 1> gammaa;
         Eigen::Matrix<double, 6, 1> gammab;

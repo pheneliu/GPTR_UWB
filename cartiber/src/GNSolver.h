@@ -55,7 +55,7 @@ private:
     VectorXd rm;
     
     // Value of the keep state for prior
-    map<int, StateStamped<double>>  knots_keep_gbidx_state;
+    map<int, GPState<double>>  knots_keep_gbidx_state;
 
     // Dictionary to covert absolute to local state idx
     map<int, int> absKidxToLocal;

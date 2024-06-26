@@ -177,8 +177,8 @@ void GNSolver::EvaluatePriorFactors
 
         // printf("Build prior for knot %d, %d, %d.\n", kidx, xkidx.first);
 
-        const StateStamped<> &Xbar = xkidx.second;
-        const StateStamped<> &Xcur = traj->getKnot(absKidxToLocal[xkidx.first]);
+        const GPState<> &Xbar = xkidx.second;
+        const GPState<> &Xcur = traj->getKnot(absKidxToLocal[xkidx.first]);
         
         Matrix<double, STATE_DIM, 1> dX = Xcur.boxminus(Xbar);
         rprior.block<XALL_LSIZE, 1>(kidx*XALL_LSIZE, 0) << dX;
@@ -186,7 +186,7 @@ void GNSolver::EvaluatePriorFactors
 
         // Add the inverse jacobian on the SO3 state
         Vec3 dR = dX.block<3, 1>(0, 0);
-        if (dR.norm() < 1e-3 || dR.hasNaN())
+        if ( !(dR.norm() < 1e-3 || dR.hasNaN()) )
             Jprior.block<3, 3>(kidx*XALL_LSIZE, kidx*XALL_LSIZE) = GPMixer::JrInv(dR);
     }
 

@@ -735,7 +735,7 @@ void AddAnalyticGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
 void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, vector<LidarCoef> &Coef, const int &cidx)
 {
     // for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
-    //     swTraj->setKnot(kidx, StateStamped<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
+    //     swTraj->setKnot(kidx, GPState<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
     //                                                      Vector3d(0, 1, 2)*sin(kidx+1),
     //                                                      Vector3d(4, 5, 6)*cos(kidx+1),
     //                                                      Vector3d(7, 8, 9)*sin(kidx+1),

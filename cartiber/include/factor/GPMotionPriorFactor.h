@@ -64,17 +64,17 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        StateStamped Xsa(0);  gpm.MapParamToState(parameters, RsaIdx, Xsa);
-        StateStamped Xsb(Dt); gpm.MapParamToState(parameters, RsbIdx, Xsb);
-        StateStamped Xfa(0);  gpm.MapParamToState(parameters, RfaIdx, Xfa);
-        StateStamped Xfb(Dt); gpm.MapParamToState(parameters, RfbIdx, Xfb);
+        GPState Xsa(0);  gpm.MapParamToState(parameters, RsaIdx, Xsa);
+        GPState Xsb(Dt); gpm.MapParamToState(parameters, RsbIdx, Xsb);
+        GPState Xfa(0);  gpm.MapParamToState(parameters, RfaIdx, Xfa);
+        GPState Xfb(Dt); gpm.MapParamToState(parameters, RfbIdx, Xfb);
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
 
-        StateStamped Xs(ss*Dt); vector<vector<Matrix3d>> DXs_DXsa; vector<vector<Matrix3d>> DXs_DXsb;
-        StateStamped Xf(sf*Dt); vector<vector<Matrix3d>> DXf_DXfa; vector<vector<Matrix3d>> DXf_DXfb;
+        GPState Xs(ss*Dt); vector<vector<Matrix3d>> DXs_DXsa; vector<vector<Matrix3d>> DXs_DXsb;
+        GPState Xf(sf*Dt); vector<vector<Matrix3d>> DXf_DXfa; vector<vector<Matrix3d>> DXf_DXfb;
 
         Eigen::Matrix<double, 6, 1> gammasa;
         Eigen::Matrix<double, 6, 1> gammasb;

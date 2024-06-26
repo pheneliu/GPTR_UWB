@@ -4,12 +4,12 @@
 
     <arg name="autorun" default="false" />
 
-    <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="bash -c 'sleep 3; $0 $@' ">
+    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+          launch-prefix="bash -c 'sleep 3; $0 $@' "> -->
     <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
           launch-prefix="valgrind"> -->
-    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="gdb -ex run - -args"> -->
+    <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+          launch-prefix="gdb -ex run - -args">
 
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
 

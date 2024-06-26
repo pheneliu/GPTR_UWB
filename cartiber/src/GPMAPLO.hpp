@@ -281,17 +281,25 @@ public:
     {
         traj = GaussianProcessPtr(new GaussianProcess(deltaT));
         traj->setStartTime(t0);
-        traj->setKnot(0, StateStamped(t0, T_W_Li0));
+        traj->setKnot(0, GPState(t0, T_W_Li0));
 
         deque<CloudXYZITPtr> swCloudSeg;
         deque<CloudXYZIPtr > swCloudSegUndi;
         deque<CloudXYZIPtr > swCloudSegUndiInW;
         deque<vector<LidarCoef>> swCloudCoef;
 
+        double timeout = -1;
         // Check the buffer
         while(ros::ok())
         {
             // Step 0: Poll and Extract the cloud segment -------------------------------------------------------------
+            
+            // Exit this thread if no data has been sent for more than 5 seconds
+            if(timeout > 0 && ros::Time::now().toSec() - timeout > 5.0)
+            {
+                printf(KGRN "GPMAPLO %d completed.\n" RESET, LIDX);
+                break;
+            }
 
             CloudXYZITPtr cloudSeg;
             if(cloud_seg_buf.size() != 0)
@@ -299,6 +307,8 @@ public:
                 std::lock_guard<mutex> lg(cloud_seg_buf_mtx);
                 cloudSeg = cloud_seg_buf.front();
                 cloud_seg_buf.pop_front();
+
+                timeout = ros::Time::now().toSec();
             }
             else
             {
@@ -366,7 +376,7 @@ public:
             // Step 3: iterative optimization -------------------------------------------------------------------------
 
             // Sample the state before optimization 
-            StateStamped Xt0 = traj->getStateAt(TSWEND);
+            GPState Xt0 = traj->getStateAt(TSWEND);
             vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
 
             int optnum = -1; optnum++;
@@ -425,7 +435,7 @@ public:
                 }
 
                 // Prepare some visualization
-                StateStamped XtK = traj->getStateAt(TSWEND);
+                GPState XtK = traj->getStateAt(TSWEND);
 
                 // Sample and publish the slinding window trajectory
                 CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
