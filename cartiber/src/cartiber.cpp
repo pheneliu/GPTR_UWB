@@ -961,24 +961,4 @@ int main(int argc, char **argv)
     // Wait for the end of the universe
     for(auto &thr : choptheclouds)
         thr.join();
-
-    // ros::Rate rate(1);
-    // while(ros::ok())
-    // {
-    //     ros::Time currTime = ros::Time::now();
-
-    //     // Publish the prior map for visualization
-    //     Util::publishCloud(pmpub, *priormap, currTime, "world");
-
-    //     static vector<ros::Publisher> gpSamplePub;
-    //     if(gpSamplePub.size() == 0)
-    //         for(int lidx = 0; lidx < Nlidar; lidx++)
-    //             gpSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
-
-    //     for(int lidx = 0; lidx < Nlidar; lidx++)
-    //         Util::publishCloud(gpSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
-
-    //     // Sleep
-    //     rate.sleep();
-    // }
 }
