@@ -60,9 +60,6 @@ void GNSolver::EvaluateLidarFactors
     for(int widx = 1; widx < SwLidarCoef.size(); widx++)
         lidarIdxBase[widx] += lidarIdxBase[widx-1] + SwLidarCoef[widx-1].size();
 
-    // Number of lidar factors
-    report.lidarFactors = lidarIdxBase.back() + SwLidarCoef.back().size();
-
     // Create factors and calculate their residual and jacobian
     for(int widx = 0; widx < SwLidarCoef.size(); widx++)
     {
@@ -464,6 +461,11 @@ bool GNSolver::Solve
         numLidarFactors += c.size();
     // One mp2 factor between each knot
     numMp2Factors = traj->getNumKnots() - 1;
+
+    // Number of lidar factors
+    report.lidarFactors = numLidarFactors;
+    report.mp2kFactors  = numMp2Factors;
+    report.priorFactors = 1;
 
     // Determine the dimension of the Gauss-Newton Problem
     UpdateDimensions(numLidarFactors, numMp2Factors, numX);

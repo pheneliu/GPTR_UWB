@@ -467,7 +467,7 @@ public:
                          RESET,
                          gniter == max_gniter ? KGRN : "", LIDX, optnum,
                          gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
-                         tt_preopt.GetLastStop(), 0, tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
+                         tt_preopt.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
                          gniter == max_gniter ? tt_loop.Toc() : -1.0,
                          gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
                          J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
