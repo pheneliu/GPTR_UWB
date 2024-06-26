@@ -532,6 +532,35 @@ void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
     }
 }
 
+void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
+{
+    // Number of lidars
+    int Nlidar = gndtrCloud.size();
+    
+    // Create the publisher
+    ros::Publisher pmpub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
+    ros::Publisher gndtrPub[Nlidar];
+    for(int idx = 0; idx < Nlidar; idx++)
+        gndtrPub[idx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gndtr", idx), 10);
+
+    // Publish gndtr every 1s
+    ros::Rate rate(1);
+    while(ros::ok())
+    {
+        ros::Time currTime = ros::Time::now();
+
+        // Publish the prior map for visualization
+        Util::publishCloud(pmpub, *priormap, currTime, "world");
+
+        // Publish the grountruth
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+            Util::publishCloud(gndtrPub[lidx], *gndtrCloud[lidx], ros::Time::now(), "world");
+
+        // Sleep
+        rate.sleep();
+    }    
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "cartiber");
@@ -609,39 +638,56 @@ int main(int argc, char **argv)
     printf("Building the prior map");
     kdTreeMap->setInputCloud(priormap);
     
-    // Publish the prior map for visualization
-    static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
-    for(int count = 0; count < 6; count ++)
-    {
-        Util::publishCloud(pmpub, *priormap, ros::Time::now(), "world");
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+    // // Publish the prior map for visualization
+    // static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
+    // for(int count = 0; count < 6; count ++)
+    // {
+    //     Util::publishCloud(pmpub, *priormap, ros::Time::now(), "world");
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // }
 
     // Make the ikd-tree
     // ikdtPM = ikdtreePtr(new ikdtree(0.5, 0.6, pmap_leaf_size));
 
     // Converting the topic to index
-    map<string, int> pctopicidx; for(int idx = 0; idx < pc_topics.size(); idx++) pctopicidx[pc_topics[idx]] = idx;
+    map<string, int> pctopicidx;
+    for(int idx = 0; idx < pc_topics.size(); idx++)
+        pctopicidx[pc_topics[idx]] = idx;
 
     // Storage of the pointclouds
     vector<vector<CloudXYZITPtr>> clouds(pc_topics.size());
     vector<vector<ros::Time>> cloudstamp(pc_topics.size());
+    vector<tf2_msgs::TFMessage> gndtr;
+    
+    vector<string> queried_topics = pc_topics;
+    queried_topics.push_back("/tf");
 
     // Load the bag file
     rosbag::Bag lidar_bag;
     lidar_bag.open(lidar_bag_file);
-    rosbag::View view(lidar_bag, rosbag::TopicQuery(pc_topics));
+    rosbag::View view(lidar_bag, rosbag::TopicQuery(queried_topics));
 
     // Load the pointclouds
     for (rosbag::MessageInstance const m : view)
     {
         sensor_msgs::PointCloud2::ConstPtr pcMsgOuster = m.instantiate<sensor_msgs::PointCloud2>();
         livox_ros_driver::CustomMsg::ConstPtr pcMsgLivox = m.instantiate<livox_ros_driver::CustomMsg>();
+        tf2_msgs::TFMessage::ConstPtr gndtrMsg = m.instantiate<tf2_msgs::TFMessage>();;
 
         CloudXYZITPtr cloud(new CloudXYZIT());
         ros::Time stamp;
-        int lidx = pctopicidx[m.getTopic()];
+
+        string topic = m.getTopic();
+        int lidx = pctopicidx.find(topic) == pctopicidx.end() ? -1 : pctopicidx[topic];
         int Npoint = 0;
+
+        // Copy the ground truth
+        if (gndtrMsg != nullptr && topic == "/tf")
+        {
+            tf2_msgs::TFMessage msg = *gndtrMsg;
+            gndtr.push_back(msg);
+            continue;
+        }
 
         if (pcMsgOuster != nullptr && lidar_type[lidx] == "ouster")
         {
@@ -709,6 +755,40 @@ int main(int argc, char **argv)
             break;
     }
 
+    // Extract the ground truth and publish
+    vector<CloudPosePtr> gndtrCloud(Nlidar);
+    for(auto &cloud : gndtrCloud)
+        cloud = CloudPosePtr(new CloudPose());
+    // Add points to gndtr
+    for(auto &msg : gndtr)
+    {
+        for (auto &tf : msg.transforms)
+        {
+            int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
+            if (lidar_id >= Nlidar)
+            {
+                printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
+                continue;
+            }
+
+            // Copy the pose to the cloud
+            PointPose pose;
+            pose.t = tf.header.stamp.toSec();
+            pose.x = tf.transform.translation.x;
+            pose.y = tf.transform.translation.y;
+            pose.z = tf.transform.translation.z;
+            pose.qx = tf.transform.rotation.x;
+            pose.qy = tf.transform.rotation.y;
+            pose.qz = tf.transform.rotation.z;
+            pose.qw = tf.transform.rotation.w;
+            gndtrCloud[lidar_id]->push_back(pose);
+        }
+    }
+
+    // Create thread for visualizing groundtruth
+    thread vizGtr = thread(VisualizeGndtr, std::ref(priormap), std::ref(gndtrCloud));
+
+    // Initial coordinates of the lidar
     vector<myTf<double>> tf_W_Li0(Nlidar);
     vector<CloudXYZIPtr> pc0(Nlidar);
 
@@ -878,26 +958,27 @@ int main(int argc, char **argv)
         findthetraj[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
     }
 
+    // Wait for the end of the universe
     for(auto &thr : choptheclouds)
         thr.join();
 
-    ros::Rate rate(1);
-    while(ros::ok())
-    {
-        ros::Time currTime = ros::Time::now();
+    // ros::Rate rate(1);
+    // while(ros::ok())
+    // {
+    //     ros::Time currTime = ros::Time::now();
 
-        // Publish the prior map for visualization
-        Util::publishCloud(pmpub, *priormap, currTime, "world");
+    //     // Publish the prior map for visualization
+    //     Util::publishCloud(pmpub, *priormap, currTime, "world");
 
-        static vector<ros::Publisher> gpSamplePub;
-        if(gpSamplePub.size() == 0)
-            for(int lidx = 0; lidx < Nlidar; lidx++)
-                gpSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
+    //     static vector<ros::Publisher> gpSamplePub;
+    //     if(gpSamplePub.size() == 0)
+    //         for(int lidx = 0; lidx < Nlidar; lidx++)
+    //             gpSamplePub.push_back(nh.advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/spline_sample", lidx), 1));
 
-        for(int lidx = 0; lidx < Nlidar; lidx++)
-            Util::publishCloud(gpSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
+    //     for(int lidx = 0; lidx < Nlidar; lidx++)
+    //         Util::publishCloud(gpSamplePub[lidx], *poseSampled[lidx], ros::Time::now(), "world");
 
-        // Sleep
-        rate.sleep();
-    }
+    //     // Sleep
+    //     rate.sleep();
+    // }
 }

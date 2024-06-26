@@ -14,27 +14,13 @@
 #include <pcl/filters/impl/crop_box.hpp>
 /* All needed for filter of custom point type----------*/
 
+// All about gaussian process
 #include "GaussianProcess.hpp"
-// #include "factor/GPPoseFactor.h"
-// #include "factor/GPMotionPriorFactor.h"
-// #include "factor/GPPointToPlaneFactor.h"
-// #include "factor/GPMotionPriorTwoKnotsFactor.h"
-// #include "factor/GPSmoothnessFactor.h"
 
-// #include "factor/GPPoseFactorAutodiff.h"
-// #include "factor/GPMotionPriorFactorAutodiff.h"
-// #include "factor/GPPointToPlaneFactorAutodiff.h"
-// #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
-
+// Custom solver
 #include "GNSolver.h"
 
-// #include "basalt/spline/se3_spline.h"
-// #include "basalt/spline/ceres_spline_helper.h"
-// #include "basalt/spline/ceres_local_param.hpp"
-
 using NodeHandlePtr = boost::shared_ptr<ros::NodeHandle>;
-// using PoseSplinePtr = std::shared_ptr<PoseSplineX>;
-// typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 class GPMAPLO
 {
