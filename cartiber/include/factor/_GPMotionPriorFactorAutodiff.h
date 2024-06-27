@@ -101,8 +101,8 @@ public:
         Eigen::Matrix<T, 6, 1> gammafb;
         Eigen::Matrix<T, 6, 1> gammaf;
 
-        gpm.ComputeXtAndDerivs<T>(Xsa, Xsb, Xs, DXs_DXsa, DXs_DXsb, gammasa, gammasb, gammas);
-        gpm.ComputeXtAndDerivs<T>(Xfa, Xfb, Xf, DXf_DXfa, DXf_DXfb, gammafa, gammafb, gammaf);
+        gpm.ComputeXtAndJacobians<T>(Xsa, Xsb, Xs, DXs_DXsa, DXs_DXsb, gammasa, gammasb, gammas);
+        gpm.ComputeXtAndJacobians<T>(Xfa, Xfb, Xf, DXf_DXfa, DXf_DXfb, gammafa, gammafb, gammaf);
 
         // Relative rotation and its rate
         SO3T Rsf         = Xs.R.inverse()*Xf.R;

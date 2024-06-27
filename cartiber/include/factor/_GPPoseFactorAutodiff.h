@@ -71,7 +71,7 @@ public:
         Eigen::Matrix<T, 6, 1> gammab;
         Eigen::Matrix<T, 6, 1> gammat;
 
-        gpm.ComputeXtAndDerivs<T>(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
+        gpm.ComputeXtAndJacobians<T>(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Rotational residual
         Vec3T rR = (pose_meas.so3().inverse()*Xt.R).log();

@@ -14,6 +14,7 @@ typedef Matrix3d Mat3;
 using namespace std;
 using namespace Eigen;
 
+// Local parameterization when using ceres
 template <class Groupd>
 class GPSO3LocalParameterization : public ceres::LocalParameterization
 {
@@ -531,15 +532,15 @@ public:
     }
 
     template <class T = double>
-    void ComputeXtAndDerivs(const GPState<T> &Xa,
-                            const GPState<T> &Xb,
-                                  GPState<T> &Xt,
-                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa,
-                            vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb,
-                            Eigen::Matrix<T, 9, 1> &gammaa_,
-                            Eigen::Matrix<T, 9, 1> &gammab_,
-                            Eigen::Matrix<T, 9, 1> &gammat_
-                           ) const
+    void ComputeXtAndJacobians(const GPState<T> &Xa,
+                               const GPState<T> &Xb,
+                                     GPState<T> &Xt,
+                               vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXa,
+                               vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb,
+                               Eigen::Matrix<T, 9, 1> &gammaa_,
+                               Eigen::Matrix<T, 9, 1> &gammab_,
+                               Eigen::Matrix<T, 9, 1> &gammat_
+                              ) const
     {
         using SO3T  = Sophus::SO3<T>;
         using Vec3T = Eigen::Matrix<T, 3, 1>;
@@ -1046,7 +1047,6 @@ public:
         this->A = GPother.A;        
         return *this;
     }
-    
 };
 
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;

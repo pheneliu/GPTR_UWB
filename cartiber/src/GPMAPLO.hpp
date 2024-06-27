@@ -52,9 +52,6 @@ private:
     // Initial pose of the lidars
     SE3d T_W_Li0;
 
-    // Extrinsics of the lidars
-    vector<SE3d> T_L0_Li;
-
     // Spline to model the trajectory of each lidar
     GaussianProcessPtr traj;
 
@@ -503,5 +500,10 @@ public:
                 swCloudCoef.pop_front();
             }
         }
+    }
+
+    GaussianProcessPtr &GetTraj()
+    {
+        return traj;
     }
 };

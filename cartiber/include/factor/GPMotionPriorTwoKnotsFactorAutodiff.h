@@ -53,17 +53,12 @@ public:
         for(int j = 0; j < 7; j++)
             Dtpow[j] = pow(Dt, j);
 
-        Matrix3d QR;
-        QR << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
-              1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
-              1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
-        Info.block<9, 9>(0, 0) = gpm.kron(QR, Matrix3d::Identity());
-
-        Matrix3d QP;
-        QP << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
-              1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
-              1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
-        Info.block<9, 9>(9, 9) = gpm.kron(QP, Matrix3d::Identity());
+        Matrix3d Qtilde;
+        Qtilde << 1.0/20.0*Dtpow[5], 1.0/8.0*Dtpow[4], 1.0/6.0*Dtpow[3],
+                  1.0/08.0*Dtpow[4], 1.0/3.0*Dtpow[3], 1.0/2.0*Dtpow[2],
+                  1.0/06.0*Dtpow[3], 1.0/2.0*Dtpow[2], 1.0/1.0*Dtpow[1];
+        Info.block<9, 9>(0, 0) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
+        Info.block<9, 9>(9, 9) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);

@@ -9,6 +9,9 @@
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
 
+#include "factor/GPExtrinsicFactor.h"
+#include "factor/GPExtrinsicFactorAutodiff.h"
+
 double mpSigmaR = 1.0;
 double mpSigmaP = 1.0;
 int lidar_ds_rate = 1;
@@ -732,101 +735,360 @@ void AddAnalyticGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
     gplidarFactorMeta.residual_blocks = res_ids_lidar;
 }
 
+void AddAutodiffGPXtsFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
+                            FactorMeta &factorMeta, SO3d &R_Lx_Ly, Vector3d &P_Lx_Ly)
+{
+    vector<double *> so3_param;
+    vector<double *> r3_param;
+    vector<ceres::ResidualBlockId> res_ids;
+
+    // SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+    // problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
+
+    // Vector3d P_Lx_Ly(0, 0, 0);
+    // problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+
+    // Get the knot time
+    double ts = traj->getKnotTime(0) + traj->getDt()/2.0;
+    double tf = traj->getKnotTime(2) + traj->getDt()/2.0;
+    
+    // Skip if time is outside the range of the other trajectory
+    pair<int, double> uss, usf;
+    uss = traj->computeTimeIndex(ts);
+    usf = traj->computeTimeIndex(tf);
+
+    int umins = uss.first;
+    int uminf = usf.first;
+    double ss = uss.second;
+    double sf = usf.second;
+
+    // Create the factor
+    double mpSigmaR = 1.0;
+    double mpSigmaP = 1.0;
+    double mp_loss_thres = -1;
+    // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+    GPExtrinsicFactorAutodiff *factor = new GPExtrinsicFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt(), traj->getDt(), ss, sf);
+    auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPExtrinsicFactorAutodiff>(factor);
+    cost_function->SetNumResiduals(18);
+
+    // Add the parameter blocks
+    vector<double *> factor_param_blocks;
+    for (int kidx = umins; kidx < umins + 2; kidx++)
+    {
+        so3_param.push_back(traj->getKnotSO3(kidx).data());
+        r3_param.push_back(traj->getKnotOmg(kidx).data());
+        r3_param.push_back(traj->getKnotAlp(kidx).data());
+        r3_param.push_back(traj->getKnotPos(kidx).data());
+        r3_param.push_back(traj->getKnotVel(kidx).data());
+        r3_param.push_back(traj->getKnotAcc(kidx).data());
+
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+
+        cost_function->AddParameterBlock(4);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+    }
+
+    for (int kidx = uminf; kidx < uminf + 2; kidx++)
+    {
+        so3_param.push_back(traj->getKnotSO3(kidx).data());
+        r3_param.push_back(traj->getKnotOmg(kidx).data());
+        r3_param.push_back(traj->getKnotAlp(kidx).data());
+        r3_param.push_back(traj->getKnotPos(kidx).data());
+        r3_param.push_back(traj->getKnotVel(kidx).data());
+        r3_param.push_back(traj->getKnotAcc(kidx).data());
+
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+
+        cost_function->AddParameterBlock(4);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+        cost_function->AddParameterBlock(3);
+    }
+
+    // Add the extrinsics
+    {
+        so3_param.push_back(R_Lx_Ly.data());
+        r3_param.push_back(P_Lx_Ly.data());
+
+        factor_param_blocks.push_back(R_Lx_Ly.data());
+        factor_param_blocks.push_back(P_Lx_Ly.data());
+
+        cost_function->AddParameterBlock(4);
+        cost_function->AddParameterBlock(3);
+    }
+
+    // Add res block
+    auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+    res_ids.push_back(res_block);
+
+    // Copy the factor meta
+    factorMeta.so3_parameter_blocks = so3_param;
+    factorMeta.r3_parameter_blocks = r3_param;
+    factorMeta.residual_blocks = res_ids;
+}
+
+void AddAnalyticGPXtsFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
+                            FactorMeta &factorMeta, SO3d &R_Lx_Ly, Vector3d &P_Lx_Ly)
+{
+    vector<double *> so3_param;
+    vector<double *> r3_param;
+    vector<ceres::ResidualBlockId> res_ids;
+
+    // SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+    // problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
+
+    // Vector3d P_Lx_Ly(0, 0, 0);
+    // problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+
+    // Get the knot time
+    double ts = traj->getKnotTime(0) + traj->getDt()/2.0;
+    double tf = traj->getKnotTime(2) + traj->getDt()/2.0;
+    
+    // Skip if time is outside the range of the other trajectory
+    pair<int, double> uss, usf;
+    uss = traj->computeTimeIndex(ts);
+    usf = traj->computeTimeIndex(tf);
+
+    int umins = uss.first;
+    int uminf = usf.first;
+    double ss = uss.second;
+    double sf = usf.second;
+
+    // Add the parameter blocks
+    vector<double *> factor_param_blocks;
+    for (int kidx = umins; kidx < umins + 2; kidx++)
+    {
+        so3_param.push_back(traj->getKnotSO3(kidx).data());
+        r3_param.push_back(traj->getKnotOmg(kidx).data());
+        r3_param.push_back(traj->getKnotAlp(kidx).data());
+        r3_param.push_back(traj->getKnotPos(kidx).data());
+        r3_param.push_back(traj->getKnotVel(kidx).data());
+        r3_param.push_back(traj->getKnotAcc(kidx).data());
+
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+    }
+
+    for (int kidx = uminf; kidx < uminf + 2; kidx++)
+    {
+        so3_param.push_back(traj->getKnotSO3(kidx).data());
+        r3_param.push_back(traj->getKnotOmg(kidx).data());
+        r3_param.push_back(traj->getKnotAlp(kidx).data());
+        r3_param.push_back(traj->getKnotPos(kidx).data());
+        r3_param.push_back(traj->getKnotVel(kidx).data());
+        r3_param.push_back(traj->getKnotAcc(kidx).data());
+
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+    }
+
+    // Add the extrinsics
+    {
+        so3_param.push_back(R_Lx_Ly.data());
+        r3_param.push_back(P_Lx_Ly.data());
+
+        factor_param_blocks.push_back(R_Lx_Ly.data());
+        factor_param_blocks.push_back(P_Lx_Ly.data());
+    }
+
+    // Create the factor
+    double mpSigmaR = 1.0;
+    double mpSigmaP = 1.0;
+    double mp_loss_thres = -1;
+    // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+    ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, traj->getDt(), traj->getDt(), ss, sf);
+    
+    // Add res block
+    auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+    res_ids.push_back(res_block);
+
+    // Copy the factor meta
+    factorMeta.so3_parameter_blocks = so3_param;
+    factorMeta.r3_parameter_blocks = r3_param;
+    factorMeta.residual_blocks = res_ids;
+}
+
 void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, vector<LidarCoef> &Coef, const int &cidx)
 {
-    // for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
-    //     swTraj->setKnot(kidx, GPState<double>(0, SO3d(Util::YPR2Quat(Vector3d(0.57, 43, 91)*kidx)),
-    //                                                      Vector3d(0, 1, 2)*sin(kidx+1),
-    //                                                      Vector3d(4, 5, 6)*cos(kidx+1),
-    //                                                      Vector3d(7, 8, 9)*sin(kidx+1),
-    //                                                      Vector3d(10, 11, 12)*cos(kidx+1)));
-//     // Motion priors
-//     {
-//         double time_autodiff;
-//         VectorXd residual_autodiff_;
-//         MatrixXd Jacobian_autodiff_;
-//         {
-//             // Test the autodiff Jacobian
-//             FactorMeta gpmpFactorMetaAutodiff;
-//             AddAutodiffGPMPFactor(swTraj, problem, gpmpFactorMetaAutodiff);
-//             if (gpmpFactorMetaAutodiff.parameter_blocks() == 0)
-//                 return;
-//             TicToc tt_autodiff;
-//             double cost_autodiff;
-//             vector <double> residual_autodiff;
-//             MatrixXd J_autodiff;
-//             int count = 100;
-//             while(count-- > 0)
-//                 GetFactorJacobian(problem, gpmpFactorMetaAutodiff, 0,
-//                                   cost_autodiff, residual_autodiff, J_autodiff);
-//             RemoveResidualBlock(problem, gpmpFactorMetaAutodiff);
-//             printf(KCYN "Motion Prior Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-//                    J_autodiff.rows(), J_autodiff.cols(),
-//                    gpmpFactorMetaAutodiff.parameter_blocks(),
-//                    cost_autodiff, time_autodiff = tt_autodiff.Toc());
-//             residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-//             Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-//             // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-//             // Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
-//             // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-//             // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-//             // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-//             // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-//         }
-//         double time_analytic;
-//         VectorXd residual_analytic_;
-//         MatrixXd Jacobian_analytic_;
-//         {
-//             // Test the analytic Jacobian
-//             FactorMeta gpmpFactorMetaAnalytic;
-//             AddAnalyticGPMPFactor(swTraj, problem, gpmpFactorMetaAnalytic);
-//             if (gpmpFactorMetaAnalytic.parameter_blocks() == 0)
-//                 return;
-//             TicToc tt_analytic;
-//             double cost_analytic;
-//             vector <double> residual_analytic;
-//             MatrixXd J_analytic;
-            
-//             int count = 100;
-//             while(count-- > 0)
-//                 GetFactorJacobian(problem, gpmpFactorMetaAnalytic, 1,
-//                                   cost_analytic, residual_analytic, J_analytic);
-//             RemoveResidualBlock(problem, gpmpFactorMetaAnalytic);
-//             printf(KMAG "Motion Prior Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-//                    J_analytic.rows(), J_analytic.cols(),
-//                    gpmpFactorMetaAnalytic.parameter_blocks(),
-//                    cost_analytic, time_analytic = tt_analytic.Toc());
-//             residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-//             Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-//             // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-//             // Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
-//             // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-//             // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-//             // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-//             // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-//             // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-//         }
-//         // Compare the two jacobians
-//         VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-//         MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-//         // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-//         // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-//         // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-//         //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-//         printf(KGRN "CIDX: %d. MotionPrior Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n" RESET,
-//                cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-//     }
+    // // Motion priors
+    // {
+    //     double time_autodiff;
+    //     VectorXd residual_autodiff_;
+    //     MatrixXd Jacobian_autodiff_;
+    //     {
+    //         // Test the autodiff Jacobian
+    //         FactorMeta gpmp2kFactorMetaAutodiff;
+    //         AddAutodiffGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAutodiff);
+    //         if (gpmp2kFactorMetaAutodiff.parameter_blocks() == 0)
+    //             return;
+    //         TicToc tt_autodiff;
+    //         double cost_autodiff;
+    //         vector <double> residual_autodiff;
+    //         MatrixXd J_autodiff;
+    //         int count = 100;
+    //         while(count-- > 0)
+    //             GetFactorJacobian(problem, gpmp2kFactorMetaAutodiff, 0,
+    //                               cost_autodiff, residual_autodiff, J_autodiff);
+    //         RemoveResidualBlock(problem, gpmp2kFactorMetaAutodiff);
+    //         printf(KCYN "Motion Prior 2Knot Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+    //                J_autodiff.rows(), J_autodiff.cols(),
+    //                gpmp2kFactorMetaAutodiff.parameter_blocks(),
+    //                cost_autodiff, time_autodiff = tt_autodiff.Toc());
+    //         residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
+    //         Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
+    //         // Jacobian_autodiff_ = J_autodiff.block(0, 0, 9, 36);
+    //         // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
+    //         cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
+    //     }
+    //     double time_analytic;
+    //     VectorXd residual_analytic_;
+    //     MatrixXd Jacobian_analytic_;
+    //     {
+    //         // Test the analytic Jacobian
+    //         FactorMeta gpmp2kFactorMetaAnalytic;
+    //         AddAnalyticGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAnalytic);
+    //         if (gpmp2kFactorMetaAnalytic.parameter_blocks() == 0)
+    //             return;
+    //         TicToc tt_analytic;
+    //         double cost_analytic;
+    //         vector <double> residual_analytic;
+    //         MatrixXd J_analytic;
+    //         int count = 100;
+    //         while(count-- > 0)
+    //             GetFactorJacobian(problem, gpmp2kFactorMetaAnalytic, 1,
+    //                               cost_analytic, residual_analytic, J_analytic);
+    //         RemoveResidualBlock(problem, gpmp2kFactorMetaAnalytic);
+    //         printf(KMAG "Motion Prior 2Knot Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+    //                J_analytic.rows(), J_analytic.cols(),
+    //                gpmp2kFactorMetaAnalytic.parameter_blocks(),
+    //                cost_analytic, time_analytic = tt_analytic.Toc());
+    //         residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
+    //         Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
+    //         // Jacobian_analytic_ = J_analytic.block(0, 0, 9, 36);
+    //         // cout << "residual:\n" << residual_analytic_.transpose() << endl;
+    //         cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
+    //     }
+    //     // Compare the two jacobians
+    //     VectorXd resdiff = residual_autodiff_ - residual_analytic_;
+    //     MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
+    //     cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
+    //     cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
+    //     // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
+    //     //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
+    //     printf(KGRN "CIDX: %d. MotionPrior 2K Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,
+    //            cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
+    // }
 
-    // Motion priors
+    // // Lidar factors
+    // {
+    //     double time_autodiff;
+    //     VectorXd residual_autodiff_;
+    //     MatrixXd Jacobian_autodiff_;
+    //     {
+    //         // Test the autodiff Jacobian
+    //         FactorMeta gplidarFactorMetaAutodiff;
+    //         AddAutodiffGPLidarFactor(swTraj, problem, gplidarFactorMetaAutodiff, Coef);
+    //         if (gplidarFactorMetaAutodiff.parameter_blocks() == 0)
+    //             return;
+    //         TicToc tt_autodiff;
+    //         double cost_autodiff;
+    //         vector <double> residual_autodiff;
+    //         MatrixXd J_autodiff;
+    //         int count = 100;
+    //         while(count-- > 0)
+    //             GetFactorJacobian(problem, gplidarFactorMetaAutodiff, 0,
+    //                               cost_autodiff, residual_autodiff, J_autodiff);
+    //         RemoveResidualBlock(problem, gplidarFactorMetaAutodiff);
+    //         printf(KCYN "Lidar Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+    //                J_autodiff.rows(), J_autodiff.cols(),
+    //                gplidarFactorMetaAutodiff.parameter_blocks(),
+    //                cost_autodiff, time_autodiff = tt_autodiff.Toc());
+    //         residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
+    //         Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
+    //         // Jacobian_autodiff_ = J_autodiff.block(0, 0, 1, 18);
+    //         // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
+    //         // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
+    //     }
+    //     double time_analytic;
+    //     VectorXd residual_analytic_;
+    //     MatrixXd Jacobian_analytic_;
+    //     {
+    //         // Test the analytic Jacobian
+    //         FactorMeta gplidarFactorMetaAnalytic;
+    //         AddAnalyticGPLidarFactor(swTraj, problem, gplidarFactorMetaAnalytic, Coef);
+    //         if (gplidarFactorMetaAnalytic.parameter_blocks() == 0)
+    //             return;
+    //         TicToc tt_analytic;
+    //         double cost_analytic;
+    //         vector <double> residual_analytic;
+    //         MatrixXd J_analytic;
+            
+    //         int count = 100;
+    //         while(count-- > 0)
+    //             GetFactorJacobian(problem, gplidarFactorMetaAnalytic, 1,
+    //                               cost_analytic, residual_analytic, J_analytic);
+    //         RemoveResidualBlock(problem, gplidarFactorMetaAnalytic);
+    //         printf(KMAG "Lidar Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+    //                J_analytic.rows(), J_analytic.cols(),
+    //                gplidarFactorMetaAnalytic.parameter_blocks(),
+    //                cost_analytic, time_analytic = tt_analytic.Toc());
+    //         residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
+    //         Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
+    //         // Jacobian_analytic_ = J_analytic.block(0, 0, 1, 18);
+    //         // cout << "residual:\n" << residual_analytic_.transpose() << endl;
+    //         // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
+    //     }
+    //     // Compare the two jacobians
+    //     VectorXd resdiff = residual_autodiff_ - residual_analytic_;
+    //     MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
+    //     cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
+    //     // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
+    //     // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
+    //     //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
+    //     printf(KGRN "CIDX: %d. Lidar Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,
+    //            cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
+    // }
+
+    // Add the extrinsic params
+    SO3d R_Lx_Ly(Util::YPR2Quat(43, 57, 91));
+    Vector3d P_Lx_Ly(11, 02, 19);
+    problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
+    problem.AddParameterBlock(P_Lx_Ly.data(), 3);
     {
         double time_autodiff;
         VectorXd residual_autodiff_;
         MatrixXd Jacobian_autodiff_;
         {
             // Test the autodiff Jacobian
-            FactorMeta gpmp2kFactorMetaAutodiff;
-            AddAutodiffGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAutodiff);
-            if (gpmp2kFactorMetaAutodiff.parameter_blocks() == 0)
+            FactorMeta factorMetaAutodiff;
+            AddAutodiffGPXtsFactor(swTraj, problem, factorMetaAutodiff, R_Lx_Ly, P_Lx_Ly);
+            if (factorMetaAutodiff.parameter_blocks() == 0)
                 return;
             TicToc tt_autodiff;
             double cost_autodiff;
@@ -834,17 +1096,17 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
             MatrixXd J_autodiff;
             int count = 100;
             while(count-- > 0)
-                GetFactorJacobian(problem, gpmp2kFactorMetaAutodiff, 0,
+                GetFactorJacobian(problem, factorMetaAutodiff, 0,
                                   cost_autodiff, residual_autodiff, J_autodiff);
-            RemoveResidualBlock(problem, gpmp2kFactorMetaAutodiff);
-            printf(KCYN "Motion Prior 2Knot Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+            RemoveResidualBlock(problem, factorMetaAutodiff);
+            printf(KCYN "Xts Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
                    J_autodiff.rows(), J_autodiff.cols(),
-                   gpmp2kFactorMetaAutodiff.parameter_blocks(),
+                   factorMetaAutodiff.parameter_blocks(),
                    cost_autodiff, time_autodiff = tt_autodiff.Toc());
             residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-            Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-            // Jacobian_autodiff_ = J_autodiff.block(0, 0, 9, 36);
-            // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
+            // Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
+            Jacobian_autodiff_ = J_autodiff.block(0, 0, 18, 18);
+            cout << "residual:\n" << residual_autodiff_.transpose() << endl;
             cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
         }
         double time_analytic;
@@ -852,27 +1114,28 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
         MatrixXd Jacobian_analytic_;
         {
             // Test the analytic Jacobian
-            FactorMeta gpmp2kFactorMetaAnalytic;
-            AddAnalyticGPMP2KFactor(swTraj, problem, gpmp2kFactorMetaAnalytic);
-            if (gpmp2kFactorMetaAnalytic.parameter_blocks() == 0)
+            FactorMeta factorMetaAnalytic;
+            AddAnalyticGPXtsFactor(swTraj, problem, factorMetaAnalytic, R_Lx_Ly, P_Lx_Ly);
+            if (factorMetaAnalytic.parameter_blocks() == 0)
                 return;
             TicToc tt_analytic;
             double cost_analytic;
             vector <double> residual_analytic;
             MatrixXd J_analytic;
+            
             int count = 100;
             while(count-- > 0)
-                GetFactorJacobian(problem, gpmp2kFactorMetaAnalytic, 1,
+                GetFactorJacobian(problem, factorMetaAnalytic, 1,
                                   cost_analytic, residual_analytic, J_analytic);
-            RemoveResidualBlock(problem, gpmp2kFactorMetaAnalytic);
-            printf(KMAG "Motion Prior 2Knot Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
+            RemoveResidualBlock(problem, factorMetaAnalytic);
+            printf(KMAG "Xts Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
                    J_analytic.rows(), J_analytic.cols(),
-                   gpmp2kFactorMetaAnalytic.parameter_blocks(),
+                   factorMetaAnalytic.parameter_blocks(),
                    cost_analytic, time_analytic = tt_analytic.Toc());
             residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-            Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-            // Jacobian_analytic_ = J_analytic.block(0, 0, 9, 36);
-            // cout << "residual:\n" << residual_analytic_.transpose() << endl;
+            // Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
+            Jacobian_analytic_ = J_analytic.block(0, 0, 18, 18);
+            cout << "residual:\n" << residual_analytic_.transpose() << endl;
             cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
         }
         // Compare the two jacobians
@@ -882,157 +1145,9 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
         cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
         // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
         //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-        printf(KGRN "CIDX: %d. MotionPrior 2K Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,
-               cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-    }
-
-//     // Pose factors
-//     {
-//         double time_autodiff;
-//         VectorXd residual_autodiff_;
-//         MatrixXd Jacobian_autodiff_;
-//         {
-//             // Test the autodiff Jacobian
-//             FactorMeta gpposeFactorMetaAutodiff;
-//             AddAutodiffGPPoseFactor(swTraj, problem, gpposeFactorMetaAutodiff);
-//             if (gpposeFactorMetaAutodiff.parameter_blocks() == 0)
-//                 return;
-//             TicToc tt_autodiff;
-//             double cost_autodiff;
-//             vector <double> residual_autodiff;
-//             MatrixXd J_autodiff;
-//             int count = 100;
-//             while(count-- > 0)
-//                 GetFactorJacobian(problem, gpposeFactorMetaAutodiff, 0,
-//                                   cost_autodiff, residual_autodiff, J_autodiff);
-//             RemoveResidualBlock(problem, gpposeFactorMetaAutodiff);
-//             printf(KCYN "Pose Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-//                    J_autodiff.rows(), J_autodiff.cols(),
-//                    gpposeFactorMetaAutodiff.parameter_blocks(),
-//                    cost_autodiff, time_autodiff = tt_autodiff.Toc());
-//             residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-//             Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-//             // Jacobian_autodiff_ = J_autodiff.block(0, 6 + 15*0,  15, 9);
-//             // Jacobian_autodiff_.block(0, 6, 6, 6) = J_autodiff.block(0, 15, 6, 6);
-//             // Jacobian_autodiff_.block(6, 0, 6, 6) = J_autodiff.block(0, 30, 6, 6);
-//             // Jacobian_autodiff_.block(6, 6, 6, 6) = J_autodiff.block(0, 45, 6, 6);
-//             // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-//             // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-//         }
-//         double time_analytic;
-//         VectorXd residual_analytic_;
-//         MatrixXd Jacobian_analytic_;
-//         {
-//             // Test the analytic Jacobian
-//             FactorMeta gpposeFactorMetaAnalytic;
-//             AddAnalyticGPPoseFactor(swTraj, problem, gpposeFactorMetaAnalytic);
-//             if (gpposeFactorMetaAnalytic.parameter_blocks() == 0)
-//                 return;
-//             TicToc tt_analytic;
-//             double cost_analytic;
-//             vector <double> residual_analytic;
-//             MatrixXd J_analytic;
-            
-//             int count = 100;
-//             while(count-- > 0)
-//                 GetFactorJacobian(problem, gpposeFactorMetaAnalytic, 1,
-//                                   cost_analytic, residual_analytic, J_analytic);
-//             RemoveResidualBlock(problem, gpposeFactorMetaAnalytic);
-//             printf(KMAG "Pose Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-//                    J_analytic.rows(), J_analytic.cols(),
-//                    gpposeFactorMetaAnalytic.parameter_blocks(),
-//                    cost_analytic, time_analytic = tt_analytic.Toc());
-//             residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-//             Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-//             // Jacobian_analytic_ = J_analytic.block(0, 6 + 15*0,  15, 9);
-//             // Jacobian_analytic_.block(0, 0, 6, 6) = J_analytic.block(0, 0,  6, 6);
-//             // Jacobian_analytic_.block(0, 6, 6, 6) = J_analytic.block(0, 15, 6, 6);
-//             // Jacobian_analytic_.block(6, 0, 6, 6) = J_analytic.block(0, 30, 6, 6);
-//             // Jacobian_analytic_.block(6, 6, 6, 6) = J_analytic.block(0, 45, 6, 6);
-//             // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-//             // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-//         }
-//         // Compare the two jacobians
-//         VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-//         MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-//         // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-//         // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-//         // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-//         //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
-//         printf(KGRN "CIDX: %d. Pose Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n" RESET,
-//                cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
-//     }
-
-    // Lidar factors
-    {
-        double time_autodiff;
-        VectorXd residual_autodiff_;
-        MatrixXd Jacobian_autodiff_;
-        {
-            // Test the autodiff Jacobian
-            FactorMeta gplidarFactorMetaAutodiff;
-            AddAutodiffGPLidarFactor(swTraj, problem, gplidarFactorMetaAutodiff, Coef);
-            if (gplidarFactorMetaAutodiff.parameter_blocks() == 0)
-                return;
-            TicToc tt_autodiff;
-            double cost_autodiff;
-            vector <double> residual_autodiff;
-            MatrixXd J_autodiff;
-            int count = 100;
-            while(count-- > 0)
-                GetFactorJacobian(problem, gplidarFactorMetaAutodiff, 0,
-                                  cost_autodiff, residual_autodiff, J_autodiff);
-            RemoveResidualBlock(problem, gplidarFactorMetaAutodiff);
-            printf(KCYN "Lidar Autodiff Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                   J_autodiff.rows(), J_autodiff.cols(),
-                   gplidarFactorMetaAutodiff.parameter_blocks(),
-                   cost_autodiff, time_autodiff = tt_autodiff.Toc());
-            residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-            Jacobian_autodiff_ = J_autodiff;//MatrixXd(15, 9).setZero();
-            // Jacobian_autodiff_ = J_autodiff.block(0, 0, 1, 18);
-            // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
-            // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
-        }
-        double time_analytic;
-        VectorXd residual_analytic_;
-        MatrixXd Jacobian_analytic_;
-        {
-            // Test the analytic Jacobian
-            FactorMeta gplidarFactorMetaAnalytic;
-            AddAnalyticGPLidarFactor(swTraj, problem, gplidarFactorMetaAnalytic, Coef);
-            if (gplidarFactorMetaAnalytic.parameter_blocks() == 0)
-                return;
-            TicToc tt_analytic;
-            double cost_analytic;
-            vector <double> residual_analytic;
-            MatrixXd J_analytic;
-            
-            int count = 100;
-            while(count-- > 0)
-                GetFactorJacobian(problem, gplidarFactorMetaAnalytic, 1,
-                                  cost_analytic, residual_analytic, J_analytic);
-            RemoveResidualBlock(problem, gplidarFactorMetaAnalytic);
-            printf(KMAG "Lidar Analytic Jacobian: Size %2d %2d. Params: %d. Cost: %f. Time: %f.\n",
-                   J_analytic.rows(), J_analytic.cols(),
-                   gplidarFactorMetaAnalytic.parameter_blocks(),
-                   cost_analytic, time_analytic = tt_analytic.Toc());
-            residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-            Jacobian_analytic_ = J_analytic;//MatrixXd(15, 9).setZero();
-            // Jacobian_analytic_ = J_analytic.block(0, 0, 1, 18);
-            // cout << "residual:\n" << residual_analytic_.transpose() << endl;
-            // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
-        }
-        // Compare the two jacobians
-        VectorXd resdiff = residual_autodiff_ - residual_analytic_;
-        MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-        cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-        // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
-        // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
-        //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
         printf(KGRN "CIDX: %d. Lidar Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,
                cidx, jcbdiff.cwiseAbs().maxCoeff(), time_autodiff, time_analytic, time_autodiff/time_analytic*100);
     }
-
 }
 
 int main(int argc, char **argv)
@@ -1126,7 +1241,7 @@ int main(int argc, char **argv)
         double Dt = 0.04357;
         GaussianProcessPtr traj(new GaussianProcess(Dt));
         traj->setStartTime(0.5743);
-        traj->genRandomTrajectory(2);
+        traj->genRandomTrajectory(6);
 
         ceres::Problem problem;
         ceres::Solver::Options options;

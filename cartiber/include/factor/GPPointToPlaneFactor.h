@@ -102,7 +102,7 @@ public:
         Eigen::Matrix<double, 9, 1> gammab;
         Eigen::Matrix<double, 9, 1> gammat;
 
-        gpm.ComputeXtAndDerivs(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
+        gpm.ComputeXtAndJacobians(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Residual
         Eigen::Map<Matrix<double, 1, 1>> residual(residuals);
