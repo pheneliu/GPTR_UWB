@@ -8,16 +8,16 @@
 using SO3d = Sophus::SO3<double>;
 using SE3d = Sophus::SE3<double>;
 
-template <typename MatrixType1, typename MatrixType2>
-MatrixXd kroneckerProduct(const MatrixType1& A, const MatrixType2& B) {
-    MatrixXd result(A.rows() * B.rows(), A.cols() * B.cols());
-    for (int i = 0; i < A.rows(); ++i) {
-        for (int j = 0; j < A.cols(); ++j) {
-            result.block(i * B.rows(), j * B.cols(), B.rows(), B.cols()) = A(i, j) * B;
-        }
-    }
-    return result;
-}
+// template <typename MatrixType1, typename MatrixType2>
+// MatrixXd kroneckerProduct(const MatrixType1& A, const MatrixType2& B) {
+//     MatrixXd result(A.rows() * B.rows(), A.cols() * B.cols());
+//     for (int i = 0; i < A.rows(); ++i) {
+//         for (int j = 0; j < A.cols(); ++j) {
+//             result.block(i * B.rows(), j * B.cols(), B.rows(), B.cols()) = A(i, j) * B;
+//         }
+//     }
+//     return result;
+// }
 
 class GaussianPriorFactor : public ceres::CostFunction
 {
@@ -109,13 +109,13 @@ public:
         Matrix2d QR;
         QR << 1/3*dtbapow[3]*wR, 1/2*dtbapow[2]*wR,
               1/2*dtbapow[2]*wR,     dtbapow[1]*wR;
-        Info.block<6, 6>(0, 0) = kroneckerProduct(QR, Matrix3d::Identity());
+        Info.block<6, 6>(0, 0) = gpm.kron(QR, Matrix3d::Identity());
 
         Matrix3d QP;
         QP << 1/20*dtbapow[5]*wP, 1/8*dtbapow[4]*wP, 1/6*dtbapow[3]*wP,
               1/ 8*dtbapow[4]*wP, 1/3*dtbapow[3]*wP, 1/2*dtbapow[2]*wP,
               1/ 6*dtbapow[3]*wP, 1/2*dtbapow[2]*wP, 1/1*dtbapow[1]*wP;
-        Info.block<9, 9>(6, 0) = kroneckerProduct(QP, Matrix3d::Identity());
+        Info.block<9, 9>(6, 0) = gpm.kron(QP, Matrix3d::Identity());
 
         sqrtW = Eigen::LLT<Matrix<double, 15, 15>>(Info).matrixL().transpose();
     }

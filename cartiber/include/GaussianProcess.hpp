@@ -4,6 +4,8 @@
 #include <algorithm>    // Include this header for std::max
 #include <Eigen/Dense>
 
+#include <ceres/local_parameterization.h>   // For the local parameterization
+
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
 typedef Vector3d Vec3;
@@ -12,23 +14,56 @@ typedef Matrix3d Mat3;
 using namespace std;
 using namespace Eigen;
 
-template <typename MatrixType1, typename MatrixType2>
-MatrixXd kron(const MatrixType1& A, const MatrixType2& B) {
-    MatrixXd result(A.rows() * B.rows(), A.cols() * B.cols());
-    for (int i = 0; i < A.rows(); ++i) {
-        for (int j = 0; j < A.cols(); ++j) {
-            result.block(i * B.rows(), j * B.cols(), B.rows(), B.cols()) = A(i, j) * B;
-        }
+template <class Groupd>
+class GPSO3LocalParameterization : public ceres::LocalParameterization
+{
+public:
+    virtual ~GPSO3LocalParameterization() {}
+
+    using Tangentd = typename Groupd::Tangent;
+
+    /// @brief plus operation for Ceres
+    ///
+    ///  T * exp(x)
+    ///
+    virtual bool Plus(double const *T_raw, double const *delta_raw,
+                        double *T_plus_delta_raw) const
+    {
+        Eigen::Map<Groupd const> const T(T_raw);
+        Eigen::Map<Tangentd const> const delta(delta_raw);
+        Eigen::Map<Groupd> T_plus_delta(T_plus_delta_raw);
+        T_plus_delta = T * Groupd::exp(delta);
+        return true;
     }
-    return result;
-}
+
+    virtual bool ComputeJacobian(double const *T_raw,
+                                    double *jacobian_raw) const
+    {
+        Eigen::Map<Groupd const> T(T_raw);
+        Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF,
+                                    Eigen::RowMajor>>
+            jacobian(jacobian_raw);
+        jacobian.setZero();
+        jacobian(0, 0) = 1;
+        jacobian(1, 1) = 1;
+        jacobian(2, 2) = 1;
+        return true;
+    }
+
+    ///@brief Global size
+    virtual int GlobalSize() const { return Groupd::num_parameters; }
+
+    ///@brief Local size
+    virtual int LocalSize() const { return Groupd::DoF; }
+};
+
+typedef GPSO3LocalParameterization<Sophus::SO3d> GPSO3dLocalParameterization;
 
 // Define of the states for convenience in initialization and copying
 #define STATE_DIM 18
 template <class T = double>
 class GPState
 {
-
 public:
 
     using SO3T  = Sophus::SO3<T>;
@@ -90,6 +125,7 @@ public:
     }
 };
 
+// Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, Jr, Hr, Hprimer ...
 class GPMixer
 {
 private:
@@ -103,6 +139,17 @@ public:
 
     // Constructor
     GPMixer(double dt_) : dt(dt_) {};
+
+    template <typename MatrixType1, typename MatrixType2>
+    MatrixXd kron(const MatrixType1& A, const MatrixType2& B) const
+    {
+        MatrixXd result(A.rows() * B.rows(), A.cols() * B.cols());
+        for (int i = 0; i < A.rows(); ++i)
+            for (int j = 0; j < A.cols(); ++j)
+                result.block(i * B.rows(), j * B.cols(), B.rows(), B.cols()) = A(i, j) * B;
+
+        return result;
+    }
 
     // Transition Matrix, PHI(tau, 0)
     MatrixXd TransMat(const double dtau, int N) const
@@ -733,6 +780,7 @@ public:
     }
 };
 
+// Managing control points: craation, extension, queries, ...
 class GaussianProcess
 {
 private:

@@ -56,7 +56,7 @@ void GetFactorJacobian(ceres::Problem &problem, FactorMeta &factorMeta,
         }
         else
         {   
-            localparameterization = new basalt::LieAnalyticLocalParameterization<SO3d>();
+            localparameterization = new GPSO3dLocalParameterization();
             problem.SetParameterization(parameter, localparameterization);
         }
     }
@@ -85,7 +85,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
     // Add the parameter blocks for rotation
     for (int kidx = 0; kidx < KNOTS; kidx++)
     {
-        problem.AddParameterBlock(swTraj->getKnotSO3(kidx).data(), 4, new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>());
+        problem.AddParameterBlock(swTraj->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
         problem.AddParameterBlock(swTraj->getKnotOmg(kidx).data(), 3);
         problem.AddParameterBlock(swTraj->getKnotAlp(kidx).data(), 3);
         problem.AddParameterBlock(swTraj->getKnotPos(kidx).data(), 3);

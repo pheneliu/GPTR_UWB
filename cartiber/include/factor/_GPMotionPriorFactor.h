@@ -46,13 +46,13 @@ public:
         Matrix2d QR;
         QR << 1.0/3.0*dtsfpow[3]*wR, 1.0/2.0*dtsfpow[2]*wR,
               1.0/2.0*dtsfpow[2]*wR,         dtsfpow[1]*wR;
-        Info.block<6, 6>(0, 0) = kron(QR.inverse(), Matrix3d::Identity());
+        Info.block<6, 6>(0, 0) = gpm.kron(QR.inverse(), Matrix3d::Identity());
 
         Matrix3d QP;
         QP << 1.0/20.0*dtsfpow[5]*wP, 1.0/8.0*dtsfpow[4]*wP, 1.0/6.0*dtsfpow[3]*wP,
               1.0/ 8.0*dtsfpow[4]*wP, 1.0/3.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP,
               1.0/ 6.0*dtsfpow[3]*wP, 1.0/2.0*dtsfpow[2]*wP, 1.0/1.0*dtsfpow[1]*wP;
-        Info.block<9, 9>(6, 6) = kron(QP.inverse(), Matrix3d::Identity());
+        Info.block<9, 9>(6, 6) = gpm.kron(QP.inverse(), Matrix3d::Identity());
         
         // Find the square root info
         // sqrtW = Matrix<double, 15, 15>::Identity(15, 15);

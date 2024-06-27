@@ -30,9 +30,9 @@
 #include "GPMAPLO.hpp"
 
 // Factor for optimization
-#include "factor/PoseAnalyticFactor.h"
+// #include "factor/PoseAnalyticFactor.h"
 #include "factor/ExtrinsicFactor.h"
-#include "factor/ExtrinsicPoseFactor.h"
+// #include "factor/ExtrinsicPoseFactor.h"
 // #include "factor/GPPoseFactor.h"
 
 using namespace std;
@@ -88,8 +88,8 @@ typedef std::shared_ptr<GPKFLO> GPKFLOPtr;
 typedef std::shared_ptr<GPMAPLO> GPMAPLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
+vector<GPKFLOPtr> gpkflo;
 vector<GPMAPLOPtr> gpmaplo;
-vector<thread> choptheclouds;
 
 template <typename PointType>
 typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::PointCloud<PointType>::Ptr &cloudin, double sampling_radius)
@@ -206,7 +206,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
     options.num_threads = MAX_THREADS;
     options.max_num_iterations = 50;
 
-    ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
+    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
 
     // Add the parameter blocks for rotation
     for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
@@ -361,7 +361,7 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     options.max_num_iterations = 50;
 
     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-    ceres::LocalParameterization *local_parameterization = new basalt::LieAnalyticLocalParameterization<Sophus::SO3d>();
+    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
 
     SO3d rot(Quaternd(1, 0, 0, 0));
     problem.AddParameterBlock(rot.data(), 4, local_parameterization);
@@ -407,6 +407,71 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     // delete pos;
 
     return T_L0_Li;
+}
+
+myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianProcessPtr &trajy)
+{
+    // Trajectory should have 1:1 correspondence
+    // ROS_ASSERT(trajx->size() == trajy->size());
+    // int Nsample = trajx->size();
+
+    // Ceres problem
+    ceres::Problem problem;
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+
+    // Set up the ceres problem
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.num_threads = MAX_THREADS;
+    options.max_num_iterations = 50;
+
+    // ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+    // ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
+
+    // SO3d rot(Quaternd(1, 0, 0, 0));
+    // problem.AddParameterBlock(rot.data(), 4, local_parameterization);
+
+    // Vector3d pos(0, 0, 0);
+    // problem.AddParameterBlock(pos.data(), 3);
+    
+    // vector<double *> factor_param_blocks;
+    // factor_param_blocks.emplace_back(rot.data());
+    // factor_param_blocks.emplace_back(pos.data());
+
+    // double cost_pose_init;
+    // double cost_pose_final;
+    // vector<ceres::internal::ResidualBlock *> res_ids_pose;
+    // for(int sidx = 0; sidx < Nsample; sidx++)
+    // {
+    //     myTf Ti(trajx->points[sidx]);
+    //     myTf Tj(trajy->points[sidx]);
+    //     SE3d Tji = (Ti.inverse()*Tj).getSE3();
+
+    //     ceres::CostFunction *cost_function = new ExtrinsicFactor(Tji.so3(), Tji.translation(), 1.0, 1.0);
+    //     auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+    //     res_ids_pose.push_back(res_block);
+    // }
+
+    // // Init cost
+    // Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+
+    // // Solve the optimization problem
+    // ceres::Solve(options, &problem, &summary);
+
+    // // Final cost
+    // Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+
+    // printf("Optimization done: Iter: %d. Cost: %f -> %f\n",
+    //         summary.iterations.size(),
+    //         summary.initial_cost, summary.final_cost);
+
+    // myTf<double> T_L0_Li(rot.unit_quaternion(), pos);
+
+    // // Delete the created memories
+    // // delete rot;
+    // // delete pos;
+
+    // return T_L0_Li;
 }
 
 void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
@@ -459,6 +524,7 @@ void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
     int lastCloudIdx = 0;
     int lastPointIdx = -1;
     double lastCutTime = clouds.front()->points.front().t;
+    double endTime = clouds.back()->points.back().t;
 
     while(ros::ok())
     {
@@ -518,15 +584,19 @@ void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
         {
             // printf("GPMAPLO %d add cloud. Time: %f\n", lidx, cloudSeg->points.front().t);
             gpmaplo[lidx]->AddCloudSeg(cloudSeg);
-            lastCutTime += deltaT;    
+            lastCutTime += deltaT;
         }
         else
         {
-            // printf("No more points.\n");
+            // printf("Lidx %d. No more points.\n", lidx);
+            // break;
             // this_thread::sleep_for(chrono::milliseconds(1000));
             lastCloudIdx = 0;
             lastPointIdx = -1;
         }
+
+        if (lastCutTime > endTime)
+            break;
 
         this_thread::sleep_for(chrono::milliseconds(int(deltaT*1000)));
     }
@@ -637,14 +707,6 @@ int main(int argc, char **argv)
     // Create the kd tree
     printf("Building the prior map");
     kdTreeMap->setInputCloud(priormap);
-    
-    // // Publish the prior map for visualization
-    // static ros::Publisher pmpub = nh.advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
-    // for(int count = 0; count < 6; count ++)
-    // {
-    //     Util::publishCloud(pmpub, *priormap, ros::Time::now(), "world");
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // }
 
     // Make the ikd-tree
     // ikdtPM = ikdtreePtr(new ikdtree(0.5, 0.6, pmap_leaf_size));
@@ -801,137 +863,135 @@ int main(int argc, char **argv)
         pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
 
     // Find a preliminary trajectory for each lidar sequence
-    vector<GPKFLOPtr> gpkflo;
-    vector<thread> trajEst;
-    vector<CloudPosePtr> posePrior(Nlidar);
+    gpkflo = vector<GPKFLOPtr>(Nlidar);
+    vector<thread> findtrajkf;
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         // Creating the trajectory estimator
         StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-        gpkflo.push_back(GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx)));
+        gpkflo[lidx] = GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
 
         // Estimate the trajectory
-        posePrior[lidx] = CloudPosePtr(new CloudPose());
-        trajEst.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
-                                            std::ref(kdTreeMap), std::ref(priormap),
-                                            std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
-                                            std::ref(posePrior[lidx]))));
+        findtrajkf.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
+                                               std::ref(kdTreeMap), std::ref(priormap),
+                                               std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]))));
     }
+
     // Wait for the trajectory estimate to finish
     for(int lidx = 0; lidx < Nlidar; lidx++)
-        trajEst[lidx].join();
+        findtrajkf[lidx].join();
 
-    trajEst.clear();
-    gpkflo.clear();
+    // findtrajkf.clear();
+    // gpkflo.clear();
 
-    // Merge the time stamps
-    double tmincut = cloudstamp.front().front().toSec();
-    double tmaxcut = cloudstamp.front().back().toSec();
-    deque<double> tsample;
-    for(auto &stamps : cloudstamp)
-    {
-        tmincut = max(tmincut, stamps.front().toSec());
-        tmaxcut = min(tmaxcut, stamps.back().toSec());
+    // // Merge the time stamps
+    // double tmincut = cloudstamp.front().front().toSec();
+    // double tmaxcut = cloudstamp.front().back().toSec();
+    // deque<double> tsample;
+    // for(auto &stamps : cloudstamp)
+    // {
+    //     tmincut = max(tmincut, stamps.front().toSec());
+    //     tmaxcut = min(tmaxcut, stamps.back().toSec());
 
-        for(auto &stamp : stamps)
-            tsample.push_back(stamp.toSec());
-    }
-    // Sort the sampling time:
-    std::sort(tsample.begin(), tsample.end());
-    // Pop the ones outside of tmincut and tmaxcut
-    while(tsample.size() != 0)
-        if (tsample.front() <= tmincut)
-            tsample.pop_front();
-        else
-            break;
+    //     for(auto &stamp : stamps)
+    //         tsample.push_back(stamp.toSec());
+    // }
+    // // Sort the sampling time:
+    // std::sort(tsample.begin(), tsample.end());
+    // // Pop the ones outside of tmincut and tmaxcut
+    // while(tsample.size() != 0)
+    //     if (tsample.front() <= tmincut)
+    //         tsample.pop_front();
+    //     else
+    //         break;
 
-    while(tsample.size() != 0)
-        if (tsample.back() >= tmaxcut)
-            tsample.pop_back();
-        else
-            break;
+    // while(tsample.size() != 0)
+    //     if (tsample.back() >= tmaxcut)
+    //         tsample.pop_back();
+    //     else
+    //         break;
 
-    printf("Sample time: %f -> %f. %f, %f, %f, %f\n",
-            tsample.front(), tsample.back(),
-            cloudstamp.front().front().toSec(), cloudstamp.front().back().toSec(),
-            cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
+    // printf("Sample time: %f -> %f. %f, %f, %f, %f\n",
+    //         tsample.front(), tsample.back(),
+    //         cloudstamp.front().front().toSec(), cloudstamp.front().back().toSec(),
+    //         cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
 
-    // Now got all trajectories, fit a spline to these trajectories and sample them
-    vector<string> report(Nlidar);
-    vector<GaussianProcessPtr> traj(Nlidar);
-    vector<CloudPosePtr> poseSampled(Nlidar);
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        traj[lidx] = GaussianProcessPtr(new GaussianProcess(deltaT));
-        traj[lidx]->setStartTime(clouds[lidx].front()->points.front().t);
-        traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t);
+    // // Now got all trajectories, fit a spline to these trajectories and sample them
+    // vector<string> report(Nlidar);
+    // vector<GaussianProcessPtr> traj(Nlidar);
+    // vector<CloudPosePtr> poseSampled(Nlidar);
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    // {
+    //     traj[lidx] = GaussianProcessPtr(new GaussianProcess(deltaT));
+    //     traj[lidx]->setStartTime(clouds[lidx].front()->points.front().t);
+    //     traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t);
         
-        int Ncloud = clouds[lidx].size();
-        vector<double> ts(Ncloud);
-        MatrixXd pos(Ncloud, 3);
-        MatrixXd rot(Ncloud, 4);
-        vector<double> wp(Ncloud, 1);
-        vector<double> wr(Ncloud, 1);
-        double loss_thread = 1.0;
+    //     int Ncloud = clouds[lidx].size();
+    //     vector<double> ts(Ncloud);
+    //     MatrixXd pos(Ncloud, 3);
+    //     MatrixXd rot(Ncloud, 4);
+    //     vector<double> wp(Ncloud, 1);
+    //     vector<double> wr(Ncloud, 1);
+    //     double loss_thread = 1.0;
 
-        #pragma omp parallel for num_threads(MAX_THREADS)
-        for(int cidx = 0; cidx < Ncloud; cidx++)
-        {
-            ts[cidx] = clouds[lidx][cidx]->points.back().t;
-            pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x,  posePrior[lidx]->points[cidx].y,  posePrior[lidx]->points[cidx].z;
-            rot.block<1, 4>(cidx, 0) << posePrior[lidx]->points[cidx].qx, posePrior[lidx]->points[cidx].qy, posePrior[lidx]->points[cidx].qz, posePrior[lidx]->points[cidx].qw;
-        }
+    //     #pragma omp parallel for num_threads(MAX_THREADS)
+    //     for(int cidx = 0; cidx < Ncloud; cidx++)
+    //     {
+    //         ts[cidx] = clouds[lidx][cidx]->points.back().t;
+    //         pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x,  posePrior[lidx]->points[cidx].y,  posePrior[lidx]->points[cidx].z;
+    //         rot.block<1, 4>(cidx, 0) << posePrior[lidx]->points[cidx].qx, posePrior[lidx]->points[cidx].qy, posePrior[lidx]->points[cidx].qz, posePrior[lidx]->points[cidx].qw;
+    //     }
         
-        // Fit the spline
-        report[lidx] = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
+    //     // Fit the spline
+    //     report[lidx] = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
 
-        for(int kidx = 0; kidx < traj[lidx]->getNumKnots(); kidx++)
-        {
-            auto X = traj[lidx]->getKnot(kidx);
-            myTf T(X.R.unit_quaternion(), X.P);
-            printf("LIDX %d. Knot %3d. Pos: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. "
-                   "YPR: %6.3f, %6.3f, %6.3f. OMG: %6.3f, %6.3f, %6.3f.\n",
-                   lidx, kidx,
-                   X.P.x(), X.P.y(), X.P.z(), X.V.x(), X.V.y(), X.V.z(), X.A.x(), X.A.y(), X.A.z(),
-                   T.yaw(), T.pitch(), T.roll(), X.O.x(), X.O.y(), X.O.z());
-        }
+    //     for(int kidx = 0; kidx < traj[lidx]->getNumKnots(); kidx++)
+    //     {
+    //         auto X = traj[lidx]->getKnot(kidx);
+    //         myTf T(X.R.unit_quaternion(), X.P);
+    //         printf("LIDX %d. Knot %3d. Pos: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. "
+    //                "YPR: %6.3f, %6.3f, %6.3f. OMG: %6.3f, %6.3f, %6.3f.\n",
+    //                lidx, kidx,
+    //                X.P.x(), X.P.y(), X.P.z(), X.V.x(), X.V.y(), X.V.z(), X.A.x(), X.A.y(), X.A.z(),
+    //                T.yaw(), T.pitch(), T.roll(), X.O.x(), X.O.y(), X.O.z());
+    //     }
 
-        // Sample the spline by the synchronized sampling time
-        poseSampled[lidx] = CloudPosePtr(new CloudPose());
-        for(int tidx = 0; tidx < tsample.size() - 1; tidx++)
-        {
-            double t1 = tsample[tidx];
-            double t2 = (tsample[tidx] + tsample[tidx + 1])/2;
+    //     // Sample the spline by the synchronized sampling time
+    //     poseSampled[lidx] = CloudPosePtr(new CloudPose());
+    //     for(int tidx = 0; tidx < tsample.size() - 1; tidx++)
+    //     {
+    //         double t1 = tsample[tidx];
+    //         double t2 = (tsample[tidx] + tsample[tidx + 1])/2;
 
-            poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t1)).Pose6D(t1));
-            poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t2)).Pose6D(t2));
-        }
-    }
+    //         poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t1)).Pose6D(t1));
+    //         poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t2)).Pose6D(t2));
+    //     }
+    // }
 
-    // Export the sampling time for checking
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        poseSampled[lidx]->width = 1;
-        poseSampled[lidx]->height = poseSampled[lidx]->size();
-        printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d. %s\n",
-                lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size(), report[lidx].c_str());
-        pcl::io::savePCDFileASCII (myprintf("/home/tmn/ros_ws/dev_ws/src/cartiber/log/sampled_%d.pcd", lidx), *poseSampled[lidx]);
-    }
+    // // Export the sampling time for checking
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    // {
+    //     poseSampled[lidx]->width = 1;
+    //     poseSampled[lidx]->height = poseSampled[lidx]->size();
+    //     printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d. %s\n",
+    //             lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size(), report[lidx].c_str());
+    //     pcl::io::savePCDFileASCII (myprintf("/home/tmn/ros_ws/dev_ws/src/cartiber/log/sampled_%d.pcd", lidx), *poseSampled[lidx]);
+    // }
     
-    // Optimize the extrinsics for initial condition
-    vector<SE3d> T_L0_Li(Nlidar, SE3d());
-    for(int lidx = 1; lidx < Nlidar; lidx++)
-    {
-        myTf tf_L0_L = optimizeExtrinsics(poseSampled[0], poseSampled[lidx]);
-        printf("T_L0_L%d: XYZ: %f, %f, %f, YPR: %f, %f, %f\n",
-                lidx, tf_L0_L.pos(0), tf_L0_L.pos(1),  tf_L0_L.pos(2),
-                      tf_L0_L.yaw(),  tf_L0_L.pitch(), tf_L0_L.roll());
+    // // Optimize the extrinsics for initial condition
+    // vector<SE3d> T_L0_Li(Nlidar, SE3d());
+    // for(int lidx = 1; lidx < Nlidar; lidx++)
+    // {
+    //     myTf tf_L0_L = optimizeExtrinsics(poseSampled[0], poseSampled[lidx]);
+    //     printf("T_L0_L%d: XYZ: %f, %f, %f, YPR: %f, %f, %f\n",
+    //             lidx, tf_L0_L.pos(0), tf_L0_L.pos(1),  tf_L0_L.pos(2),
+    //                   tf_L0_L.yaw(),  tf_L0_L.pitch(), tf_L0_L.roll());
         
-        // Import the estimte
-        T_L0_Li[lidx] = tf_L0_L.getSE3();
-    }
+    //     // Import the estimte
+    //     T_L0_Li[lidx] = tf_L0_L.getSE3();
+    // }
 
-    // Merge the pointcloud by time.
+    // Split the pointcloud by time.
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
     for(int lidx = 1; lidx < Nlidar; lidx++)
     {
@@ -942,8 +1002,8 @@ int main(int argc, char **argv)
     // Find the trajectory with MAP optimization
     // vector<ros::Publisher> cloudsegpub(Nlidar);
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);
-    choptheclouds = vector<thread>(Nlidar);
-    vector<thread> findthetraj(Nlidar);
+    vector<thread> choptheclouds(Nlidar);
+    vector<thread> findtrajmap(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         // Create the gpmaplo objects
@@ -955,10 +1015,20 @@ int main(int argc, char **argv)
         
         // Create the estimators
         double t0 = cloudsx[lidx].front()->points.front().t;
-        findthetraj[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
+        findtrajmap[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
     }
 
-    // Wait for the end of the universe
+    // Wait for the threads to complete
     for(auto &thr : choptheclouds)
         thr.join();
+    for(auto &thr : findtrajmap)
+        thr.join();
+
+    // Finish
+    printf(KGRN "All finished.\n" RESET);
+
+    // Loop in waiting
+    ros::Rate rate(1);
+    while(ros::ok())
+        rate.sleep();
 }

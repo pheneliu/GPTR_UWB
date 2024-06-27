@@ -45,13 +45,13 @@ public:
         QR << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
               1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
               1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
-        Info.block<9, 9>(0, 0) = kron(QR, Matrix3d::Identity());
+        Info.block<9, 9>(0, 0) = gpm.kron(QR, Matrix3d::Identity());
 
         Matrix3d QP;
         QP << 1.0/20.0*Dtpow[5]*wP, 1.0/8.0*Dtpow[4]*wP, 1.0/6.0*Dtpow[3]*wP,
               1.0/08.0*Dtpow[4]*wP, 1.0/3.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP,
               1.0/06.0*Dtpow[3]*wP, 1.0/2.0*Dtpow[2]*wP, 1.0/1.0*Dtpow[1]*wP;
-        Info.block<9, 9>(9, 9) = kron(QP, Matrix3d::Identity());
+        Info.block<9, 9>(9, 9) = gpm.kron(QP, Matrix3d::Identity());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);

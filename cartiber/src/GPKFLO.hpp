@@ -198,8 +198,13 @@ class GPKFLO
 {
 private:
 
+    // Lidar index
+    int lidx;
+
+    // Node handle
     NodeHandlePtr nh_ptr;
 
+    // Estimates
     StateWithCov Xhatprev;
     StateWithCov Xhat;
 
@@ -212,7 +217,7 @@ private:
     double minKnnSqDis = 0.5*0.5;
     double minKnnNbrDis = 0.1;
 
-    // Max iterations
+    // Optimimzation params
     int MAX_ITER  = 10;
     double lambda = 0.0;
     double dXmax  = 0.5;
@@ -220,8 +225,8 @@ private:
     // Number of debug steps
     int DEBUG_STEPS = 1;
 
-    // Lidar index
-    int lidx;
+    // Estimated trajectory
+    CloudPosePtr trajEst;
 
     // Visualization
     ros::Publisher assocPub;
@@ -235,7 +240,7 @@ public:
 
     // Constructor
     GPKFLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
-    : lidx(lidx_), Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_)
+    : lidx(lidx_), Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_), trajEst(CloudPosePtr(new CloudPose()))
     {
         // Initialize the covariance of velocity
         Eigen::VectorXd Rm_(12);
@@ -379,11 +384,11 @@ public:
     }
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
-                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp, CloudPosePtr &posePrior)
+                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp)
     {
         int Ncloud = clouds.size();
-        posePrior = CloudPosePtr(new CloudPose());
-        posePrior->resize(Ncloud);
+        trajEst = CloudPosePtr(new CloudPose());
+        trajEst->resize(Ncloud);
 
         for(int cidx = 0; cidx < Ncloud && ros::ok(); cidx++)
         {
@@ -534,13 +539,18 @@ public:
             Xhat = Xpred;
 
             // Add the estimated pose to the pointcloud
-            posePrior->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
-            Util::publishCloud(pppub, *posePrior, ros::Time::now(), "world");
+            trajEst->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
+            Util::publishCloud(pppub, *trajEst, ros::Time::now(), "world");
 
             // DEBUG: Break after n steps
             static int debug_count = 0; debug_count++;
             if (DEBUG_STEPS > 0 && debug_count >= DEBUG_STEPS)
                 break; 
         }
+    }
+
+    CloudPosePtr &getTrajEst()
+    {
+        return trajEst;
     }
 };

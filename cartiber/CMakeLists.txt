@@ -3,8 +3,8 @@ project(cartiber)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -25,6 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenMP REQUIRED)
+find_package(Sophus REQUIRED)
 find_package(PCL REQUIRED)
 # find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
