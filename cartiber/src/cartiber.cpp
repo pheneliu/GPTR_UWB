@@ -436,6 +436,10 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         problem.AddParameterBlock(trajx->getKnotPos(kidx).data(), 3);
         problem.AddParameterBlock(trajx->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(trajx->getKnotAcc(kidx).data(), 3);
+
+        // Fix the pose
+        // problem.SetParameterBlockConstant(trajx->getKnotSO3(kidx).data());
+        // problem.SetParameterBlockConstant(trajx->getKnotPos(kidx).data());
     }
 
     for (int kidx = 0; kidx < trajy->getNumKnots(); kidx++)
@@ -446,12 +450,16 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         problem.AddParameterBlock(trajy->getKnotPos(kidx).data(), 3);
         problem.AddParameterBlock(trajy->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(trajy->getKnotAcc(kidx).data(), 3);
+
+        // Fix the pose
+        // problem.SetParameterBlockConstant(trajy->getKnotSO3(kidx).data());
+        // problem.SetParameterBlockConstant(trajy->getKnotPos(kidx).data());
     }
 
     SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
     problem.AddParameterBlock(R_Lx_Ly.data(), 4, so3parameterization);
 
-    Vector3d P_Lx_Ly(0, 0, 0);
+    Vector3d P_Lx_Ly(-0.1767767, 0, -0.53033009);
     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
 
     // Fix the first pose of each trajectory
@@ -642,7 +650,9 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             summary.initial_cost, summary.final_cost);
 
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
-    cout << "T_L0_Li\n" << T_L0_Li << endl;
+    printf("T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n",
+            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll());
     return T_L0_Li;
 }
 

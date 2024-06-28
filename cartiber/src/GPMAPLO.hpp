@@ -469,8 +469,8 @@ public:
                          "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
                          "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
                          "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
-                         "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
-                         "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f\n"
+                         "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+                         "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
                          RESET,
                          gniter == max_gniter ? KGRN : "", LIDX, optnum,
                          gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
@@ -479,8 +479,8 @@ public:
                          gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
                          J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
                          JK, gnreport.JKlidar, gnreport.JKprior, gnreport.JKmp2k,
-                         Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(),
-                         XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z());
+                         Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(), Xt0.yaw(), Xt0.pitch(), Xt0.roll(),
+                         XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z(), XtK.yaw(), XtK.pitch(), XtK.roll());
             }
 
             // Print the report

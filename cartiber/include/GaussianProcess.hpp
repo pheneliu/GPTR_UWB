@@ -124,6 +124,35 @@ public:
                A - Xother.A;
         return dX;
     }
+
+    double yaw()
+    {
+        Eigen::Vector3d n = R.matrix().col(0);
+        Eigen::Vector3d ypr(3);
+        double y = atan2(n(1), n(0));
+        return y / M_PI * 180.0;
+    }
+
+    double pitch()
+    {
+        Eigen::Vector3d n = R.matrix().col(0);
+        Eigen::Vector3d ypr(3);
+        double y = atan2(n(1), n(0));
+        double p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
+        return p / M_PI * 180.0;
+    }
+
+    double roll()
+    {
+        Eigen::Vector3d n = R.matrix().col(0);
+        Eigen::Vector3d o = R.matrix().col(1);
+        Eigen::Vector3d a = R.matrix().col(2);
+        Eigen::Vector3d ypr(3);
+        double y = atan2(n(1), n(0));
+        double p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
+        double r = atan2(a(0) * sin(y) - a(1) * cos(y), -o(0) * sin(y) + o(1) * cos(y));
+        return r / M_PI * 180.0;
+    }
 };
 
 // Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, Jr, Hr, Hprimer ...
