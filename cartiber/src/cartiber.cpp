@@ -455,10 +455,10 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
 
     // Fix the first pose of each trajectory
-    problem.SetParameterBlockConstant(trajx->getKnotSO3(0).data());
-    problem.SetParameterBlockConstant(trajx->getKnotPos(0).data());
-    problem.SetParameterBlockConstant(trajy->getKnotSO3(0).data());
-    problem.SetParameterBlockConstant(trajy->getKnotPos(0).data());
+    // problem.SetParameterBlockConstant(trajx->getKnotSO3(0).data());
+    // problem.SetParameterBlockConstant(trajx->getKnotPos(0).data());
+    // problem.SetParameterBlockConstant(trajy->getKnotSO3(0).data());
+    // problem.SetParameterBlockConstant(trajy->getKnotPos(0).data());
 
     //-----------------------------------------------------------------------------------------------------------------
 
