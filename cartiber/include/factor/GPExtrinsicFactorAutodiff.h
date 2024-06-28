@@ -84,16 +84,18 @@ public:
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
         
         Mat3T Ostx = SO3T::hat(Xst.O);
-        Mat3T Sftx = SO3T::hat(Xst.S);
+        Mat3T Oftx = SO3T::hat(Xft.O);
+        Mat3T Sstx = SO3T::hat(Xst.S);
+        Mat3T Sftx = SO3T::hat(Xft.S);
         Vec3T OstxPsf = Ostx*Psf;
-        Vec3T SftxPsf = Sftx*Psf;
+        Vec3T SstxPsf = Sstx*Psf;
 
         Vec3T rR = (Rsf.inverse()*Xst.R.inverse()*Xft.R).log();
         Vec3T rO = Rsf*Xft.O - Xst.O;
         Vec3T rS = Rsf*Xft.S - Xst.S;
         Vec3T rP = Xft.P - Xst.P - Xst.R*Psf;
         Vec3T rV = Xft.V - Xst.V - Xst.R*OstxPsf;
-        Vec3T rA = Xft.A - Xst.A - Xst.R*SftxPsf - Xst.R*(Ostx*OstxPsf);
+        Vec3T rA = Xft.A - Xst.A - Xst.R*SstxPsf - Xst.R*(Ostx*OstxPsf);
 
         // Residual
         Eigen::Map<Matrix<T, 18, 1>> residual(residuals);

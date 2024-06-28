@@ -336,7 +336,7 @@ public:
         T cXn = cos(Xn);
         // T cXnp2 = cXn*cXn;
         
-        T gXn = (1.0 - cXn)/Xnp2;
+        // T gXn = (1.0 - cXn)/Xnp2;
         T DgXn_DXn = sXn/Xnp2 - 2.0*(1.0 - cXn)/Xnp3;
         T DDgXn_DXnDXn = cXn/Xnp2 - 4.0*sXn/Xnp3 + 6.0*(1.0 - cXn)/Xnp4;
 
@@ -457,14 +457,14 @@ public:
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
         T Xnp4 = Xnp3*Xn;
-        T Xnp5 = Xnp4*Xn;
+        // T Xnp5 = Xnp4*Xn;
 
         T sXn = sin(Xn);
         T sXnp2 = sXn*sXn;
         T s2Xn = sin(2.0*Xn);
         
         T cXn = cos(Xn);
-        T cXnp2 = cXn*cXn;
+        // T cXnp2 = cXn*cXn;
         T c2Xn = cos(2.0*Xn);
         
         T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
@@ -478,7 +478,7 @@ public:
         Mat3T DXsksqV_DX = Fu(X, V);
         Mat3T DDXsksqVA_DXDX = Fuu(X, V, A);
 
-        Mat3T Vsk = SO3T::hat(V);
+        // Mat3T Vsk = SO3T::hat(V);
         T AtpXb = A.transpose()*Xb;
         Eigen::Matrix<T, 1, 3> AtpDXb = A.transpose()*DXb_DX;
 
@@ -504,7 +504,7 @@ public:
 
         T Xnp2 = Xn*Xn;
         T Xnp3 = Xnp2*Xn;
-        T Xnp4 = Xnp3*Xn;
+        // T Xnp4 = Xnp3*Xn;
         // T Xnp5 = Xnp4*Xn;
 
         T sXn = sin(Xn);
@@ -642,8 +642,8 @@ public:
         Mat3T DTheddotb_DTheb = DJrInvThebSb_DTheb + DDJrInvThebObThedotb_DThebDTheb + DJrInvThebOb_DTheb*DJrInvThebOb_DTheb;
 
         Mat3T DJrThetTheddott_DThet = DJrXV_DX(Thet, Theddott);
-        Mat3T DDJrThetThedottThedott_DThetDThet = DDJrXVA_DXDX(Thet, Theddott, Theddott);
-        Mat3T DDJrThetThedottThedott_DThetDThedott = DDJrXVA_DXDV(Thet, Theddott, Theddott) + DJrXV_DX(Thet, Thedott);
+        Mat3T DDJrThetThedottThedott_DThetDThet = DDJrXVA_DXDX(Thet, Thedott, Thedott);
+        Mat3T DDJrThetThedottThedott_DThetDThedott = DDJrXVA_DXDV(Thet, Thedott, Thedott) + DJrXV_DX(Thet, Thedott);
 
         Mat3T DThet_DTheb = PSI_ROS11 + PSI_ROS12*DJrInvThebOb_DTheb + PSI_ROS13*DTheddotb_DTheb;
         Mat3T DThedott_DTheb = PSI_ROS21 + PSI_ROS22*DJrInvThebOb_DTheb + PSI_ROS23*DTheddotb_DTheb;
@@ -675,11 +675,11 @@ public:
         Mat3T DTheddott_DSb = PSI_ROS33*JrInvTheb;
 
         Mat3T JrThet = Jr(Thet);
-        Mat3T JrInvThet = JrInv(Thet);
+        // Mat3T JrInvThet = JrInv(Thet);
 
         // // Dependance of Ot on the states
         Mat3T DJrThetThedott_DThet = DJrXV_DX(Thet, Thedott);
-        // Mat3T DOt_DThedott = JrThet;        
+        // Mat3T DOt_DThedott = JrThet;
         
         // DRt_DRa
         DXt_DXa[RIDX][RIDX] = Sophus::SO3<T>::exp(-Thet).matrix() + JrThet*DThet_DRa;
@@ -698,11 +698,11 @@ public:
         // DOt_DPa DOt_DVa DOt_DAa are all zeros
 
         // DSt_Ra
-        DXt_DXa[SIDX][RIDX] = DJrThetTheddott_DThet*DThet_DRa + JrInvThet*DTheddott_DRa + DDJrThetThedottThedott_DThetDThet*DThet_DRa + DDJrThetThedottThedott_DThetDThedott*DThedott_DRa;
+        DXt_DXa[SIDX][RIDX] = DJrThetTheddott_DThet*DThet_DRa + JrThet*DTheddott_DRa + DDJrThetThedottThedott_DThetDThet*DThet_DRa + DDJrThetThedottThedott_DThetDThedott*DThedott_DRa;
         // DSt_Oa
-        DXt_DXa[SIDX][OIDX] = DJrThetTheddott_DThet*DThet_DOa + JrInvThet*DTheddott_DOa + DDJrThetThedottThedott_DThetDThet*DThet_DOa + DDJrThetThedottThedott_DThetDThedott*DThedott_DOa;
+        DXt_DXa[SIDX][OIDX] = DJrThetTheddott_DThet*DThet_DOa + JrThet*DTheddott_DOa + DDJrThetThedottThedott_DThetDThet*DThet_DOa + DDJrThetThedottThedott_DThetDThedott*DThedott_DOa;
         // DSt_Sa
-        DXt_DXa[SIDX][SIDX] = DJrThetTheddott_DThet*DThet_DSa + JrInvThet*DTheddott_DSa + DDJrThetThedottThedott_DThetDThet*DThet_DSa + DDJrThetThedottThedott_DThetDThedott*DThedott_DSa;
+        DXt_DXa[SIDX][SIDX] = DJrThetTheddott_DThet*DThet_DSa + JrThet*DTheddott_DSa + DDJrThetThedottThedott_DThetDThet*DThet_DSa + DDJrThetThedottThedott_DThetDThedott*DThedott_DSa;
         // DSt_DPa DSt_DVa DSt_DAa are all zeros
 
 
@@ -746,11 +746,11 @@ public:
         // DOt_DPb DOt_DVb DOt_DAb are all zeros
 
         // DSt_Rb
-        DXt_DXb[SIDX][RIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DRb + DDJrThetThedottThedott_DThetDThedott*DThedott_DRb + JrInvThet*DTheddott_DRb;
+        DXt_DXb[SIDX][RIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DRb + DDJrThetThedottThedott_DThetDThedott*DThedott_DRb + JrThet*DTheddott_DRb;
         // DSt_Ob
-        DXt_DXb[SIDX][OIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DOb + DDJrThetThedottThedott_DThetDThedott*DThedott_DOb + JrInvThet*DTheddott_DOb;
+        DXt_DXb[SIDX][OIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DOb + DDJrThetThedottThedott_DThetDThedott*DThedott_DOb + JrThet*DTheddott_DOb;
         // DSt_Sb
-        DXt_DXb[SIDX][SIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DSb + DDJrThetThedottThedott_DThetDThedott*DThedott_DSb + JrInvThet*DTheddott_DSb;
+        DXt_DXb[SIDX][SIDX] = (DJrThetTheddott_DThet + DDJrThetThedottThedott_DThetDThet)*DThet_DSb + DDJrThetThedottThedott_DThetDThedott*DThedott_DSb + JrThet*DTheddott_DSb;
         // DSt_DPb DSt_DVb DSt_DAb are all zeros
 
 

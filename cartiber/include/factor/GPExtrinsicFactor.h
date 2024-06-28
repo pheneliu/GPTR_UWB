@@ -76,18 +76,20 @@ public:
         /* #endregion Compute the interpolated states ---------------------------------------------------------------*/
 
         /* #region Calculate the residual ---------------------------------------------------------------------------*/
-        
+
         Mat3 Ostx = SO3d::hat(Xst.O);
-        Mat3 Sftx = SO3d::hat(Xst.S);
+        Mat3 Oftx = SO3d::hat(Xft.O);
+        Mat3 Sstx = SO3d::hat(Xst.S);
+        Mat3 Sftx = SO3d::hat(Xft.S);
         Vec3 OstxPsf = Ostx*Psf;
-        Vec3 SftxPsf = Sftx*Psf;
+        Vec3 SstxPsf = Sstx*Psf;
 
         Vec3 rR = (Rsf.inverse()*Xst.R.inverse()*Xft.R).log();
         Vec3 rO = Rsf*Xft.O - Xst.O;
         Vec3 rS = Rsf*Xft.S - Xst.S;
         Vec3 rP = Xft.P - Xst.P - Xst.R*Psf;
         Vec3 rV = Xft.V - Xst.V - Xst.R*OstxPsf;
-        Vec3 rA = Xft.A - Xst.A - Xst.R*SftxPsf - Xst.R*(Ostx*OstxPsf);
+        Vec3 rA = Xft.A - Xst.A - Xst.R*SstxPsf - Xst.R*(Ostx*OstxPsf);
 
         // Residual
         Eigen::Map<Matrix<double, 18, 1>> residual(residuals);
@@ -115,29 +117,29 @@ public:
 
         Mat3 DrO_DOft =  Rsfmat;
         Mat3 DrO_DOst = -Eye;
-        Mat3 DrO_DRsf = -Ostx;
+        Mat3 DrO_DRsf = -Rsfmat*Oftx;
 
         Mat3 DrS_DSft =  Rsfmat;
         Mat3 DrS_DSst = -Eye;
-        Mat3 DrS_DRsf = -Sftx;
+        Mat3 DrS_DRsf = -Rsfmat*Sftx;
 
         Mat3 DrP_DPft =  Eye;
         Mat3 DrP_DPst = -Eye;
-        Mat3 DrP_DRst =  SO3d::hat(Psf);
+        Mat3 DrP_DRst =  Rstmat*SO3d::hat(Psf);
         Mat3 DrP_DPsf = -Rstmat;
 
         Mat3 DrV_DVft =  Eye;
         Mat3 DrV_DVst = -Eye;
-        Mat3 DrV_DRst =  SO3d::hat(OstxPsf);
-        Mat3 DrV_DOst = -Rstmat*Psfskw;
+        Mat3 DrV_DRst =  Rstmat*SO3d::hat(OstxPsf);
+        Mat3 DrV_DOst =  Rstmat*Psfskw;
         Mat3 DrV_DPsf = -Rstmat*Ostx;
 
         Mat3 DrA_DAft =  Eye;
         Mat3 DrA_DAst = -Eye;
-        Mat3 DrA_DRst =  SO3d::hat(SftxPsf + Ostx*OstxPsf);
+        Mat3 DrA_DRst =  Rstmat*SO3d::hat(SstxPsf + Ostx*OstxPsf);
         Mat3 DrA_DOst = -Rstmat*gpms.Fu(Xst.O, Psf);
         Mat3 DrA_DSst =  Rstmat*SO3d::hat(Psf);
-        Mat3 DrA_DPsf = -Rstmat*Sftx - Rstmat*Ostx*Ostx;
+        Mat3 DrA_DPsf = -Rstmat*Sstx - Rstmat*Ostx*Ostx;
 
         size_t idx;
 
@@ -182,8 +184,8 @@ public:
                 Dr_DSsa.block<3, 3>(0,  0) = DrR_DRst*DXst_DXsa[RIdx][SIdx];
                 Dr_DSsa.block<3, 3>(3,  0) = DrO_DOst*DXst_DXsa[OIdx][SIdx];
                 Dr_DSsa.block<3, 3>(6,  0) = DrS_DSst*DXst_DXsa[SIdx][SIdx];
-                Dr_DSsa.block<3, 3>(9,  0) = DrP_DRst*DXst_DXsa[PIdx][SIdx];
-                Dr_DSsa.block<3, 3>(12, 0) = DrV_DRst*DXst_DXsa[VIdx][SIdx] + DrV_DOst*DXst_DXsa[VIdx][SIdx];
+                Dr_DSsa.block<3, 3>(9,  0) = DrP_DRst*DXst_DXsa[RIdx][SIdx];
+                Dr_DSsa.block<3, 3>(12, 0) = DrV_DRst*DXst_DXsa[RIdx][SIdx] + DrV_DOst*DXst_DXsa[OIdx][SIdx];
                 Dr_DSsa.block<3, 3>(15, 0) = DrA_DRst*DXst_DXsa[RIdx][SIdx] + DrA_DOst*DXst_DXsa[OIdx][SIdx] + DrA_DSst*DXst_DXsa[SIdx][SIdx];
                 Dr_DSsa = sqrtW*Dr_DSsa;
             }
@@ -349,9 +351,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DRsb(jacobians[idx]);
                 Dr_DRsb.setZero();
-                Dr_DRsb.block<3, 3>(9,  0) = DrP_DPft*DXst_DXsb[PIdx][PIdx];
-                Dr_DRsb.block<3, 3>(12, 0) = DrV_DVft*DXst_DXsb[VIdx][PIdx];
-                Dr_DRsb.block<3, 3>(15, 0) = DrA_DAft*DXst_DXsb[AIdx][PIdx];
+                Dr_DRsb.block<3, 3>(9,  0) = DrP_DPst*DXst_DXsb[PIdx][PIdx];
+                Dr_DRsb.block<3, 3>(12, 0) = DrV_DVst*DXst_DXsb[VIdx][PIdx];
+                Dr_DRsb.block<3, 3>(15, 0) = DrA_DAst*DXst_DXsb[AIdx][PIdx];
                 Dr_DRsb = sqrtW*Dr_DRsb;
             }
 
@@ -360,9 +362,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DVsb(jacobians[idx]);
                 Dr_DVsb.setZero();
-                Dr_DVsb.block<3, 3>(9,  0) = DrP_DPft*DXst_DXsb[PIdx][VIdx];
-                Dr_DVsb.block<3, 3>(12, 0) = DrV_DVft*DXst_DXsb[VIdx][VIdx];
-                Dr_DVsb.block<3, 3>(15, 0) = DrA_DAft*DXst_DXsb[AIdx][VIdx];
+                Dr_DVsb.block<3, 3>(9,  0) = DrP_DPst*DXst_DXsb[PIdx][VIdx];
+                Dr_DVsb.block<3, 3>(12, 0) = DrV_DVst*DXst_DXsb[VIdx][VIdx];
+                Dr_DVsb.block<3, 3>(15, 0) = DrA_DAst*DXst_DXsb[AIdx][VIdx];
                 Dr_DVsb = sqrtW*Dr_DVsb;
             }
 
@@ -371,9 +373,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DAsb(jacobians[idx]);
                 Dr_DAsb.setZero();
-                Dr_DAsb.block<3, 3>(9,  0) = DrP_DPft*DXst_DXsb[PIdx][AIdx];
-                Dr_DAsb.block<3, 3>(12, 0) = DrV_DVft*DXst_DXsb[VIdx][AIdx];
-                Dr_DAsb.block<3, 3>(15, 0) = DrA_DAft*DXst_DXsb[AIdx][AIdx];
+                Dr_DAsb.block<3, 3>(9,  0) = DrP_DPst*DXst_DXsb[PIdx][AIdx];
+                Dr_DAsb.block<3, 3>(12, 0) = DrV_DVst*DXst_DXsb[VIdx][AIdx];
+                Dr_DAsb.block<3, 3>(15, 0) = DrA_DAst*DXst_DXsb[AIdx][AIdx];
                 Dr_DAsb = sqrtW*Dr_DAsb;
             }
         }
@@ -418,9 +420,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DRfb(jacobians[idx]);
                 Dr_DRfb.setZero();
-                Dr_DRfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfa[PIdx][PIdx];
-                Dr_DRfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfa[VIdx][PIdx];
-                Dr_DRfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfa[AIdx][PIdx];
+                Dr_DRfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfb[PIdx][PIdx];
+                Dr_DRfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfb[VIdx][PIdx];
+                Dr_DRfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfb[AIdx][PIdx];
                 Dr_DRfb = sqrtW*Dr_DRfb;
             }
 
@@ -429,9 +431,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DVfb(jacobians[idx]);
                 Dr_DVfb.setZero();
-                Dr_DVfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfa[PIdx][VIdx];
-                Dr_DVfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfa[VIdx][VIdx];
-                Dr_DVfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfa[AIdx][VIdx];
+                Dr_DVfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfb[PIdx][VIdx];
+                Dr_DVfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfb[VIdx][VIdx];
+                Dr_DVfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfb[AIdx][VIdx];
                 Dr_DVfb = sqrtW*Dr_DVfb;
             }
 
@@ -440,9 +442,9 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, 18, 3, Eigen::RowMajor>> Dr_DAfb(jacobians[idx]);
                 Dr_DAfb.setZero();
-                Dr_DAfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfa[PIdx][AIdx];
-                Dr_DAfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfa[VIdx][AIdx];
-                Dr_DAfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfa[AIdx][AIdx];
+                Dr_DAfb.block<3, 3>(9,  0) = DrP_DPft*DXft_DXfb[PIdx][AIdx];
+                Dr_DAfb.block<3, 3>(12, 0) = DrV_DVft*DXft_DXfb[VIdx][AIdx];
+                Dr_DAfb.block<3, 3>(15, 0) = DrA_DAft*DXft_DXfb[AIdx][AIdx];
                 Dr_DAfb = sqrtW*Dr_DAfb;
             }
         }
