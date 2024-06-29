@@ -6,6 +6,16 @@
 
 #include <ceres/local_parameterization.h>   // For the local parameterization
 
+// #define KNRM  "\x1B[0m"
+// #define KRED  "\x1B[31m"
+// #define KGRN  "\x1B[32m"
+// #define KYEL  "\x1B[33m"
+// #define KBLU  "\x1B[34m"
+// #define KMAG  "\x1B[35m"
+// #define KCYN  "\x1B[36m"
+// #define KWHT  "\x1B[37m"
+// #define RESET "\033[0m"
+
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
 typedef Vector3d Vec3;
@@ -835,9 +845,9 @@ public:
 
     // Constructor
     GaussianProcess(double dt_)
-        : dt(dt_), gpm(dt_) {};
+        : dt(dt_), gpm(GPMixer(dt_)) {};
 
-    double getMinTime()
+    double getMinTime() const
     {
         return t0;
     }
@@ -857,7 +867,7 @@ public:
         return t0 + kidx*dt;
     }
 
-    double getDt()
+    double getDt() const
     {
         return dt;
     }
@@ -885,16 +895,25 @@ public:
         int ub = u+1;
 
         if (ub >= R.size() && fabs(1.0 - s) < 1e-5)
+        {
+            // printf(KYEL "Boundary issue: ub: %d, Rsz: %d, s: %f, 1-s: %f\n" RESET, ub, R.size(), s, fabs(1.0 - s));
             return GPState(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
+        }
 
         // Extract the states of the two adjacent knots
         GPState Xa = GPState(t0 + ua*dt, R[ua], O[ua], S[ua], P[ua], V[ua], A[ua]);
         if (fabs(s) < 1e-5)
+        {
+            // printf(KYEL "Boundary issue: ub: %d, Rsz: %d, s: %f, 1-s: %f\n" RESET, ub, R.size(), s, fabs(1.0 - s));
             return Xa;
+        }
 
         GPState Xb = GPState(t0 + ub*dt, R[ub], O[ub], S[ua], P[ub], V[ub], A[ub]);
         if (fabs(1.0 - s) < 1e-5)
+        {
+            // printf(KYEL "Boundary issue: ub: %d, Rsz: %d, s: %f, 1-s: %f\n" RESET, ub, R.size(), s, fabs(1.0 - s));
             return Xb;
+        }
 
         SO3d Rab = Xa.R.inverse()*Xb.R;
 
@@ -927,7 +946,7 @@ public:
         // Assign the interpolated state
         SO3d Rt = Xa.R*SO3d::exp(Thet);
         Vec3 Ot = gpm.Jr(Thet)*Thedott;
-        Vec3 St = gpm.Jr(Thet)*Theddott + gpm.DJrXV_DX(Thet, Thedott)*Theddott;
+        Vec3 St = gpm.Jr(Thet)*Theddott + gpm.DJrXV_DX(Thet, Thedott)*Thedott;
         Vec3 Pt = pvat.block<3, 1>(0, 0);
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
@@ -1067,12 +1086,17 @@ public:
     // Copy constructor
     GaussianProcess &operator=(const GaussianProcess &GPother)
     {
+        this->t0 = GPother.getMinTime();
+        this->dt = GPother.getDt();
+        this->gpm = GPMixer(this->dt);
+
         this->R = GPother.R;
         this->O = GPother.O;
         this->S = GPother.S;
         this->P = GPother.P;
         this->V = GPother.V;
-        this->A = GPother.A;        
+        this->A = GPother.A;
+
         return *this;
     }
 };

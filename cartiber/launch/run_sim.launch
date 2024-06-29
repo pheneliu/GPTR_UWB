@@ -71,8 +71,8 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="Nsample"        value="1200"   />
-        <param name="Nseg"           value="1"      />
+        <param name="Nsample"        value="5"   />
+        <param name="Nseg"           value="3"      />
         <param name="t_shift"        value="0.0"    />
 
     </node>

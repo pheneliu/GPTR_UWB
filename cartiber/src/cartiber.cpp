@@ -1184,12 +1184,18 @@ int main(int argc, char **argv)
             int Nsample = 1000; nh_ptr->getParam("Nsample", Nsample);
             CloudPosePtr posesample0(new CloudPose()); posesample0->resize(Nsample);
             CloudPosePtr posesamplen(new CloudPose()); posesamplen->resize(Nsample);
-            #pragma omp parallel for num_threads(MAX_THREADS)
+            // #pragma omp parallel for num_threads(MAX_THREADS)
             for (int pidx = 0; pidx < Nsample; pidx++)
             {
                 double ts = tmin + pidx*(tmax - tmin)/Nsample;
                 posesample0->points[pidx] = myTf(traj0->pose(ts)).Pose6D(ts);
                 posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
+
+                GPState gpstate = traj0->getStateAt(ts);
+                printf("Tsample %.3f. Pos: %f, %f, %f. Vel: %f, %f, %f. Acc: %f, %f, %f\n",
+                        gpstate.t,
+                        gpstate.P.x(), gpstate.P.y(), gpstate.P.z(),
+                        gpstate.V.x(), gpstate.V.y(), gpstate.V.z());
             }
 
             Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");
