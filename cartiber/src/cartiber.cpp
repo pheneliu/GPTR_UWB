@@ -398,15 +398,16 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     // Final cost
     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
 
-    printf("Optimization done: Iter: %d. Cost: %f -> %f\n",
+    printf("Optimization done: Iter: %d. Factors: %d. Cost: %f -> %f\n",
             summary.iterations.size(),
-            summary.initial_cost, summary.final_cost);
+            res_ids_pose.size(),
+            summary.initial_cost,
+            summary.final_cost);
 
     myTf<double> T_L0_Li(rot.unit_quaternion(), pos);
-
-    // Delete the created memories
-    // delete rot;
-    // delete pos;
+    printf("T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n",
+            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll());
 
     return T_L0_Li;
 }
@@ -438,8 +439,12 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         problem.AddParameterBlock(trajx->getKnotAcc(kidx).data(), 3);
 
         // Fix the pose
-        // problem.SetParameterBlockConstant(trajx->getKnotSO3(kidx).data());
-        // problem.SetParameterBlockConstant(trajx->getKnotPos(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotSO3(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotOmg(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotAlp(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotPos(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotVel(kidx).data());
+        problem.SetParameterBlockConstant(trajx->getKnotAcc(kidx).data());
     }
 
     for (int kidx = 0; kidx < trajy->getNumKnots(); kidx++)
@@ -452,8 +457,12 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         problem.AddParameterBlock(trajy->getKnotAcc(kidx).data(), 3);
 
         // Fix the pose
-        // problem.SetParameterBlockConstant(trajy->getKnotSO3(kidx).data());
-        // problem.SetParameterBlockConstant(trajy->getKnotPos(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotSO3(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotOmg(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotAlp(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotPos(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotVel(kidx).data());
+        problem.SetParameterBlockConstant(trajy->getKnotAcc(kidx).data());
     }
 
     SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
@@ -653,6 +662,7 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     printf("T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n",
             T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
             T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll());
+
     return T_L0_Li;
 }
 
@@ -1063,116 +1073,6 @@ int main(int argc, char **argv)
     for(int lidx = 0; lidx < Nlidar; lidx++)
         findtrajkf[lidx].join();
 
-    // findtrajkf.clear();
-    // gpkflo.clear();
-
-    // // Merge the time stamps
-    // double tmincut = cloudstamp.front().front().toSec();
-    // double tmaxcut = cloudstamp.front().back().toSec();
-    // deque<double> tsample;
-    // for(auto &stamps : cloudstamp)
-    // {
-    //     tmincut = max(tmincut, stamps.front().toSec());
-    //     tmaxcut = min(tmaxcut, stamps.back().toSec());
-
-    //     for(auto &stamp : stamps)
-    //         tsample.push_back(stamp.toSec());
-    // }
-    // // Sort the sampling time:
-    // std::sort(tsample.begin(), tsample.end());
-    // // Pop the ones outside of tmincut and tmaxcut
-    // while(tsample.size() != 0)
-    //     if (tsample.front() <= tmincut)
-    //         tsample.pop_front();
-    //     else
-    //         break;
-
-    // while(tsample.size() != 0)
-    //     if (tsample.back() >= tmaxcut)
-    //         tsample.pop_back();
-    //     else
-    //         break;
-
-    // printf("Sample time: %f -> %f. %f, %f, %f, %f\n",
-    //         tsample.front(), tsample.back(),
-    //         cloudstamp.front().front().toSec(), cloudstamp.front().back().toSec(),
-    //         cloudstamp.back().front().toSec(), cloudstamp.back().back().toSec());
-
-    // // Now got all trajectories, fit a spline to these trajectories and sample them
-    // vector<string> report(Nlidar);
-    // vector<GaussianProcessPtr> traj(Nlidar);
-    // vector<CloudPosePtr> poseSampled(Nlidar);
-    // for(int lidx = 0; lidx < Nlidar; lidx++)
-    // {
-    //     traj[lidx] = GaussianProcessPtr(new GaussianProcess(deltaT));
-    //     traj[lidx]->setStartTime(clouds[lidx].front()->points.front().t);
-    //     traj[lidx]->extendKnotsTo(clouds[lidx].back()->points.back().t);
-        
-    //     int Ncloud = clouds[lidx].size();
-    //     vector<double> ts(Ncloud);
-    //     MatrixXd pos(Ncloud, 3);
-    //     MatrixXd rot(Ncloud, 4);
-    //     vector<double> wp(Ncloud, 1);
-    //     vector<double> wr(Ncloud, 1);
-    //     double loss_thread = 1.0;
-
-    //     #pragma omp parallel for num_threads(MAX_THREADS)
-    //     for(int cidx = 0; cidx < Ncloud; cidx++)
-    //     {
-    //         ts[cidx] = clouds[lidx][cidx]->points.back().t;
-    //         pos.block<1, 3>(cidx, 0) << posePrior[lidx]->points[cidx].x,  posePrior[lidx]->points[cidx].y,  posePrior[lidx]->points[cidx].z;
-    //         rot.block<1, 4>(cidx, 0) << posePrior[lidx]->points[cidx].qx, posePrior[lidx]->points[cidx].qy, posePrior[lidx]->points[cidx].qz, posePrior[lidx]->points[cidx].qw;
-    //     }
-        
-    //     // Fit the spline
-    //     report[lidx] = FitGP(traj[lidx], ts, pos, rot, wp, wr, loss_thread);
-
-    //     for(int kidx = 0; kidx < traj[lidx]->getNumKnots(); kidx++)
-    //     {
-    //         auto X = traj[lidx]->getKnot(kidx);
-    //         myTf T(X.R.unit_quaternion(), X.P);
-    //         printf("LIDX %d. Knot %3d. Pos: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. "
-    //                "YPR: %6.3f, %6.3f, %6.3f. OMG: %6.3f, %6.3f, %6.3f.\n",
-    //                lidx, kidx,
-    //                X.P.x(), X.P.y(), X.P.z(), X.V.x(), X.V.y(), X.V.z(), X.A.x(), X.A.y(), X.A.z(),
-    //                T.yaw(), T.pitch(), T.roll(), X.O.x(), X.O.y(), X.O.z());
-    //     }
-
-    //     // Sample the spline by the synchronized sampling time
-    //     poseSampled[lidx] = CloudPosePtr(new CloudPose());
-    //     for(int tidx = 0; tidx < tsample.size() - 1; tidx++)
-    //     {
-    //         double t1 = tsample[tidx];
-    //         double t2 = (tsample[tidx] + tsample[tidx + 1])/2;
-
-    //         poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t1)).Pose6D(t1));
-    //         poseSampled[lidx]->points.push_back(myTf(traj[lidx]->pose(t2)).Pose6D(t2));
-    //     }
-    // }
-
-    // // Export the sampling time for checking
-    // for(int lidx = 0; lidx < Nlidar; lidx++)
-    // {
-    //     poseSampled[lidx]->width = 1;
-    //     poseSampled[lidx]->height = poseSampled[lidx]->size();
-    //     printf("LIDX %d. WIDTH %d. HEIGHT: %d. Size: %d. %s\n",
-    //             lidx, poseSampled[lidx]->width, poseSampled[lidx]->height, poseSampled[lidx]->size(), report[lidx].c_str());
-    //     pcl::io::savePCDFileASCII (myprintf("/home/tmn/ros_ws/dev_ws/src/cartiber/log/sampled_%d.pcd", lidx), *poseSampled[lidx]);
-    // }
-    
-    // // Optimize the extrinsics for initial condition
-    // vector<SE3d> T_L0_Li(Nlidar, SE3d());
-    // for(int lidx = 1; lidx < Nlidar; lidx++)
-    // {
-    //     myTf tf_L0_L = optimizeExtrinsics(poseSampled[0], poseSampled[lidx]);
-    //     printf("T_L0_L%d: XYZ: %f, %f, %f, YPR: %f, %f, %f\n",
-    //             lidx, tf_L0_L.pos(0), tf_L0_L.pos(1),  tf_L0_L.pos(2),
-    //                   tf_L0_L.yaw(),  tf_L0_L.pitch(), tf_L0_L.roll());
-        
-    //     // Import the estimte
-    //     T_L0_Li[lidx] = tf_L0_L.getSE3();
-    // }
-
     // Split the pointcloud by time.
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
     for(int lidx = 1; lidx < Nlidar; lidx++)
@@ -1207,10 +1107,45 @@ int main(int argc, char **argv)
         thr.join();
 
     // Finish
-    printf(KGRN "All finished.\n" RESET);
+    printf(KGRN "All GPMPLO processes finished.\n" RESET);
+
+    // Create the pose sampling publisher
+    vector<ros::Publisher> poseSamplePub(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
 
     // Optimize the extrinics
-    optimizeExtrinsics(gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj());
+    for(int n = 1; n < Nlidar; n++)
+    {
+        GaussianProcessPtr traj0 = gpmaplo[0]->GetTraj();
+        GaussianProcessPtr trajn = gpmaplo[n]->GetTraj();
+
+        // Run the inter traj optimization
+        optimizeExtrinsics(traj0, trajn);
+
+        // Sample the trajectory
+        double tmin = max(traj0->getMinTime(), trajn->getMinTime());
+        double tmax = min(traj0->getMaxTime(), trajn->getMaxTime());
+
+        // Sample the trajectories:
+        printf("Sampling the trajectories %d, %d\n", 0, n);
+        int Nsample = 1000; nh_ptr->getParam("Nsample", Nsample);
+        CloudPosePtr posesample0(new CloudPose()); posesample0->resize(Nsample);
+        CloudPosePtr posesamplen(new CloudPose()); posesamplen->resize(Nsample);
+        #pragma omp parallel for num_threads(MAX_THREADS)
+        for (int pidx = 0; pidx < Nsample; pidx++)
+        {
+            double ts = tmin + pidx*(tmax - tmin)/Nsample;
+            posesample0->points[pidx] = myTf(traj0->pose(ts)).Pose6D(ts);
+            posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
+        }
+
+        Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");
+        Util::publishCloud(poseSamplePub[n], *posesamplen, ros::Time::now(), "world");
+
+        printf("Ooptimizing the extrinsics.\n");
+        optimizeExtrinsics(posesample0, posesamplen);
+    }
 
     // Loop in waiting
     ros::Rate rate(1);
