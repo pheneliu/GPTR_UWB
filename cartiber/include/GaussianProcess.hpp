@@ -57,10 +57,9 @@ public:
     ///@brief Local size
     virtual int LocalSize() const { return Groupd::DoF; }
 };
+typedef GPSO3LocalParameterization<SO3d> GPSO3dLocalParameterization;
 
-typedef GPSO3LocalParameterization<Sophus::SO3d> GPSO3dLocalParameterization;
-
-// Define of the states for convenience in initialization and copying
+// Define the states for convenience in initialization and copying
 #define STATE_DIM 18
 template <class T = double>
 class GPState
@@ -155,7 +154,7 @@ public:
     }
 };
 
-// Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, Jr, Hr, Hprimer ...
+// Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, J_r, H_r, Hprime_r ...
 class GPMixer
 {
 private:
@@ -810,7 +809,7 @@ public:
     }
 };
 
-// Managing control points: craation, extension, queries, ...
+// Managing control points: cration, extension, queries, ...
 class GaussianProcess
 {
 private:
@@ -1077,5 +1076,5 @@ public:
         return *this;
     }
 };
-
+// Define the shared pointer
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
