@@ -38,7 +38,7 @@
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.04357"/>
-        <param name="WINDOW_SIZE"    value="3"     />
+        <param name="WINDOW_SIZE"    value="3"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="0.0"    />
@@ -71,7 +71,7 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="Nsample"        value="8000"   />
+        <param name="Nsample"        value="1200"   />
 
     </node>
 

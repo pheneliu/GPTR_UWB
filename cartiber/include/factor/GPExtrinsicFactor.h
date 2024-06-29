@@ -42,7 +42,7 @@ public:
         
         // // Find the square root info
         sqrtW = Matrix<double, 18, 18>::Identity(18, 18);
-        // sqrtW.block<3, 3>(12, 12).setZero();
+        // sqrtW.block<3, 3>(9, 9) = Vector3d(100, 100, 100).asDiagonal();
         // sqrtW.block<3, 3>(15, 15).setZero();
         // sqrtW = Eigen::LLT<Matrix<double, 18, 18>>(Info.inverse()).matrixL().transpose();
     }

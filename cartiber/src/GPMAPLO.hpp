@@ -292,7 +292,7 @@ public:
             // Step 0: Poll and Extract the cloud segment -------------------------------------------------------------
             
             // Exit this thread if no data has been sent for more than 5 seconds
-            if(timeout > 0 && ros::Time::now().toSec() - timeout > 5.0)
+            if(timeout > 0 && ros::Time::now().toSec() - timeout > 2.0)
             {
                 printf(KGRN "GPMAPLO %d completed.\n" RESET, LIDX);
                 break;

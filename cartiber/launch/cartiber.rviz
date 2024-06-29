@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar01
+        - /Lidar01/SplineSample01
         - /Lidar11
         - /Lidar11/SplineSample11
       Splitter Ratio: 0.6352941393852234
@@ -215,8 +216,8 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.014999999664723873
-          Style: Boxes
+          Size (m): 0.029999999329447746
+          Style: Spheres
           Topic: /lidar_0/pose_sampled
           Unreliable: false
           Use Fixed Frame: true
@@ -415,8 +416,8 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.014999999664723873
-          Style: Boxes
+          Size (m): 0.029999999329447746
+          Style: Spheres
           Topic: /lidar_1/pose_sampled
           Unreliable: false
           Use Fixed Frame: true
@@ -508,7 +509,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 4.346014022827148
+      Distance: 1.253968358039856
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -516,17 +517,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.9588718414306641
-        Y: -0.6996194124221802
-        Z: -1.2338014130364172e-06
+        X: 1.6076327562332153
+        Y: 0.9427711963653564
+        Z: -1.3530107025871985e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4447961151599884
+      Pitch: 0.5047972798347473
       Target Frame: body
-      Yaw: 5.555778980255127
+      Yaw: 3.3907370567321777
     Saved: ~
 Window Geometry:
   Displays:
