@@ -467,8 +467,8 @@ public:
                 myprintf("%sGPMAP%dLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
                          "Tprop: %2.0f. Tslv: %2.0f. Taftop: %2.0f. Tlp: %3.0f.\n"
                          "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
-                         "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
-                         "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %9.3f.\n"
+                         "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
+                         "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
                          "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
                          "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
                          RESET,

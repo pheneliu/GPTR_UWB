@@ -82,6 +82,10 @@ ikdtreePtr ikdtPM;
 double UW_NOISE = 10.0;
 double UV_NOISE = 10.0;
 
+// Number of poses per knot in the extrinsic optimization
+int Nseg = 1;
+double t_shift = 0.0;
+
 // Mutex for the node handle
 mutex nh_mtx;
 
@@ -423,7 +427,7 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
 
     printf(KCYN
-           "Pose-Only Extrinsic Opt: Iter: %d. Time: %f.\n"
+           "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
            "Factor: Cross: %d.\n"
            "J0: %12.3f. Xtrs: %9.3f.\n"
            "Jk: %12.3f. Xtrs: %9.3f.\n"
@@ -561,8 +565,6 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         res_ids_mp2k.push_back(res_block);
     }
 
-    int Nseg = 1;
-
     // Add the extrinsic factors
     double cost_xtrinsic_init = -1;
     double cost_xtrinsic_final = -1;
@@ -572,7 +574,7 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         for(int i = 0; i < Nseg; i++)
         {
             // Get the knot time
-            double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + 0*trajx->getDt()/Nseg/2;
+            double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + t_shift;
 
             // Skip if time is outside the range of the other trajectory
             if (!trajy->TimeInInterval(t))
@@ -622,60 +624,60 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         }
     }
 
-    for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
-    {
-        for(int i = 0; i < Nseg; i++)
-        {
-            // Get the knot time
-            double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + 0*trajx->getDt()/Nseg/2;
+    // for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
+    // {
+    //     for(int i = 0; i < Nseg; i++)
+    //     {
+    //         // Get the knot time
+    //         double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + t_shift;
 
-            // Skip if time is outside the range of the other trajectory
-            if (!trajx->TimeInInterval(t))
-                continue;
+    //         // Skip if time is outside the range of the other trajectory
+    //         if (!trajx->TimeInInterval(t))
+    //             continue;
 
-            pair<int, double> uss, usf;
-            uss = trajy->computeTimeIndex(t);
-            usf = trajx->computeTimeIndex(t);
+    //         pair<int, double> uss, usf;
+    //         uss = trajy->computeTimeIndex(t);
+    //         usf = trajx->computeTimeIndex(t);
 
-            int umins = uss.first;
-            int uminf = usf.first;
-            double ss = uss.second;
-            double sf = usf.second;
+    //         int umins = uss.first;
+    //         int uminf = usf.first;
+    //         double ss = uss.second;
+    //         double sf = usf.second;
 
-            // Add the parameter blocks
-            vector<double *> factor_param_blocks;
-            for (int kidx = umins; kidx < umins + 2; kidx++)
-            {
-                factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
-            }
-            for (int kidx = uminf; kidx < uminf + 2; kidx++)
-            {
-                factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
-            }
-            factor_param_blocks.push_back(R_Lx_Ly.data());
-            factor_param_blocks.push_back(P_Lx_Ly.data());
+    //         // Add the parameter blocks
+    //         vector<double *> factor_param_blocks;
+    //         for (int kidx = umins; kidx < umins + 2; kidx++)
+    //         {
+    //             factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
+    //             factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
+    //             factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
+    //             factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
+    //             factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
+    //             factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
+    //         }
+    //         for (int kidx = uminf; kidx < uminf + 2; kidx++)
+    //         {
+    //             factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
+    //             factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
+    //             factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
+    //             factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
+    //             factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
+    //             factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
+    //         }
+    //         factor_param_blocks.push_back(R_Lx_Ly.data());
+    //         factor_param_blocks.push_back(P_Lx_Ly.data());
 
-            // Create the factors
-            double mpSigmaR = 1.0;
-            double mpSigmaP = 1.0;
-            double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), sf, ss);
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            res_ids_xtrinsic.push_back(res_block);
-        }
-    }
+    //         // Create the factors
+    //         double mpSigmaR = 1.0;
+    //         double mpSigmaP = 1.0;
+    //         double mp_loss_thres = -1;
+    //         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    //         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+    //         ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), sf, ss);
+    //         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+    //         res_ids_xtrinsic.push_back(res_block);
+    //     }
+    // }
 
     TicToc tt_slv;
 
@@ -695,10 +697,10 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
 
     printf(KGRN
-           "GaussProc Extrinsic Opt: Iter: %d. Time: %f.\n"
-           "Factor: Cross: %d, MP2K: %d.\n"
-           "J0: %12.3f. Xtrs: %9.3f. MP2k: %9.3f.\n"
-           "Jk: %12.3f. Xtrs: %9.3f. MP2k: %9.3f.\n"
+           "GaussProc Extrinsic Opt: Iter: %d. Time: %.0f.\n"
+           "Factor: MP2K: %d, Cross: %d.\n"
+           "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
+           "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n"
            RESET,
             summary.iterations.size(), tt_slv.GetLastStop(),
@@ -910,6 +912,10 @@ int main(int argc, char **argv)
     nh_ptr->getParam("UW_NOISE", UW_NOISE);
     nh_ptr->getParam("UV_NOISE", UV_NOISE);
     printf("Proccess noise: %.3f, %.3f\n", UW_NOISE, UV_NOISE);
+
+    // Find the Nseg
+    nh_ptr->getParam("Nseg", Nseg);
+    nh_ptr->getParam("t_shift", t_shift);
 
     // Determine the number of lidar
     int Nlidar = pc_topics.size();
@@ -1160,7 +1166,7 @@ int main(int argc, char **argv)
         poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
 
     // Loop in waiting
-    ros::Rate rate(1);
+    ros::Rate rate(0.2);
     while(ros::ok())
     {
         // Optimize the extrinics
@@ -1192,6 +1198,7 @@ int main(int argc, char **argv)
             // Run the inter traj optimization
             optimizeExtrinsics(posesample0, posesamplen);
             optimizeExtrinsics(traj0, trajn);
+            cout << endl;
         }
 
         rate.sleep();
