@@ -5,10 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar01
-        - /Lidar01/SplineSample01
-        - /Lidar01/SWOpt01
         - /Lidar11
-        - /Lidar11/SplineSample11
       Splitter Ratio: 0.6352941393852234
     Tree Height: 746
   - Class: rviz/Selection
@@ -235,7 +232,7 @@ Visualization Manager:
           Class: rviz/PointCloud2
           Color: 11; 171; 255
           Color Transformer: FlatColor
-          Decay Time: 0
+          Decay Time: 600
           Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255

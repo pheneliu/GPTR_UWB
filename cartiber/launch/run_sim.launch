@@ -4,19 +4,19 @@
 
     <arg name="autorun" default="false" />
 
-    <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="bash -c 'sleep 3; $0 $@' ">
+    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+          launch-prefix="bash -c 'sleep 3; $0 $@' "> -->
     <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
           launch-prefix="valgrind"> -->
-    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="gdb -ex run - -args"> -->
+    <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+          launch-prefix="gdb -ex run - -args">
 
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
 
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="100"/>
+        <param name="MAX_CLOUDS"     value="150"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
@@ -24,6 +24,11 @@
         <param name="xyzypr_W_L0"    value="[
                                                 0, 0, 0.7,  045, 45, 0,
                                                 0, 0, 0.5, -135, 00, 0
+                                            ]"                         type="yaml"/>
+        <!-- Groundtruth for evaluation-->
+        <param name="xtrns_gndtr"    value="[
+                                                0, 0, 0, 0, 0, 0,
+                                               -0.1767767, 0, -0.53033009, 180, 45, 0
                                             ]"                         type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
@@ -71,8 +76,8 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="Nsample"        value="5"   />
-        <param name="Nseg"           value="3"      />
+        <param name="Nsample"        value="1000"   />
+        <param name="Nseg"           value="8"      />
         <param name="t_shift"        value="0.0"    />
 
     </node>

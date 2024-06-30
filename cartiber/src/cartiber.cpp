@@ -32,6 +32,7 @@
 // Factor for optimization
 // #include "factor/PoseAnalyticFactor.h"
 #include "factor/ExtrinsicFactor.h"
+#include "factor/FullExtrinsicFactor.h"
 #include "factor/GPExtrinsicFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
@@ -86,6 +87,8 @@ double UV_NOISE = 10.0;
 // Number of poses per knot in the extrinsic optimization
 int Nseg = 1;
 double t_shift = 0.0;
+
+vector<myTf<double>> T_B_Li_gndtr;
 
 // Mutex for the node handle
 mutex nh_mtx;
@@ -369,7 +372,7 @@ myTf<double> umeyamaAlign(const CloudPosePtr &x_, const CloudPosePtr &y_)
     return umeyamaAlign(x, y);
 }
 
-myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &trajy)
+myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &trajy, int lidx=-1)
 {
     // Trajectory should have 1:1 correspondence
     ROS_ASSERT(trajx->size() == trajy->size());
@@ -426,25 +429,115 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
     tt_slv.Toc();
 
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
 
     printf(KCYN
            "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
            "Factor: Cross: %d.\n"
            "J0: %12.3f. Xtrs: %9.3f.\n"
            "Jk: %12.3f. Xtrs: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n"
+           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
            RESET,
             summary.iterations.size(), tt_slv.GetLastStop(),
             res_ids_pose.size(),
             summary.initial_cost, cost_pose_init, 
             summary.final_cost, cost_pose_final,
             T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll());
+            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
     return T_L0_Li;
 }
 
-myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianProcessPtr &trajy)
+myTf<double> optimizeExtrinsics(const vector<GPState<double>> &trajx, const vector<GPState<double>> &trajy, int lidx=-1)
+{
+    // Trajectory should have 1:1 correspondence
+    ROS_ASSERT(trajx.size() == trajy.size());
+    int Nsample = trajx.size();
+
+    // Ceres problem
+    ceres::Problem problem;
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+
+    // Set up the ceres problem
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.num_threads = MAX_THREADS;
+    options.max_num_iterations = 50;
+
+    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
+
+    SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+    problem.AddParameterBlock(R_Lx_Ly.data(), 4, local_parameterization);
+
+    Vector3d P_Lx_Ly(0, 0, 0);
+    problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+    
+    vector<double *> factor_param_blocks;
+    factor_param_blocks.emplace_back(R_Lx_Ly.data());
+    factor_param_blocks.emplace_back(P_Lx_Ly.data());
+
+    double cost_pose_init;
+    double cost_pose_final;
+    vector<ceres::internal::ResidualBlock *> res_ids_pose;
+    for(int sidx = 0; sidx < Nsample; sidx++)
+    {
+        GPState Xi = trajx[sidx];
+        GPState Xj = trajy[sidx];
+
+        // printf("Xi: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
+        //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
+        //         Xi.P.x(), Xi.P.y(), Xi.P.z(),
+        //         Xi.V.x(), Xi.V.y(), Xi.V.z(),
+        //         Xi.A.x(), Xi.A.y(), Xi.A.z());
+
+        // printf("Xj: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
+        //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
+        //         Xj.P.x(), Xj.P.y(), Xj.P.z(),
+        //         Xj.V.x(), Xj.V.y(), Xj.V.z(),
+        //         Xj.A.x(), Xj.A.y(), Xj.A.z());
+                
+        ceres::CostFunction *cost_function
+            = new FullExtrinsicFactor(Xi.R, Xi.O, Xi.S, Xi.P, Xi.V, Xi.A,
+                                      Xj.R, Xj.O, Xj.S, Xj.P, Xj.V, Xj.A, 1.0, 1.0);
+        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+        res_ids_pose.push_back(res_block);
+    }
+
+    TicToc tt_slv;
+
+    // Init cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+
+    // Solve the optimization problem
+    ceres::Solve(options, &problem, &summary);
+
+    // Final cost
+    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+    
+    tt_slv.Toc();
+
+    myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
+
+    printf(KMAG
+           "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
+           "Factor: Cross: %d.\n"
+           "J0: %12.3f. Xtrs: %9.3f.\n"
+           "Jk: %12.3f. Xtrs: %9.3f.\n"
+           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
+           RESET,
+            summary.iterations.size(), tt_slv.GetLastStop(),
+            res_ids_pose.size(),
+            summary.initial_cost, cost_pose_init, 
+            summary.final_cost, cost_pose_final,
+            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+
+    return T_L0_Li;
+}
+
+myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianProcessPtr &trajy, int lidx=-1)
 {
     // Ceres problem
     ceres::Problem problem;
@@ -533,11 +626,11 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
         // Create the factors
         double mpSigmaR = 1.0;
         double mpSigmaP = 1.0;
-        double mp_loss_thres = -1;
+        // double mp_loss_thres = -1;
         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-        ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+        ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
         ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajx->getDt());
-        auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
         res_ids_mp2k.push_back(res_block);
     }
 
@@ -696,20 +789,21 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     tt_slv.Toc();
 
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
 
     printf(KGRN
            "GaussProc Extrinsic Opt: Iter: %d. Time: %.0f.\n"
            "Factor: MP2K: %d, Cross: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f\n"
+           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
            RESET,
             summary.iterations.size(), tt_slv.GetLastStop(),
             res_ids_mp2k.size(), res_ids_xtrinsic.size(),
             summary.initial_cost, cost_mp2k_init, cost_xtrinsic_init,
             summary.final_cost, cost_mp2k_final, cost_xtrinsic_final,
             T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll());
+            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
     return T_L0_Li;
 }
@@ -1030,6 +1124,35 @@ int main(int argc, char **argv)
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
 
+    T_B_Li_gndtr.resize(Nlidar);
+    vector<double> xtrns_gndtr(Nlidar*6, 0.0);
+    if( nh_ptr->getParam("xtrns_gndtr", xtrns_gndtr) )
+    {
+        if (xtrns_gndtr.size() < Nlidar*6)
+        {
+            printf(KYEL "xtrns_gndtr missing values. Setting all to zeros \n" RESET);
+            xtrns_gndtr = vector<double>(Nlidar*6, 0.0);
+        }
+        else
+        {
+            printf("xtrns_gndtr found: \n");
+            for(int i = 0; i < Nlidar; i++)
+            {
+                T_B_Li_gndtr[i] = myTf(Util::YPR2Quat(xtrns_gndtr[i*6 + 3], xtrns_gndtr[i*6 + 4], xtrns_gndtr[i*6 + 5]),
+                                             Vector3d(xtrns_gndtr[i*6 + 0], xtrns_gndtr[i*6 + 1], xtrns_gndtr[i*6 + 2]));
+
+                for(int j = 0; j < 6; j++)
+                    printf("%f, ", xtrns_gndtr[i*6 + j]);
+                cout << endl;
+            }
+        }
+    }
+    else
+    {
+        printf("Failed to get xyzypr_W_L0. Setting all to zeros\n");
+        xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
+    }
+
     // Load the priormap
     CloudXYZIPtr priormap(new CloudXYZI()); pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
     priormap = uniformDownsample<PointXYZI>(priormap, pmap_leaf_size);
@@ -1270,6 +1393,8 @@ int main(int argc, char **argv)
             int Nsample = 1000; nh_ptr->getParam("Nsample", Nsample);
             CloudPosePtr posesample0(new CloudPose()); posesample0->resize(Nsample);
             CloudPosePtr posesamplen(new CloudPose()); posesamplen->resize(Nsample);
+            vector<GPState<double>> gpstate0(Nsample);
+            vector<GPState<double>> gpstaten(Nsample);
             // #pragma omp parallel for num_threads(MAX_THREADS)
             for (int pidx = 0; pidx < Nsample; pidx++)
             {
@@ -1277,15 +1402,17 @@ int main(int argc, char **argv)
                 posesample0->points[pidx] = myTf(traj0->pose(ts)).Pose6D(ts);
                 posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
 
-                GPState gpstate = traj0->getStateAt(ts);
+                gpstate0[pidx] = traj0->getStateAt(ts);
+                gpstaten[pidx] = trajn->getStateAt(ts);
             }
 
             Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");
             Util::publishCloud(poseSamplePub[n], *posesamplen, ros::Time::now(), "world");
 
             // Run the inter traj optimization
-            optimizeExtrinsics(posesample0, posesamplen);
-            optimizeExtrinsics(traj0, trajn);
+            optimizeExtrinsics(posesample0, posesamplen, n);
+            optimizeExtrinsics(gpstate0, gpstaten, n);
+            optimizeExtrinsics(traj0, trajn, n);
             cout << endl;
         }
 
