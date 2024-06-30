@@ -493,11 +493,12 @@ bool GNSolver::Solve
     EvaluatePriorFactors(traj, swAbsKidx, bprior_sparse, Hprior_sparse, &report.J0prior);
 
     // Build the problem and solve
+    SparseMatrix<double> rsparse = RESIDUAL.sparseView(); rsparse.makeCompressed();
     SparseMatrix<double> Jsparse = JACOBIAN.sparseView(); Jsparse.makeCompressed();
     SparseMatrix<double> Jtp = Jsparse.transpose();
-    SparseMatrix<double> H = Jtp*Jsparse;
-    MatrixXd b = -Jtp*RESIDUAL;
-
+    SparseMatrix<double> b = -Jtp*rsparse;
+    SparseMatrix<double> H =  Jtp*Jsparse;
+    
     // Add the prior factor
     if(Hprior_sparse.rows() > 0 && bprior_sparse.rows() > 0)
     {

@@ -34,6 +34,7 @@
 #include "factor/ExtrinsicFactor.h"
 #include "factor/GPExtrinsicFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
+#include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
 // #include "factor/ExtrinsicPoseFactor.h"
 // #include "factor/GPPoseFactor.h"
 
@@ -870,6 +871,91 @@ void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
     }    
 }
 
+void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
+{
+    ceres::Problem problem;
+    ceres::Solver::Options options;
+    ceres::Solver::Summary summary;
+
+    // Set up the ceres problem
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.num_threads = MAX_THREADS;
+    options.max_num_iterations = 50;
+
+    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+    ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
+
+    // Add params to the problem --------------------------------------------------------------------------------------
+
+    for (int kidx = umin-1; kidx < traj->getNumKnots(); kidx++)
+    {
+        problem.AddParameterBlock(traj->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
+        problem.AddParameterBlock(traj->getKnotOmg(kidx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotAlp(kidx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotPos(kidx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
+    }
+
+    // Add the motion prior factors
+    double cost_mp2k_init = -1;
+    double cost_mp2k_final = -1;
+    vector<ceres::internal::ResidualBlock *> res_ids_mp2k;
+    for (int kidx = umin-1; kidx < traj->getNumKnots() - 1; kidx++)
+    {
+        res_ids_mp2k.clear();
+
+        vector<double *> factor_param_blocks;
+        // Add the parameter blocks
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+        
+        factor_param_blocks.push_back(traj->getKnotSO3(kidx+1).data());
+        factor_param_blocks.push_back(traj->getKnotOmg(kidx+1).data());
+        factor_param_blocks.push_back(traj->getKnotAlp(kidx+1).data());
+        factor_param_blocks.push_back(traj->getKnotPos(kidx+1).data());
+        factor_param_blocks.push_back(traj->getKnotVel(kidx+1).data());
+        factor_param_blocks.push_back(traj->getKnotAcc(kidx+1).data());
+        
+
+        // Create the factors
+        double mpSigmaR = 1.0;
+        double mpSigmaP = 1.0;
+        double mp_loss_thres = -1;
+        // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+        ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
+        auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+        res_ids_mp2k.push_back(res_block);
+
+        // Check the cost
+        Util::ComputeCeresCost(res_ids_mp2k, cost_mp2k_init, problem);
+
+        // Create the factors
+        typedef GPMotionPriorTwoKnotsFactorTMN mp2Factor;
+        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, traj->getDt());
+        // Calculate the residual and jacobian
+        factor.Evaluate(traj->getKnot(kidx), traj->getKnot(kidx + 1));
+        double cost = factor.residual.norm();
+        cost *= cost;
+        cost /= 2.0;
+
+        double costP = factor.residual.block<3, 1>(9,  0).norm();
+        double costV = factor.residual.block<3, 1>(12, 0).norm();
+        double costA = factor.residual.block<3, 1>(15, 0).norm();
+        costP *= costP*0.5;
+        costV *= costV*0.5;
+        costA *= costA*0.5;
+
+        printf("Knot %d -> %d MP2K Cost: %9.3f / %9.3f = %6.3f + %6.3f + %6.3f\n\n",
+                kidx, kidx+1, cost_mp2k_init, cost, costP, costV, costA);
+    }
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "cartiber");
@@ -1192,10 +1278,6 @@ int main(int argc, char **argv)
                 posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
 
                 GPState gpstate = traj0->getStateAt(ts);
-                printf("Tsample %.3f. Pos: %f, %f, %f. Vel: %f, %f, %f. Acc: %f, %f, %f\n",
-                        gpstate.t,
-                        gpstate.P.x(), gpstate.P.y(), gpstate.P.z(),
-                        gpstate.V.x(), gpstate.V.y(), gpstate.V.z());
             }
 
             Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");

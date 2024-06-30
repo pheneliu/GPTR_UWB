@@ -373,7 +373,9 @@ public:
             // Step 3: iterative optimization -------------------------------------------------------------------------
 
             // Sample the state before optimization 
-            GPState Xt0 = traj->getStateAt(TSWEND);
+            GPState Xts0 = traj->getStateAt(tmin);
+            GPState Xte0 = traj->getStateAt(tmax);
+
             vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
 
             int optnum = -1; optnum++;
@@ -432,7 +434,8 @@ public:
                 }
 
                 // Prepare some visualization
-                GPState XtK = traj->getStateAt(TSWEND);
+                GPState XtsK = traj->getStateAt(tmin);
+                GPState XteK = traj->getStateAt(tmax);
 
                 // Sample and publish the slinding window trajectory
                 CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
@@ -469,8 +472,10 @@ public:
                          "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
                          "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
                          "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
-                         "Pos0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
-                         "PosK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+                         "Poss0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+                         "PossK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+                         "Pose0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+                         "PoseK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
                          RESET,
                          gniter == max_gniter ? KGRN : "", LIDX, optnum,
                          gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
@@ -479,8 +484,10 @@ public:
                          gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
                          J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
                          JK, gnreport.JKlidar, gnreport.JKprior, gnreport.JKmp2k,
-                         Xt0.P.x(), Xt0.P.y(), Xt0.P.z(), Xt0.V.x(), Xt0.V.y(), Xt0.V.z(), Xt0.yaw(), Xt0.pitch(), Xt0.roll(),
-                         XtK.P.x(), XtK.P.y(), XtK.P.z(), XtK.V.x(), XtK.V.y(), XtK.V.z(), XtK.yaw(), XtK.pitch(), XtK.roll());
+                         Xts0.P.x(), Xts0.P.y(), Xts0.P.z(), Xts0.V.x(), Xts0.V.y(), Xts0.V.z(), Xts0.A.x(), Xts0.A.y(), Xts0.A.z(), Xts0.yaw(), Xts0.pitch(), Xts0.roll(),
+                         XtsK.P.x(), XtsK.P.y(), XtsK.P.z(), XtsK.V.x(), XtsK.V.y(), XtsK.V.z(), XtsK.A.x(), XtsK.A.y(), XtsK.A.z(), XtsK.yaw(), XtsK.pitch(), XtsK.roll(),
+                         Xte0.P.x(), Xte0.P.y(), Xte0.P.z(), Xte0.V.x(), Xte0.V.y(), Xte0.V.z(), Xte0.A.x(), Xte0.A.y(), Xte0.A.z(), Xte0.yaw(), Xte0.pitch(), Xte0.roll(),
+                         XteK.P.x(), XteK.P.y(), XteK.P.z(), XteK.V.x(), XteK.V.y(), XteK.V.z(), XteK.A.x(), XteK.A.y(), XteK.A.z(), XteK.yaw(), XteK.pitch(), XteK.roll());
             }
 
             // Print the report

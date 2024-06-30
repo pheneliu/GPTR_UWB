@@ -1141,8 +1141,8 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
         // Compare the two jacobians
         VectorXd resdiff = residual_autodiff_ - residual_analytic_;
         MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-        cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-        cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
+        // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
+        // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
         // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
         //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
         printf(KGRN "CIDX: %d. Lidar Jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,

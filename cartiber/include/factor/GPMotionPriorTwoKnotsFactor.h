@@ -46,7 +46,7 @@ public:
                   1.0/08.0*Dtpow[4], 1.0/3.0*Dtpow[3], 1.0/2.0*Dtpow[2],
                   1.0/06.0*Dtpow[3], 1.0/2.0*Dtpow[2], 1.0/1.0*Dtpow[1];
         Info.block<9, 9>(0, 0) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
-        Info.block<9, 9>(9, 9) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
+        Info.block<9, 9>(9, 9) = gpm.kron(Qtilde, Vec3(wP, wP, wP).asDiagonal());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);

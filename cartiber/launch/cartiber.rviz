@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Lidar01
         - /Lidar01/SplineSample01
+        - /Lidar01/SWOpt01
         - /Lidar11
         - /Lidar11/SplineSample11
       Splitter Ratio: 0.6352941393852234
@@ -234,7 +235,7 @@ Visualization Manager:
           Class: rviz/PointCloud2
           Color: 11; 171; 255
           Color Transformer: FlatColor
-          Decay Time: 600
+          Decay Time: 0
           Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
@@ -509,7 +510,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 4.311917304992676
+      Distance: 3.1055550575256348
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -517,17 +518,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.38891369104385376
-        Y: 0.5647261142730713
-        Z: -1.591429281688761e-06
+        X: 1.0202128887176514
+        Y: 0.23520469665527344
+        Z: -1.9490571503411047e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8647972941398621
+      Pitch: 0.4897976517677307
       Target Frame: body
-      Yaw: 1.9107366800308228
+      Yaw: 0.3657369315624237
     Saved: ~
 Window Geometry:
   Displays:
