@@ -609,55 +609,55 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     double cost_mp2k_init = -1;
     double cost_mp2k_final = -1;
     vector<ceres::internal::ResidualBlock *> res_ids_mp2k;
-    for (int kidx = 0; kidx < trajx->getNumKnots() - 1; kidx++)
-    {
-        vector<double *> factor_param_blocks;
-        // Add the parameter blocks
-        for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-        {
-            factor_param_blocks.push_back(trajx->getKnotSO3(knot_idx).data());
-            factor_param_blocks.push_back(trajx->getKnotOmg(knot_idx).data());
-            factor_param_blocks.push_back(trajx->getKnotAlp(knot_idx).data());
-            factor_param_blocks.push_back(trajx->getKnotPos(knot_idx).data());
-            factor_param_blocks.push_back(trajx->getKnotVel(knot_idx).data());
-            factor_param_blocks.push_back(trajx->getKnotAcc(knot_idx).data());
-        }
+    // for (int kidx = 0; kidx < trajx->getNumKnots() - 1; kidx++)
+    // {
+    //     vector<double *> factor_param_blocks;
+    //     // Add the parameter blocks
+    //     for (int idx = kidx; idx < kidx + 2; idx++)
+    //     {
+    //         factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
+    //         factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
+    //         factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
+    //         factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
+    //         factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
+    //         factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
+    //     }
 
-        // Create the factors
-        double mpSigmaR = 1.0;
-        double mpSigmaP = 1.0;
-        // double mp_loss_thres = -1;
-        // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-        ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajx->getDt());
-        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
-        res_ids_mp2k.push_back(res_block);
-    }
+    //     // Create the factors
+    //     double mpSigmaR = 1.0;
+    //     double mpSigmaP = 1.0;
+    //     // double mp_loss_thres = -1;
+    //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    //     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+    //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajx->getDt());
+    //     auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+    //     res_ids_mp2k.push_back(res_block);
+    // }
 
-    for (int kidx = 0; kidx < trajy->getNumKnots() - 1; kidx++)
-    {
-        vector<double *> factor_param_blocks;
-        // Add the parameter blocks
-        for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-        {
-            factor_param_blocks.push_back(trajy->getKnotSO3(knot_idx).data());
-            factor_param_blocks.push_back(trajy->getKnotOmg(knot_idx).data());
-            factor_param_blocks.push_back(trajy->getKnotAlp(knot_idx).data());
-            factor_param_blocks.push_back(trajy->getKnotPos(knot_idx).data());
-            factor_param_blocks.push_back(trajy->getKnotVel(knot_idx).data());
-            factor_param_blocks.push_back(trajy->getKnotAcc(knot_idx).data());
-        }
+    // for (int kidx = 0; kidx < trajy->getNumKnots() - 1; kidx++)
+    // {
+    //     vector<double *> factor_param_blocks;
+    //     // Add the parameter blocks
+    //     for (int idx = kidx; idx < kidx + 2; idx++)
+    //     {
+    //         factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
+    //         factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
+    //         factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
+    //         factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
+    //         factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
+    //         factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
+    //     }
 
-        // Create the factors
-        double mpSigmaR = 1.0;
-        double mpSigmaP = 1.0;
-        double mp_loss_thres = -1;
-        // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-        ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajy->getDt());
-        auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-        res_ids_mp2k.push_back(res_block);
-    }
+    //     // Create the factors
+    //     double mpSigmaR = 1.0;
+    //     double mpSigmaP = 1.0;
+    //     double mp_loss_thres = -1;
+    //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+    //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajy->getDt());
+    //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+    //     res_ids_mp2k.push_back(res_block);
+    // }
 
     // Add the extrinsic factors
     double cost_xtrinsic_init = -1;
@@ -683,25 +683,38 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             double ss = uss.second;
             double sf = usf.second;
 
+            // if(umins >= trajx->getNumKnots() || umins + 1 >= trajx->getNumKnots()
+            //     || uminf >= trajy->getNumKnots() || uminf + 1 >= trajy->getNumKnots())
+            // {
+            //     printf("Wierd time: %f. TrajTime: %f, %f, %f, %f. umins: %d / %d. uminf: %d / %d\n",
+            //             t, trajx->getMinTime(), trajx->getMaxTime(), trajy->getMinTime(), trajy->getMaxTime(),
+            //             umins, trajx->getNumKnots(), uminf, trajy->getNumKnots());
+            //     continue;   
+            // }
+
             // Add the parameter blocks
             vector<double *> factor_param_blocks;
-            for (int kidx = umins; kidx < umins + 2; kidx++)
+            for (int idx = umins; idx < umins + 2; idx++)
             {
-                factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
+                ROS_ASSERT(idx < trajx->getNumKnots());
+                // ROS_ASSERT(Util::SO3IsValid(trajx->getKnotSO3(idx)));
+                factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
+                factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
+                factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
+                factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
+                factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
+                factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
             }
-            for (int kidx = uminf; kidx < uminf + 2; kidx++)
+            for (int idx = uminf; idx < uminf + 2; idx++)
             {
-                factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
+                ROS_ASSERT(idx < trajy->getNumKnots());
+                // ROS_ASSERT(Util::SO3IsValid(trajy->getKnotSO3(idx)));
+                factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
+                factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
+                factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
+                factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
+                factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
+                factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
             }
             factor_param_blocks.push_back(R_Lx_Ly.data());
             factor_param_blocks.push_back(P_Lx_Ly.data());
@@ -1310,28 +1323,28 @@ int main(int argc, char **argv)
     vector<double> timestart(Nlidar);
     getInitPose(clouds, cloudstamp, priormap, timestartup, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
 
-    static vector<ros::Publisher> pppub(Nlidar);
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-        pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
+    // static vector<ros::Publisher> pppub(Nlidar);
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    //     pppub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/poseprior_%d", lidx), 1);
 
-    // Find a preliminary trajectory for each lidar sequence
-    gpkflo = vector<GPKFLOPtr>(Nlidar);
-    vector<thread> findtrajkf;
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        // Creating the trajectory estimator
-        StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
-        gpkflo[lidx] = GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
+    // // Find a preliminary trajectory for each lidar sequence
+    // gpkflo = vector<GPKFLOPtr>(Nlidar);
+    // vector<thread> findtrajkf;
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    // {
+    //     // Creating the trajectory estimator
+    //     StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
+    //     gpkflo[lidx] = GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.1, nh_ptr, nh_mtx));
 
-        // Estimate the trajectory
-        findtrajkf.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
-                                               std::ref(kdTreeMap), std::ref(priormap),
-                                               std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]))));
-    }
+    //     // Estimate the trajectory
+    //     findtrajkf.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
+    //                                            std::ref(kdTreeMap), std::ref(priormap),
+    //                                            std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]))));
+    // }
 
-    // Wait for the trajectory estimate to finish
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-        findtrajkf[lidx].join();
+    // // Wait for the trajectory estimate to finish
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    //     findtrajkf[lidx].join();
 
     // Split the pointcloud by time.
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
@@ -1381,8 +1394,8 @@ int main(int argc, char **argv)
         // Optimize the extrinics
         for(int n = 1; n < Nlidar; n++)
         {
-            GaussianProcessPtr traj0 = gpmaplo[0]->GetTraj();
-            GaussianProcessPtr trajn = gpmaplo[n]->GetTraj();
+            GaussianProcessPtr traj0(new GaussianProcess(deltaT)); *traj0 = *gpmaplo[0]->GetTraj();
+            GaussianProcessPtr trajn(new GaussianProcess(deltaT)); *trajn = *gpmaplo[n]->GetTraj();
 
             // Sample the trajectory
             double tmin = max(traj0->getMinTime(), trajn->getMinTime());

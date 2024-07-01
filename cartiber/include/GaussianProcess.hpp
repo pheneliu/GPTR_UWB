@@ -219,7 +219,10 @@ public:
     // PSI in x(tau) = LAMBDA(tau)x(k-1) + PSI(tau)x*(k)
     MatrixXd PSI(const double dtau, int N) const 
     {
-        return GPCov(dtau, N)*TransMat(dt - dtau, N).transpose()*GPCov(dt, N).inverse();
+        if (dtau < 1e-4)
+            return MatrixXd::Zero(N, N);
+        else
+            return GPCov(dtau, N)*TransMat(dt - dtau, N).transpose()*GPCov(dt, N).inverse();
     }
     
     // PSI in x(tau) = LAMBDA(tau)x(k-1) + PSI(tau)x*(k)
@@ -241,6 +244,9 @@ public:
     template <class T = double>
     static Eigen::Matrix<T, 3, 3> Jr(const Eigen::Matrix<T, 3, 1> &phi)
     {
+        if (phi.norm() < 1e-4)
+            return Eigen::Matrix<T, 3, 3>::Identity() - Sophus::SO3<T>::hat(phi);
+
         Eigen::Matrix<T, 3, 3> Jr;
         Sophus::rightJacobianSO3(phi, Jr);
         return Jr;
@@ -249,6 +255,9 @@ public:
     template <class T = double>
     static Eigen::Matrix<T, 3, 3> JrInv(const Eigen::Matrix<T, 3, 1> &phi)
     {
+        if (phi.norm() < 1e-4)
+            return Eigen::Matrix<T, 3, 3>::Identity() + Sophus::SO3<T>::hat(phi);
+
         Eigen::Matrix<T, 3, 3> JrInv;
         Sophus::rightJacobianInvSO3(phi, JrInv);
         return JrInv;
@@ -605,7 +614,7 @@ public:
         Mat3T LAM_ROS11 = LAM_ROSt.block(0, 0, 3, 3); Mat3T LAM_ROS12 = LAM_ROSt.block(0, 3, 3, 3); Mat3T LAM_ROS13 = LAM_ROSt.block(0, 6, 3, 3);
         Mat3T LAM_ROS21 = LAM_ROSt.block(3, 0, 3, 3); Mat3T LAM_ROS22 = LAM_ROSt.block(3, 3, 3, 3); Mat3T LAM_ROS23 = LAM_ROSt.block(3, 6, 3, 3);
         Mat3T LAM_ROS31 = LAM_ROSt.block(6, 0, 3, 3); Mat3T LAM_ROS32 = LAM_ROSt.block(6, 3, 3, 3); Mat3T LAM_ROS33 = LAM_ROSt.block(6, 6, 3, 3);
-        
+
         Mat3T PSI_ROS11 = PSI_ROSt.block(0, 0, 3, 3); Mat3T PSI_ROS12 = PSI_ROSt.block(0, 3, 3, 3); Mat3T PSI_ROS13 = PSI_ROSt.block(0, 6, 3, 3);
         Mat3T PSI_ROS21 = PSI_ROSt.block(3, 0, 3, 3); Mat3T PSI_ROS22 = PSI_ROSt.block(3, 3, 3, 3); Mat3T PSI_ROS23 = PSI_ROSt.block(3, 6, 3, 3);
         Mat3T PSI_ROS31 = PSI_ROSt.block(6, 0, 3, 3); Mat3T PSI_ROS32 = PSI_ROSt.block(6, 3, 3, 3); Mat3T PSI_ROS33 = PSI_ROSt.block(6, 6, 3, 3);
@@ -619,7 +628,7 @@ public:
         Mat3T PSI_PVA21 = PSI_PVAt.block(3, 0, 3, 3); Mat3T PSI_PVA22 = PSI_PVAt.block(3, 3, 3, 3); Mat3T PSI_PVA23 = PSI_PVAt.block(3, 6, 3, 3);
         Mat3T PSI_PVA31 = PSI_PVAt.block(6, 0, 3, 3); Mat3T PSI_PVA32 = PSI_PVAt.block(6, 3, 3, 3); Mat3T PSI_PVA33 = PSI_PVAt.block(6, 6, 3, 3);
 
-        // Find the relative rotation 
+        // Find the relative rotation
         Sophus::SO3<T> Rab = Xa.R.inverse()*Xb.R;
 
         // Calculate the SO3 knots in relative form
@@ -874,7 +883,7 @@ public:
 
     bool TimeInInterval(double t, double eps=0.0)
     {
-        return (t >= getMinTime() + eps && t <= getMaxTime() - eps);
+        return (t >= getMinTime() + eps && t < getMaxTime() - eps);
     }
 
     pair<int, double> computeTimeIndex(double t)

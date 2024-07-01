@@ -88,7 +88,7 @@ public:
         Vec3 OstxPsf = Ostx*Psf;
         Vec3 SstxPsf = Sstx*Psf;
 
-        Vec3 rR = (Rsf.inverse()*Xst.R.inverse()*Xft.R).log();
+        Vec3 rR = ((Xst.R*Rsf).inverse()*Xft.R).log();
         Vec3 rO = Rsf*Xft.O - Xst.O;
         Vec3 rS = Rsf*Xft.S - Xst.S;
         Vec3 rP = Xft.P - Xst.P - Xst.R*Psf;

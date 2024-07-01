@@ -567,6 +567,20 @@ typedef myTf<> mytf;
 
 namespace Util
 {
+    // template <typename T>
+    // inline bool SO3IsValid(Sophus::SO3<T> &R, bool debug=false)
+    // {
+    //     Quaternion<T> Q = R.unit_quaternion();
+    //     double qx = double(Q.x());
+    //     double qy = double(Q.y());
+    //     double qz = double(Q.z());
+    //     double qw = double(Q.w());
+    //     double n = sqrt(qx*qx + qy*qy + qz*qz + qw*qw);
+    //     if (debug)
+    //         printf("norm: %f\n", n);
+    //     return fabs(n - 1.0) < 1e-4;
+    // }
+
     inline void ComputeCeresCost(vector<ceres::internal::ResidualBlock *> &res_ids,
                                  double &cost, ceres::Problem &problem)
     {
