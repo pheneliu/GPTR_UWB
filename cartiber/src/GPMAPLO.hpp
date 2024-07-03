@@ -276,7 +276,7 @@ public:
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
     {
-        traj = GaussianProcessPtr(new GaussianProcess(deltaT));
+        traj = GaussianProcessPtr(new GaussianProcess(deltaT, true));
         traj->setStartTime(t0);
         traj->setKnot(0, GPState(t0, T_W_Li0));
 
@@ -402,6 +402,10 @@ public:
                 double JK = gnreport.JKprior + gnreport.JKlidar + gnreport.JKmp2k;
                 JK = JK < 0 ? -1 : JK;
 
+                // Get the covariance
+                SparseMatrix<double> InvCov_ = mySolver->GetInvCov();
+                MatrixXd InvCov = InvCov_.toDense();
+
                 tt_solve.Toc();
                 
                 TicToc tt_aftop;
@@ -414,6 +418,7 @@ public:
                         double ter = fabs(tlc - tgb);
                         ROS_ASSERT_MSG(ter < 1e-3, "Knot Time: %f, %f. Diff: %f.\n", tlc, tgb, ter);
                         traj->setKnot(kidx + umin, swTraj->getKnot(kidx));
+                        traj->setKnotCovariance(kidx + umin, InvCov.block<STATE_DIM, STATE_DIM>(kidx*STATE_DIM, kidx*STATE_DIM));
                     }
                 }
 

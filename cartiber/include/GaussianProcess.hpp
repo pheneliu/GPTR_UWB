@@ -231,6 +231,20 @@ public:
         return TransMat(dtau, N) - PSI(dtau, N)*TransMat(dt, N);
     }
 
+    Matrix<double, STATE_DIM, STATE_DIM> PropagateFullCov(Matrix<double, STATE_DIM, STATE_DIM> P0)
+    {
+        Matrix<double, STATE_DIM, STATE_DIM> F; F.setZero();
+        Matrix<double, STATE_DIM, STATE_DIM> Q; Q.setZero();
+        
+        F.block<9, 9>(0, 0) = TransMat_ROS(dt);
+        F.block<9, 9>(9, 9) = TransMat_PVA(dt);
+
+        Q.block<9, 9>(0, 0) = GPCov_ROS(dt);
+        Q.block<9, 9>(9, 9) = GPCov_PVA(dt);
+
+        return F*P0*F.transpose() + Q;
+    }
+
     MatrixXd TransMat_ROS(const double dtau)  const { return kron(TransMat(dtau, 3), Mat3::Identity()); }
     MatrixXd GPCov_ROS(const double dtau)     const { return kron(GPCov   (dtau, 3), Mat3::Identity()); }
     MatrixXd PSI_ROS(const double dtau)       const { return kron(PSI     (dtau, 3), Mat3::Identity()); }
@@ -831,13 +845,27 @@ public:
 // Managing control points: cration, extension, queries, ...
 class GaussianProcess
 {
+    using CovM = Eigen::Matrix<double, STATE_DIM, STATE_DIM>;
+
 private:
+    
+    // The invalid covariance
+    const CovM CovMZero = CovM::Zero();
 
     // Start time
     double t0 = 0;
+
+    // Knot length
     double dt = 0.0;
 
+    // Mixer
     GPMixer gpm;
+
+    // Set to true to maintain a covariance of each state
+    bool keepCov = false;
+
+    // Covariance
+    Eigen::aligned_deque<CovM> C;
 
     // State vector
     Eigen::aligned_deque<SO3d> R;
@@ -853,8 +881,8 @@ public:
     ~GaussianProcess(){};
 
     // Constructor
-    GaussianProcess(double dt_)
-        : dt(dt_), gpm(GPMixer(dt_)) {};
+    GaussianProcess(double dt_, bool keepCov_=false)
+        : dt(dt_), gpm(GPMixer(dt_)), keepCov(keepCov_) {};
 
     double getMinTime() const
     {
@@ -980,19 +1008,36 @@ public:
     inline Vec3 &getKnotPos(size_t kidx) { return P[kidx]; }
     inline Vec3 &getKnotVel(size_t kidx) { return V[kidx]; }
     inline Vec3 &getKnotAcc(size_t kidx) { return A[kidx]; }
+    inline CovM &getKnotCov(size_t kidx) { return C[kidx]; }
 
     void setStartTime(double t)
     {
         t0 = t;
         if (R.size() == 0)
         {
-            R  = {SO3d()};
-            O  = {Vec3(0, 0, 0)};
-            S  = {Vec3(0, 0, 0)};
-            P  = {Vec3(0, 0, 0)};
-            V  = {Vec3(0, 0, 0)};
-            A  = {Vec3(0, 0, 0)};
+            R = {SO3d()};
+            O = {Vec3(0, 0, 0)};
+            S = {Vec3(0, 0, 0)};
+            P = {Vec3(0, 0, 0)};
+            V = {Vec3(0, 0, 0)};
+            A = {Vec3(0, 0, 0)};
+            
+            if (keepCov)
+                C = {CovMZero};
         }
+    }
+    
+    void propagateCovariance()
+    {
+        CovM Cn = CovMZero;
+
+        // If previous
+        if (C.back().cwiseAbs().maxCoeff() != 0.0)
+            Cn = gpm.PropagateFullCov(C.back());
+
+        // Add the covariance to buffer
+        C.push_back(Cn);
+        assert(C.size() == R.size());
     }
 
     void extendKnotsTo(double t, const GPState<double> &Xn=GPState())
@@ -1020,6 +1065,9 @@ public:
             P.push_back(Xn.P);
             V.push_back(Xn.V);
             A.push_back(Xn.A);
+
+            if (keepCov)
+                propagateCovariance();
         }
     }
 
@@ -1045,6 +1093,9 @@ public:
         P.push_back(Pn);
         V.push_back(Vn);
         A.push_back(An);
+
+        if (keepCov)
+            propagateCovariance();
     }
 
     void extendOneKnot(const GPState<double> &Xn)
@@ -1055,6 +1106,9 @@ public:
         P.push_back(Xn.P);
         V.push_back(Xn.V);
         A.push_back(Xn.A);
+
+        if (keepCov)
+            propagateCovariance();
     }
 
     void setKnot(int kidx, const GPState<double> &Xn)
@@ -1065,6 +1119,12 @@ public:
         P[kidx] = Xn.P;
         V[kidx] = Xn.V;
         A[kidx] = Xn.A;
+    }
+
+    void setKnotCovariance(int kidx, const CovM &Cov)
+    {
+        C[kidx] = Cov;
+        assert(C.size() == R.size());
     }
 
     void updateKnot(int kidx, Matrix<double, STATE_DIM, 1> dX)
@@ -1098,6 +1158,9 @@ public:
         this->t0 = GPother.getMinTime();
         this->dt = GPother.getDt();
         this->gpm = GPMixer(this->dt);
+        
+        this->keepCov = GPother.keepCov;
+        this->C = GPother.C;
 
         this->R = GPother.R;
         this->O = GPother.O;

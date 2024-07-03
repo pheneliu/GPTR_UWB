@@ -53,6 +53,9 @@ private:
     VectorXd bkeep;
     MatrixXd Jm;
     VectorXd rm;
+
+    // Matrix to solve the covariance
+    SparseMatrix<double> InvCov;
     
     // Value of the keep state for prior
     map<int, GPState<double>>  knots_keep_gbidx_state;
@@ -120,6 +123,11 @@ public:
     GNSolverReport &GetReport()
     {
         return report;
+    }
+
+    SparseMatrix<double> GetInvCov()
+    {
+        return InvCov;
     }
 };
 

@@ -42,10 +42,10 @@
         <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.04357"/>
-        <param name="WINDOW_SIZE"    value="3"      />
+        <param name="deltaT"         value="0.01102"/>
+        <param name="WINDOW_SIZE"    value="5"      />
         <param name="use_ceres"      value="0"      />
-        <param name="max_gniter"     value="3"     />
+        <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="0.1"    />
         <param name="dxmax"          value="0.5"    />
         <param name="fixed_start"    value="-0.001" />

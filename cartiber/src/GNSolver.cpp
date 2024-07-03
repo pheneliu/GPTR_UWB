@@ -507,6 +507,18 @@ bool GNSolver::Solve
         // printf("Hprior: %f\n", Hprior_sparse.toDense().trace());
     }
 
+    // Fix the first knot
+    // if(H.rows() > XALL_LSIZE && H.cols() > XALL_LSIZE)
+    // {
+    //     MatrixXd H_ = H.toDense();
+    //     MatrixXd b_ = b.toDense();
+    //     H_.block(0, 0, XALL_LSIZE, H_.cols()).setZero();
+    //     H_.block(0, 0, H_.rows(), XALL_LSIZE).setZero();
+    //     b_.block(0, 0, XALL_LSIZE, b_.cols()).setZero();
+    //     H = H_.sparseView(); H.makeCompressed();
+    //     b = b_.sparseView(); b.makeCompressed();
+    // }
+
     MatrixXd dX = MatrixXd::Zero(XALL_GSIZE, 1);
     bool solver_failed = false;
 
@@ -544,6 +556,25 @@ bool GNSolver::Solve
     // Perform marginalization
     if(iter == max_gniter - 1 && swNextBaseKnot > 0)
         Marginalize(traj, RESIDUAL, JACOBIAN, bprior_sparse, Hprior_sparse, swAbsKidx, swNextBaseKnot, SwLidarCoef);
+
+    // Save the covariance
+    {
+        SparseMatrix<double> rsparse = RESIDUAL.sparseView(); rsparse.makeCompressed();
+        SparseMatrix<double> Jsparse = JACOBIAN.sparseView(); Jsparse.makeCompressed();
+        SparseMatrix<double> Jtp = Jsparse.transpose();
+        SparseMatrix<double> b = -Jtp*rsparse;
+        SparseMatrix<double> H =  Jtp*Jsparse;
+        
+        // Add the prior factor
+        if(Hprior_sparse.rows() > 0 && bprior_sparse.rows() > 0)
+        {
+            H += Hprior_sparse;
+            b += bprior_sparse;
+            // printf("Hprior: %f\n", Hprior_sparse.toDense().trace());
+        }
+
+        InvCov = H;
+    }
 
     return true;
 }

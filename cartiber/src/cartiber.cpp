@@ -438,12 +438,12 @@ myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &t
            "Jk: %12.3f. Xtrs: %9.3f.\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
            RESET,
-            summary.iterations.size(), tt_slv.GetLastStop(),
-            res_ids_pose.size(),
-            summary.initial_cost, cost_pose_init, 
-            summary.final_cost, cost_pose_final,
-            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+           summary.iterations.size(), tt_slv.GetLastStop(),
+           res_ids_pose.size(),
+           summary.initial_cost, cost_pose_init, 
+           summary.final_cost, cost_pose_final,
+           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
     return T_L0_Li;
 }
@@ -527,12 +527,12 @@ myTf<double> optimizeExtrinsics(const vector<GPState<double>> &trajx, const vect
            "Jk: %12.3f. Xtrs: %9.3f.\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
            RESET,
-            summary.iterations.size(), tt_slv.GetLastStop(),
-            res_ids_pose.size(),
-            summary.initial_cost, cost_pose_init, 
-            summary.final_cost, cost_pose_final,
-            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+           summary.iterations.size(), tt_slv.GetLastStop(),
+           res_ids_pose.size(),
+           summary.initial_cost, cost_pose_init, 
+           summary.final_cost, cost_pose_final,
+           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
     return T_L0_Li;
 }
@@ -683,15 +683,6 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             double ss = uss.second;
             double sf = usf.second;
 
-            // if(umins >= trajx->getNumKnots() || umins + 1 >= trajx->getNumKnots()
-            //     || uminf >= trajy->getNumKnots() || uminf + 1 >= trajy->getNumKnots())
-            // {
-            //     printf("Wierd time: %f. TrajTime: %f, %f, %f, %f. umins: %d / %d. uminf: %d / %d\n",
-            //             t, trajx->getMinTime(), trajx->getMaxTime(), trajy->getMinTime(), trajy->getMaxTime(),
-            //             umins, trajx->getNumKnots(), uminf, trajy->getNumKnots());
-            //     continue;   
-            // }
-
             // Add the parameter blocks
             vector<double *> factor_param_blocks;
             for (int idx = umins; idx < umins + 2; idx++)
@@ -720,71 +711,72 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             factor_param_blocks.push_back(P_Lx_Ly.data());
 
             // Create the factors
+            MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e3;
             double mpSigmaR = 1.0;
             double mpSigmaP = 1.0;
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), ss, sf);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, trajx->getDt(), trajy->getDt(), ss, sf);
             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
             res_ids_xtrinsic.push_back(res_block);
         }
     }
 
-    // for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
-    // {
-    //     for(int i = 0; i < Nseg; i++)
-    //     {
-    //         // Get the knot time
-    //         double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + t_shift;
+    for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
+    {
+        for(int i = 0; i < Nseg; i++)
+        {
+            // Get the knot time
+            double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + t_shift;
 
-    //         // Skip if time is outside the range of the other trajectory
-    //         if (!trajx->TimeInInterval(t))
-    //             continue;
+            // Skip if time is outside the range of the other trajectory
+            if (!trajx->TimeInInterval(t))
+                continue;
 
-    //         pair<int, double> uss, usf;
-    //         uss = trajy->computeTimeIndex(t);
-    //         usf = trajx->computeTimeIndex(t);
+            pair<int, double> uss, usf;
+            uss = trajy->computeTimeIndex(t);
+            usf = trajx->computeTimeIndex(t);
 
-    //         int umins = uss.first;
-    //         int uminf = usf.first;
-    //         double ss = uss.second;
-    //         double sf = usf.second;
+            int umins = uss.first;
+            int uminf = usf.first;
+            double ss = uss.second;
+            double sf = usf.second;
 
-    //         // Add the parameter blocks
-    //         vector<double *> factor_param_blocks;
-    //         for (int kidx = umins; kidx < umins + 2; kidx++)
-    //         {
-    //             factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
-    //             factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
-    //             factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
-    //             factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
-    //             factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
-    //             factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
-    //         }
-    //         for (int kidx = uminf; kidx < uminf + 2; kidx++)
-    //         {
-    //             factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
-    //             factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
-    //             factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
-    //             factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
-    //             factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
-    //             factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
-    //         }
-    //         factor_param_blocks.push_back(R_Lx_Ly.data());
-    //         factor_param_blocks.push_back(P_Lx_Ly.data());
+            // Add the parameter blocks
+            vector<double *> factor_param_blocks;
+            for (int kidx = umins; kidx < umins + 2; kidx++)
+            {
+                factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
+            }
+            for (int kidx = uminf; kidx < uminf + 2; kidx++)
+            {
+                factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
+            }
+            factor_param_blocks.push_back(R_Lx_Ly.data());
+            factor_param_blocks.push_back(P_Lx_Ly.data());
 
-    //         // Create the factors
-    //         double mpSigmaR = 1.0;
-    //         double mpSigmaP = 1.0;
-    //         double mp_loss_thres = -1;
-    //         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    //         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-    //         ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), sf, ss);
-    //         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-    //         res_ids_xtrinsic.push_back(res_block);
-    //     }
-    // }
+            // Create the factors
+            double mpSigmaR = 1.0;
+            double mpSigmaP = 1.0;
+            double mp_loss_thres = -1;
+            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), sf, ss);
+            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+            res_ids_xtrinsic.push_back(res_block);
+        }
+    }
 
     TicToc tt_slv;
 
@@ -811,12 +803,12 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
            RESET,
-            summary.iterations.size(), tt_slv.GetLastStop(),
-            res_ids_mp2k.size(), res_ids_xtrinsic.size(),
-            summary.initial_cost, cost_mp2k_init, cost_xtrinsic_init,
-            summary.final_cost, cost_mp2k_final, cost_xtrinsic_final,
-            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+           summary.iterations.size(), tt_slv.GetLastStop(),
+           res_ids_mp2k.size(), res_ids_xtrinsic.size(),
+           summary.initial_cost, cost_mp2k_init, cost_xtrinsic_init,
+           summary.final_cost, cost_mp2k_final, cost_xtrinsic_final,
+           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
     return T_L0_Li;
 }
