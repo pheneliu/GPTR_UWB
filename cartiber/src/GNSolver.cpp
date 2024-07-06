@@ -121,7 +121,7 @@ void GNSolver::EvaluateMotionPriorFactors
     {
         // Create the factors
         typedef GPMotionPriorTwoKnotsFactorTMN mp2Factor;
-        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr());
+        mp2Factor factor = mp2Factor(traj->getGPMixerPtr());
 
         // Calculate the residual and jacobian
         factor.Evaluate(traj->getKnot(kidx), traj->getKnot(kidx + 1));

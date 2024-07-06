@@ -13,10 +13,8 @@ class GPMotionPriorTwoKnotsFactor : public ceres::CostFunction
 {
 public:
 
-    GPMotionPriorTwoKnotsFactor(double wR_, double wP_, GPMixerPtr gpm_)
-    :   wR          (wR_             ),
-        wP          (wP_             ),
-        Dt          (gpm_->getDt()   ),
+    GPMotionPriorTwoKnotsFactor(GPMixerPtr gpm_)
+    :   Dt          (gpm_->getDt()   ),
         gpm         (gpm_            )
     {
 
@@ -305,9 +303,6 @@ private:
     const int PbIdx = 9;
     const int VbIdx = 10;
     const int AbIdx = 11;
-
-    double wR;
-    double wP;
 
     // Square root information
     Matrix<double, STATE_DIM, STATE_DIM> sqrtW;

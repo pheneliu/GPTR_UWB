@@ -15,10 +15,8 @@ class GPMotionPriorTwoKnotsFactorTMN
 typedef Eigen::Matrix<double, STATE_DIM, 2*STATE_DIM> MatJ;
 public:
 
-    GPMotionPriorTwoKnotsFactorTMN(double wR_, double wP_, GPMixerPtr gpm_)
-    :   wR          (wR_             ),
-        wP          (wP_             ),
-        Dt          (gpm_->getDt()   ),
+    GPMotionPriorTwoKnotsFactorTMN(GPMixerPtr gpm_)
+    :   Dt          (gpm_->getDt()   ),
         gpm         (gpm_            )
     {
 

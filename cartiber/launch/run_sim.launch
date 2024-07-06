@@ -42,8 +42,8 @@
         <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.01102"/>
-        <param name="WINDOW_SIZE"    value="5"      />
+        <param name="deltaT"         value="0.04357"/>
+        <param name="WINDOW_SIZE"    value="3"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="0.1"    />
@@ -77,7 +77,7 @@
 
         <!-- Extrinsic estimation -->
         <param name="Nsample"        value="1000"   />
-        <param name="Nseg"           value="8"      />
+        <param name="Nseg"           value="1"      />
         <param name="t_shift"        value="0.0"    />
 
     </node>

@@ -999,8 +999,6 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
     }
 
-    GPMixerPtr gpm = traj->getGPMixerPtr();
-
     // Add the motion prior factors
     double cost_mp2k_init = -1;
     double cost_mp2k_final = -1;
@@ -1027,12 +1025,12 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
         
 
         // Create the factors
-        double mpSigmaR = 1.0;
-        double mpSigmaP = 1.0;
+        // double mpSigmaR = 1.0;
+        // double mpSigmaP = 1.0;
         double mp_loss_thres = -1;
         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, gpm);
+        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(traj->getGPMixerPtr());
         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
         res_ids_mp2k.push_back(res_block);
 
@@ -1041,7 +1039,7 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
 
         // Create the factors
         typedef GPMotionPriorTwoKnotsFactorTMN mp2Factor;
-        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, gpm);
+        mp2Factor factor = mp2Factor(traj->getGPMixerPtr());
         // Calculate the residual and jacobian
         factor.Evaluate(traj->getKnot(kidx), traj->getKnot(kidx + 1));
         double cost = factor.residual.norm();

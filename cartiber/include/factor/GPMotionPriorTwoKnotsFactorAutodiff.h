@@ -39,10 +39,8 @@ class GPMotionPriorTwoKnotsFactorAutodiff
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GPMotionPriorTwoKnotsFactorAutodiff(double wR_, double wP_, GPMixerPtr gpm_)
-    :   wR          (wR_             ),
-        wP          (wP_             ),
-        Dt          (gpm_->getDt()   ),
+    GPMotionPriorTwoKnotsFactorAutodiff(GPMixerPtr gpm_)
+    :   Dt          (gpm_->getDt()   ),
         gpm         (gpm_            )
     {
         // Calculate the information matrix
