@@ -14,13 +14,13 @@ class GPExtrinsicFactorAutodiff
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GPExtrinsicFactorAutodiff(double wR_, double wP_, double Dts_, double Dtf_, double ss_, double sf_)
+    GPExtrinsicFactorAutodiff(double wR_, double wP_, GPMixerPtr gpms_, GPMixerPtr gpmf_, double ss_, double sf_)
     :   wR          (wR_             ),
         wP          (wP_             ),
-        Dts         (Dts_            ),
-        Dtf         (Dtf_            ),
-        gpms        (Dts_            ),
-        gpmf        (Dtf_            ),
+        Dts         (gpms_->getDt()  ),
+        Dtf         (gpmf_->getDt()  ),
+        gpms        (gpms_           ),
+        gpmf        (gpmf_           ),
         ss          (ss_             ),
         sf          (sf_             )
     {
@@ -56,12 +56,12 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        GPState<T> Xsa(0);   gpms.MapParamToState<T>(parameters, RsaIdx, Xsa);
-        GPState<T> Xsb(Dts); gpms.MapParamToState<T>(parameters, RsbIdx, Xsb);
+        GPState<T> Xsa(0);   gpms->MapParamToState<T>(parameters, RsaIdx, Xsa);
+        GPState<T> Xsb(Dts); gpms->MapParamToState<T>(parameters, RsbIdx, Xsb);
 
         // Map parameters to the control point states
-        GPState<T> Xfa(0);   gpmf.MapParamToState<T>(parameters, RfaIdx, Xfa);
-        GPState<T> Xfb(Dtf); gpmf.MapParamToState<T>(parameters, RfbIdx, Xfb);
+        GPState<T> Xfa(0);   gpmf->MapParamToState<T>(parameters, RfaIdx, Xfa);
+        GPState<T> Xfb(Dtf); gpmf->MapParamToState<T>(parameters, RfbIdx, Xfb);
 
         SO3T  Rsf = Eigen::Map<SO3T  const>(parameters[RsfIdx]);
         Vec3T Psf = Eigen::Map<Vec3T const>(parameters[PsfIdx]);
@@ -76,8 +76,8 @@ public:
         Eigen::Matrix<T, 9, 1> gammasa, gammasb, gammast;
         Eigen::Matrix<T, 9, 1> gammafa, gammafb, gammaft;
 
-        gpms.ComputeXtAndJacobians<T>(Xsa, Xsb, Xst, DXst_DXsa, DXst_DXsb, gammasa, gammasb, gammast);
-        gpmf.ComputeXtAndJacobians<T>(Xfa, Xfb, Xft, DXft_DXfa, DXft_DXfb, gammafa, gammafb, gammaft);
+        gpms->ComputeXtAndJacobians<T>(Xsa, Xsb, Xst, DXst_DXsa, DXst_DXsb, gammasa, gammasb, gammast);
+        gpmf->ComputeXtAndJacobians<T>(Xfa, Xfb, Xft, DXft_DXfa, DXft_DXfb, gammafa, gammafb, gammaft);
 
         /* #endregion Compute the interpolated states ---------------------------------------------------------------*/
 
@@ -162,6 +162,6 @@ private:
     double sf;
 
     // Mixer for gaussian process
-    GPMixer gpms;
-    GPMixer gpmf;
+    GPMixerPtr gpms;
+    GPMixerPtr gpmf;
 };

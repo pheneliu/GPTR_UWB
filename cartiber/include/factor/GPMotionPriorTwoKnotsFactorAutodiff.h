@@ -39,11 +39,11 @@ class GPMotionPriorTwoKnotsFactorAutodiff
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GPMotionPriorTwoKnotsFactorAutodiff(double wR_, double wP_, double Dt_)
+    GPMotionPriorTwoKnotsFactorAutodiff(double wR_, double wP_, GPMixerPtr gpm_)
     :   wR          (wR_             ),
         wP          (wP_             ),
-        Dt          (Dt_             ),
-        gpm         (Dt_             )
+        Dt          (gpm_->getDt()   ),
+        gpm         (gpm_            )
     {
         // Calculate the information matrix
         Matrix<double, STATE_DIM, STATE_DIM> Info;
@@ -57,8 +57,8 @@ public:
         Qtilde << 1.0/20.0*Dtpow[5], 1.0/8.0*Dtpow[4], 1.0/6.0*Dtpow[3],
                   1.0/08.0*Dtpow[4], 1.0/3.0*Dtpow[3], 1.0/2.0*Dtpow[2],
                   1.0/06.0*Dtpow[3], 1.0/2.0*Dtpow[2], 1.0/1.0*Dtpow[1];
-        Info.block<9, 9>(0, 0) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
-        Info.block<9, 9>(9, 9) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
+        Info.block<9, 9>(0, 0) = gpm->kron(Qtilde, gpm->getQr());
+        Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getQc());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
@@ -75,8 +75,8 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        GPState<T> Xa(0);  gpm.MapParamToState<T>(parameters, RaIdx, Xa);
-        GPState<T> Xb(Dt); gpm.MapParamToState<T>(parameters, RbIdx, Xb);
+        GPState<T> Xa(0);  gpm->MapParamToState<T>(parameters, RaIdx, Xa);
+        GPState<T> Xb(Dt); gpm->MapParamToState<T>(parameters, RbIdx, Xb);
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
@@ -85,8 +85,8 @@ public:
         SO3T Rab = Xa.R.inverse()*Xb.R;
         Vec3T Theb = Rab.log();
 
-        Mat3T JrInvTheb = gpm.JrInv(Theb);
-        Mat3T DJrInvThebOb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.O);
+        Mat3T JrInvTheb = gpm->JrInv(Theb);
+        Mat3T DJrInvThebOb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.O);
 
         Vec3T Thedotb = JrInvTheb*Xb.O;
         Vec3T Theddotb = DJrInvThebOb_DTheb*Thedotb + JrInvTheb*Xb.S;
@@ -154,5 +154,5 @@ private:
     double Dt;
     
     // Mixer for gaussian process
-    GPMixer gpm;
+    GPMixerPtr gpm;
 };

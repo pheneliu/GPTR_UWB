@@ -169,7 +169,17 @@ class GPMixer
 {
 private:
 
+    // Knot length
     double dt = 0.0;
+
+    // identity matrix
+    const Mat3 Eye = Mat3::Identity();
+
+    // Covariance of angular jerk
+    Mat3 Qr = Eye;
+
+    // Covariance of translational jerk
+    Mat3 Qc = Eye;
 
 public:
 
@@ -177,7 +187,11 @@ public:
    ~GPMixer() {};
 
     // Constructor
-    GPMixer(double dt_) : dt(dt_) {};
+    GPMixer(double dt_, const Mat3 Qr_, const Mat3 Qc_) : dt(dt_), Qr(Qr_), Qc(Qc_) {};
+
+    double getDt() const { return dt; }
+    Mat3   getQr() const { return Qr; }
+    Mat3   getQc() const { return Qc; }
 
     template <typename MatrixType1, typename MatrixType2>
     MatrixXd kron(const MatrixType1& A, const MatrixType2& B) const
@@ -191,7 +205,7 @@ public:
     }
 
     // Transition Matrix, PHI(tau, 0)
-    MatrixXd TransMat(const double dtau, int N) const
+    MatrixXd Ftilde(const double dtau, int N) const
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
 
@@ -204,7 +218,7 @@ public:
     }
 
     // Gaussian Process covariance, Q = \int{Phi*F*Qc*F'*Phi'}
-    MatrixXd GPCov(const double dtau, int N) const 
+    MatrixXd Qtilde(const double dtau, int N) const 
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
         
@@ -216,44 +230,60 @@ public:
         return Q;
     }
 
-    // PSI in x(tau) = LAMBDA(tau)x(k-1) + PSI(tau)x*(k)
-    MatrixXd PSI(const double dtau, int N) const 
-    {
-        if (dtau < 1e-4)
-            return MatrixXd::Zero(N, N);
-        else
-            return GPCov(dtau, N)*TransMat(dt - dtau, N).transpose()*GPCov(dt, N).inverse();
-    }
-    
-    // PSI in x(tau) = LAMBDA(tau)x(k-1) + PSI(tau)x*(k)
-    MatrixXd LAMBDA(const double dtau, int N) const
-    {
-        return TransMat(dtau, N) - PSI(dtau, N)*TransMat(dt, N);
-    }
-
-    Matrix<double, STATE_DIM, STATE_DIM> PropagateFullCov(Matrix<double, STATE_DIM, STATE_DIM> P0)
+    Matrix<double, STATE_DIM, STATE_DIM> PropagateFullCov(Matrix<double, STATE_DIM, STATE_DIM> P0) const
     {
         Matrix<double, STATE_DIM, STATE_DIM> F; F.setZero();
         Matrix<double, STATE_DIM, STATE_DIM> Q; Q.setZero();
         
-        F.block<9, 9>(0, 0) = TransMat_ROS(dt);
-        F.block<9, 9>(9, 9) = TransMat_PVA(dt);
+        F.block<9, 9>(0, 0) = kron(Ftilde(dt, 3), Eye);
+        F.block<9, 9>(9, 9) = kron(Ftilde(dt, 3), Eye);
 
-        Q.block<9, 9>(0, 0) = GPCov_ROS(dt);
-        Q.block<9, 9>(9, 9) = GPCov_PVA(dt);
+        Q.block<9, 9>(0, 0) = kron(Qtilde(dt, 3), Qr);
+        Q.block<9, 9>(9, 9) = kron(Qtilde(dt, 3), Qc);
 
         return F*P0*F.transpose() + Q;
     }
 
-    MatrixXd TransMat_ROS(const double dtau)  const { return kron(TransMat(dtau, 3), Mat3::Identity()); }
-    MatrixXd GPCov_ROS(const double dtau)     const { return kron(GPCov   (dtau, 3), Mat3::Identity()); }
-    MatrixXd PSI_ROS(const double dtau)       const { return kron(PSI     (dtau, 3), Mat3::Identity()); }
-    MatrixXd LAM_ROS(const double dtau)       const { return kron(LAMBDA  (dtau, 3), Mat3::Identity()); }
+    MatrixXd PSI(const double dtau, const Mat3 &Q) const
+    {
+        if (dtau < 1e-4)
+            return kron(MatrixXd::Zero(3, 3), Eye);
 
-    MatrixXd TransMat_PVA(const double dtau) const { return kron(TransMat(dtau, 3), Mat3::Identity()); }
-    MatrixXd GPCov_PVA(const double dtau)    const { return kron(GPCov   (dtau, 3), Mat3::Identity()); }
-    MatrixXd PSI_PVA(const double dtau)      const { return kron(PSI     (dtau, 3), Mat3::Identity()); }
-    MatrixXd LAM_PVA(const double dtau)      const { return kron(LAMBDA  (dtau, 3), Mat3::Identity()); }
+        MatrixXd Phidtaubar = kron(Ftilde(dt - dtau, 3), Eye);
+        MatrixXd Qdtau = kron(Qtilde(dtau, 3), Q);
+        MatrixXd Qdt = kron(Qtilde(dt, 3), Q);
+
+        return Qdtau*Phidtaubar.transpose()*Qdt.inverse();
+    }
+
+    MatrixXd PSI_ROS(const double dtau) const
+    {
+        return PSI(dtau, Qr);
+    }
+
+    MatrixXd PSI_PVA(const double dtau) const
+    {
+        return PSI(dtau, Qc);
+    }
+
+    MatrixXd LAMDA(const double dtau, const Mat3 &Q) const
+    {
+        MatrixXd PSIdtau = PSI(dtau, Q);
+        MatrixXd Fdtau = kron(Ftilde(dtau, 3), Eye);
+        MatrixXd Fdt = kron(Ftilde(dt, 3), Eye);
+
+        return Fdtau - PSIdtau*Fdt;
+    }
+
+    MatrixXd LAMDA_ROS(const double dtau) const
+    {
+        return LAMDA(dtau, Qr);
+    }
+
+    MatrixXd LAMDA_PVA(const double dtau) const
+    {
+        return LAMDA(dtau, Qc);
+    }
 
     template <class T = double>
     static Eigen::Matrix<T, 3, 3> Jr(const Eigen::Matrix<T, 3, 1> &phi)
@@ -619,10 +649,10 @@ public:
         Vec3T  &At = Xt.A;
         
         // Calculate the the mixer matrixes
-        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAM_ROS(tau).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI_ROS(tau).cast<T>();
-        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAM_PVA(tau).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI_PVA(tau).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAMDA(tau, Qr).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI(tau,   Qr).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMDA(tau, Qc).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   Qc).cast<T>();
 
         // Extract the blocks of SO3 states
         Mat3T LAM_ROS11 = LAM_ROSt.block(0, 0, 3, 3); Mat3T LAM_ROS12 = LAM_ROSt.block(0, 3, 3, 3); Mat3T LAM_ROS13 = LAM_ROSt.block(0, 6, 3, 3);
@@ -840,7 +870,17 @@ public:
         gammab_ = gammab;
         gammat_ = gammat;
     }
+
+    GPMixer &operator=(const GPMixer &other)
+    {
+        this->dt = other.dt;
+        this->Qr = other.Qr;
+        this->Qc = other.Qc;
+    }
 };
+
+// Define the shared pointer
+typedef std::shared_ptr<GPMixer> GPMixerPtr;
 
 // Managing control points: cration, extension, queries, ...
 class GaussianProcess
@@ -859,7 +899,7 @@ private:
     double dt = 0.0;
 
     // Mixer
-    GPMixer gpm;
+    GPMixerPtr gpm;
 
     // Set to true to maintain a covariance of each state
     bool keepCov = false;
@@ -881,25 +921,33 @@ public:
     ~GaussianProcess(){};
 
     // Constructor
-    GaussianProcess(double dt_, bool keepCov_=false)
-        : dt(dt_), gpm(GPMixer(dt_)), keepCov(keepCov_) {};
+    GaussianProcess(double dt_, Mat3 Qr_, Mat3 Qc_, bool keepCov_=false)
+        : dt(dt_), gpm(GPMixerPtr(new GPMixer(dt_, Qr_, Qc_))), keepCov(keepCov_) {};
+
+    Mat3 getQr() const { return gpm->getQr(); }
+    Mat3 getQc() const { return gpm->getQc(); }
+
+    GPMixerPtr getGPMixerPtr()
+    {
+        return gpm;
+    }
 
     double getMinTime() const
     {
         return t0;
     }
 
-    double getMaxTime()
+    double getMaxTime() const
     {
         return t0 + max(0, int(R.size()) - 1)*dt;
     }
 
-    int getNumKnots()
+    int getNumKnots() const
     {
         return int(R.size());
     }
 
-    double getKnotTime(int kidx)
+    double getKnotTime(int kidx) const
     {
         return t0 + kidx*dt;
     }
@@ -909,19 +957,19 @@ public:
         return dt;
     }
 
-    bool TimeInInterval(double t, double eps=0.0)
+    bool TimeInInterval(double t, double eps=0.0) const
     {
         return (t >= getMinTime() + eps && t < getMaxTime() - eps);
     }
 
-    pair<int, double> computeTimeIndex(double t)
+    pair<int, double> computeTimeIndex(double t) const
     {
         int u = int((t - t0)/dt);
         double s = double(t - t0)/dt - u;
         return make_pair(u, s);
     }
 
-    GPState<double> getStateAt(double t)
+    GPState<double> getStateAt(double t) const
     {
         // Find the index of the interval to find interpolation
         auto   us = computeTimeIndex(t);
@@ -960,8 +1008,8 @@ public:
         Vec3 Theddota = Xa.S;
 
         Vec3 Theb     = Rab.log();
-        Vec3 Thedotb  = gpm.JrInv(Theb)*Xb.O;
-        Vec3 Theddotb = gpm.JrInv(Theb)*Xb.S + gpm.DJrInvXV_DX(Theb, Xb.O)*Thedotb;
+        Vec3 Thedotb  = gpm->JrInv(Theb)*Xb.O;
+        Vec3 Theddotb = gpm->JrInv(Theb)*Xb.S + gpm->DJrInvXV_DX(Theb, Xb.O)*Thedotb;
 
         Eigen::Matrix<double, 9, 1> gammaa; gammaa << Thea, Thedota, Theddota;
         Eigen::Matrix<double, 9, 1> gammab; gammab << Theb, Thedotb, Theddotb;
@@ -972,8 +1020,8 @@ public:
         Eigen::Matrix<double, 9, 1> gammat; // Containing on-manifold states (rotation and angular velocity)
         Eigen::Matrix<double, 9, 1> pvat;   // Position, velocity, acceleration
 
-        gammat = gpm.LAM_ROS(s*dt) * gammaa + gpm.PSI_ROS(s*dt) * gammab;
-        pvat   = gpm.LAM_PVA(s*dt) * pvaa   + gpm.PSI_PVA(s*dt) * pvab;
+        gammat = gpm->LAMDA_ROS(s*dt) * gammaa + gpm->PSI_ROS(s*dt) * gammab;
+        pvat   = gpm->LAMDA_PVA(s*dt) * pvaa   + gpm->PSI_PVA(s*dt) * pvab;
 
         // Retrive the interpolated SO3 in relative form
         Vec3 Thet     = gammat.block(0, 0, 3, 1);
@@ -982,8 +1030,8 @@ public:
 
         // Assign the interpolated state
         SO3d Rt = Xa.R*SO3d::exp(Thet);
-        Vec3 Ot = gpm.Jr(Thet)*Thedott;
-        Vec3 St = gpm.Jr(Thet)*Theddott + gpm.DJrXV_DX(Thet, Thedott)*Thedott;
+        Vec3 Ot = gpm->Jr(Thet)*Thedott;
+        Vec3 St = gpm->Jr(Thet)*Theddott + gpm->DJrXV_DX(Thet, Thedott)*Thedott;
         Vec3 Pt = pvat.block<3, 1>(0, 0);
         Vec3 Vt = pvat.block<3, 1>(3, 0);
         Vec3 At = pvat.block<3, 1>(6, 0);
@@ -991,12 +1039,12 @@ public:
         return GPState<double>(t, Rt, Ot, St, Pt, Vt, At);
     }
 
-    GPState<double> getKnot(int kidx)
+    GPState<double> getKnot(int kidx) const
     {
         return GPState(getKnotTime(kidx), R[kidx], O[kidx], S[kidx], P[kidx], V[kidx], A[kidx]);
     }
 
-    SE3d pose(double t)
+    SE3d pose(double t) const
     {
         GPState X = getStateAt(t);
         return SE3d(X.R, X.P);
@@ -1033,7 +1081,7 @@ public:
 
         // If previous
         if (C.back().cwiseAbs().maxCoeff() != 0.0)
-            Cn = gpm.PropagateFullCov(C.back());
+            Cn = gpm->PropagateFullCov(C.back());
 
         // Add the covariance to buffer
         C.push_back(Cn);
@@ -1153,21 +1201,22 @@ public:
     }
 
     // Copy constructor
-    GaussianProcess &operator=(const GaussianProcess &GPother)
+    GaussianProcess &operator=(GaussianProcess &other)
     {
-        this->t0 = GPother.getMinTime();
-        this->dt = GPother.getDt();
-        this->gpm = GPMixer(this->dt);
+        this->t0 = other.getMinTime();
+        this->dt = other.getDt();
         
-        this->keepCov = GPother.keepCov;
-        this->C = GPother.C;
+        *(this->gpm) = (*other.getGPMixerPtr());
 
-        this->R = GPother.R;
-        this->O = GPother.O;
-        this->S = GPother.S;
-        this->P = GPother.P;
-        this->V = GPother.V;
-        this->A = GPother.A;
+        this->keepCov = other.keepCov;
+        this->C = other.C;
+
+        this->R = other.R;
+        this->O = other.O;
+        this->S = other.S;
+        this->P = other.P;
+        this->V = other.V;
+        this->A = other.A;
 
         return *this;
     }

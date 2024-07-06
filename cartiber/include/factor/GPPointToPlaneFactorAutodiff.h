@@ -39,14 +39,14 @@ class GPPointToPlaneFactorAutodiff
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GPPointToPlaneFactorAutodiff(const Vector3d &f_, const Vector4d &coef, double w_, double Dt_, double s_)
+    GPPointToPlaneFactorAutodiff(const Vector3d &f_, const Vector4d &coef, double w_, GPMixerPtr gpm_, double s_)
     :   f          (f_               ),
         n          (coef.head<3>()   ),
         m          (coef.tail<1>()(0)),
         w          (w_               ),
-        Dt         (Dt_              ),
+        Dt         (gpm_->getDt()    ),
         s          (s_               ),
-        gpm        (Dt_              )
+        gpm        (gpm_             )
     {}
 
     template <class T>
@@ -59,8 +59,8 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        GPState<T> Xa(0);  gpm.MapParamToState<T>(parameters, RaIdx, Xa);
-        GPState<T> Xb(Dt); gpm.MapParamToState<T>(parameters, RbIdx, Xb);
+        GPState<T> Xa(0);  gpm->MapParamToState<T>(parameters, RaIdx, Xa);
+        GPState<T> Xb(Dt); gpm->MapParamToState<T>(parameters, RbIdx, Xb);
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
@@ -72,7 +72,7 @@ public:
         Eigen::Matrix<T, 9, 1> gammab;
         Eigen::Matrix<T, 9, 1> gammat;
 
-        gpm.ComputeXtAndJacobians<T>(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
+        gpm->ComputeXtAndJacobians<T>(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Residual
         Eigen::Map<Matrix<T, 1, 1>> residual(residuals);
@@ -124,5 +124,5 @@ private:
     double Dt;
     double s;
 
-    GPMixer gpm;
+    GPMixerPtr gpm;
 };

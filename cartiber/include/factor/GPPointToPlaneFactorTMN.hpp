@@ -20,15 +20,14 @@ public:
 
     // Constructor
     GPPointToPlaneFactorTMN(const Vector3d &f_, const Vector4d &coef, double w_,
-                            double Dt_, double s_)
+                            GPMixerPtr gpm_, double s_)
     :   f          (f_               ),
         n          (coef.head<3>()   ),
         m          (coef.tail<1>()(0)),
         w          (w_               ),
-        Dt         (Dt_              ),
+        Dt         (gpm_->getDt()    ),
         s          (s_               ),
-        gpm        (Dt_              )
-
+        gpm        (gpm_             )
     {
         // // 1-element residual: n^T*(Rt*f + pt) + m
         // set_num_residuals(1);
@@ -69,7 +68,7 @@ public:
         Eigen::Matrix<double, 9, 1> gammab;
         Eigen::Matrix<double, 9, 1> gammat;
 
-        gpm.ComputeXtAndJacobians(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
+        gpm->ComputeXtAndJacobians(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Residual
         // Eigen::Map<Matrix<double, 1, 1>> residual(residuals);
@@ -238,5 +237,5 @@ private:
     // Interpolation param
     double Dt;
     double s;
-    GPMixer gpm;
+    GPMixerPtr gpm;
 };

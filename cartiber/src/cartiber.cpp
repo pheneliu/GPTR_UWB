@@ -659,6 +659,9 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
     //     res_ids_mp2k.push_back(res_block);
     // }
 
+    GPMixerPtr gpmx = trajx->getGPMixerPtr();
+    GPMixerPtr gpmy = trajy->getGPMixerPtr();
+
     // Add the extrinsic factors
     double cost_xtrinsic_init = -1;
     double cost_xtrinsic_final = -1;
@@ -711,13 +714,13 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             factor_param_blocks.push_back(P_Lx_Ly.data());
 
             // Create the factors
-            MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e3;
+            MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e6;
             double mpSigmaR = 1.0;
             double mpSigmaP = 1.0;
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, trajx->getDt(), trajy->getDt(), ss, sf);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, gpmx, gpmy, ss, sf);
             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
             res_ids_xtrinsic.push_back(res_block);
         }
@@ -772,7 +775,7 @@ myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianP
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, trajx->getDt(), trajy->getDt(), sf, ss);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, gpmx, gpmy, sf, ss);
             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
             res_ids_xtrinsic.push_back(res_block);
         }
@@ -996,6 +999,8 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
     }
 
+    GPMixerPtr gpm = traj->getGPMixerPtr();
+
     // Add the motion prior factors
     double cost_mp2k_init = -1;
     double cost_mp2k_final = -1;
@@ -1027,7 +1032,7 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
         double mp_loss_thres = -1;
         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
+        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, gpm);
         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
         res_ids_mp2k.push_back(res_block);
 
@@ -1036,7 +1041,7 @@ void CheckMP2kCost(const GaussianProcessPtr &traj, int umin)
 
         // Create the factors
         typedef GPMotionPriorTwoKnotsFactorTMN mp2Factor;
-        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, traj->getDt());
+        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, gpm);
         // Calculate the residual and jacobian
         factor.Evaluate(traj->getKnot(kidx), traj->getKnot(kidx + 1));
         double cost = factor.residual.norm();
@@ -1386,8 +1391,8 @@ int main(int argc, char **argv)
         // Optimize the extrinics
         for(int n = 1; n < Nlidar; n++)
         {
-            GaussianProcessPtr traj0(new GaussianProcess(deltaT)); *traj0 = *gpmaplo[0]->GetTraj();
-            GaussianProcessPtr trajn(new GaussianProcess(deltaT)); *trajn = *gpmaplo[n]->GetTraj();
+            GaussianProcessPtr traj0 = gpmaplo[0]->GetTraj();
+            GaussianProcessPtr trajn = gpmaplo[n]->GetTraj();
 
             // Sample the trajectory
             double tmin = max(traj0->getMinTime(), trajn->getMinTime());

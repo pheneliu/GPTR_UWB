@@ -83,7 +83,7 @@ void GNSolver::EvaluateLidarFactors
             double s  = us.second;
 
             typedef GPPointToPlaneFactorTMN ppFactor;
-            ppFactor factor = ppFactor(coef.f, coef.n, coef.plnrty*lidar_weight, traj->getDt(), s);
+            ppFactor factor = ppFactor(coef.f, coef.n, coef.plnrty*lidar_weight, traj->getGPMixerPtr(), s);
 
             // Calculate the residual and jacobian
             factor.Evaluate(traj->getKnot(u), traj->getKnot(u+1));
@@ -121,7 +121,7 @@ void GNSolver::EvaluateMotionPriorFactors
     {
         // Create the factors
         typedef GPMotionPriorTwoKnotsFactorTMN mp2Factor;
-        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, traj->getDt());
+        mp2Factor factor = mp2Factor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr());
 
         // Calculate the residual and jacobian
         factor.Evaluate(traj->getKnot(kidx), traj->getKnot(kidx + 1));

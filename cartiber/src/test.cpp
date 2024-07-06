@@ -156,17 +156,17 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         double ld_loss_thres = -1.0;
 //         nh_ptr->getParam("ld_loss_thres", ld_loss_thres);
 //         ceres::LossFunction *lidar_loss_function = ld_loss_thres <= 0 ? NULL : new ceres::HuberLoss(ld_loss_thres);
-//         ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, lidar_weight*coef.plnrty, traj->getDt(), s);
+//         ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.finW, coef.f, coef.n, lidar_weight*coef.plnrty, traj->getGPMixerPtr(), s);
 //         auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
 //         res_ids_lidar.push_back(res);
-//         // printf("Adding lidar factor %d. s: %f. u: %d, dt: %f\n", res_ids_lidar.size(), s, u, traj->getDt());
+//         // printf("Adding lidar factor %d. s: %f. u: %d, dt: %f\n", res_ids_lidar.size(), s, u, traj->getGPMixerPtr());
 //     }
 // }
 
 // void AddPosePriorFactors(GaussianProcessPtr &traj, ceres::Problem &problem,
 //                          vector<ceres::internal::ResidualBlock *> &res_ids_pose)
 // {
-//     double dt_ = traj->getDt()/7;
+//     double dt_ = traj->getGPMixerPtr()/7;
 //     // Add the pose factors with priors sampled from previous spline
 //     for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
 //     {
@@ -189,7 +189,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         double pp_loss_thres = -1.0;
 //         nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
 //         ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
-//         ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), ppSigmaR, ppSigmaP, traj->getDt(), s);
+//         ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), ppSigmaR, ppSigmaP, traj->getGPMixerPtr(), s);
 //         auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
 //         res_ids_pose.push_back(res_block);
 //     }
@@ -215,7 +215,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         double mp_loss_thres = -1;
 //         nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
 //         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-//         ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
+//         ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr());
 //         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
 //         res_ids_gp.push_back(res_block);
 //     }
@@ -257,7 +257,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //     //     double mp_loss_thres = -1;
 //     //     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
 //     //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-//     //     ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
+//     //     ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr(), ss, sf, tf - ts);
 //     //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
 //     //     res_ids_gp.push_back(res_block);
 //     // }
@@ -280,7 +280,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         double sm_loss_thres = -1;
 //         nh_ptr->getParam("sm_loss_thres", sm_loss_thres);
 //         ceres::LossFunction *sm_loss_function = sm_loss_thres <= 0 ? NULL : new ceres::HuberLoss(sm_loss_thres);
-//         ceres::CostFunction *cost_function = new GPSmoothnessFactor(smSigmaR, smSigmaP, traj->getDt());
+//         ceres::CostFunction *cost_function = new GPSmoothnessFactor(smSigmaR, smSigmaP, traj->getGPMixerPtr());
 //         auto res_block = problem.AddResidualBlock(cost_function, sm_loss_function, factor_param_blocks);
 //         res_ids_sm.push_back(res_block);
 //     }
@@ -320,7 +320,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         // Create the factor
 //         double gp_loss_thres = -1;
 //         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-//         GPMotionPriorFactorAutodiff *GPMPFactor = new GPMotionPriorFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
+//         GPMotionPriorFactorAutodiff *GPMPFactor = new GPMotionPriorFactorAutodiff(mpSigmaR, mpSigmaP, traj->getGPMixerPtr(), ss, sf, tf - ts);
 //         auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorFactorAutodiff>(GPMPFactor);
 //         cost_function->SetNumResiduals(15);
 //         vector<double *> factor_param_blocks;
@@ -425,7 +425,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         // Create the factor
 //         double gp_loss_thres = -1;
 //         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-//         ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getDt(), ss, sf, tf - ts);
+//         ceres::CostFunction *cost_function = new GPMotionPriorFactor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr(), ss, sf, tf - ts);
 //         auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
 //         res_ids_gp.push_back(res_block);
 //     }
@@ -450,7 +450,7 @@ void AddAutodiffGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
         // Create the factor
         double gp_loss_thres = -1;
         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-        GPMotionPriorTwoKnotsFactorAutodiff *GPMPFactor = new GPMotionPriorTwoKnotsFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt());
+        GPMotionPriorTwoKnotsFactorAutodiff *GPMPFactor = new GPMotionPriorTwoKnotsFactorAutodiff(mpSigmaR, mpSigmaP, traj->getGPMixerPtr());
         auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorTwoKnotsFactorAutodiff>(GPMPFactor);
         cost_function->SetNumResiduals(18);
         vector<double *> factor_param_blocks;
@@ -517,7 +517,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
         double mp_loss_thres = -1;
         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getDt());
+        ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr());
         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
         res_ids_gp.push_back(res_block);
     }
@@ -537,7 +537,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //     vector<double *> so3_param;
 //     vector<double *> r3_param;
 //     vector<ceres::ResidualBlockId> res_ids_pose;
-//     double dt_ = traj->getDt()/7;
+//     double dt_ = traj->getGPMixerPtr()/7;
 //     // Add the pose factors with priors sampled from previous spline
 //     for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
 //     {
@@ -550,7 +550,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //         // Create the factor
 //         double gp_loss_thres = -1;
 //         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-//         GPPoseFactorAutodiff *GPPoseFactor = new GPPoseFactorAutodiff(traj->pose(t), 100.0, 100.0, traj->getDt(), s);
+//         GPPoseFactorAutodiff *GPPoseFactor = new GPPoseFactorAutodiff(traj->pose(t), 100.0, 100.0, traj->getGPMixerPtr(), s);
 //         auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPPoseFactorAutodiff>(GPPoseFactor);
 //         cost_function->SetNumResiduals(6);
 //         vector<double *> factor_param_blocks;
@@ -587,7 +587,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //     vector<double *> so3_param;
 //     vector<double *> r3_param;
 //     vector<ceres::ResidualBlockId> res_ids_pose;
-//     double dt_ = traj->getDt()/7;
+//     double dt_ = traj->getGPMixerPtr()/7;
 //     // Add the pose factors with priors sampled from previous spline
 //     for (double t = traj->getMinTime(); t < traj->getMaxTime(); t+=dt_)
 //     {
@@ -615,7 +615,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //         // Create the factor
 //         double gp_loss_thres = -1;
 //         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-//         ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), 100.0, 100.0, traj->getDt(), s);
+//         ceres::CostFunction *cost_function = new GPPoseFactor(traj->pose(t), 100.0, 100.0, traj->getGPMixerPtr(), s);
 //         auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
 //         res_ids_pose.push_back(res_block);
 //     }
@@ -649,7 +649,7 @@ void AddAutodiffGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
         double lidar_loss_thres = -1.0;
         double gp_loss_thres = -1;
         ceres::LossFunction *gp_loss_func = gp_loss_thres == -1 ? NULL : new ceres::HuberLoss(gp_loss_thres);
-        GPPointToPlaneFactorAutodiff *GPLidarFactor = new GPPointToPlaneFactorAutodiff(coef.f, coef.n, coef.plnrty, traj->getDt(), s);
+        GPPointToPlaneFactorAutodiff *GPLidarFactor = new GPPointToPlaneFactorAutodiff(coef.f, coef.n, coef.plnrty, traj->getGPMixerPtr(), s);
         auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPPointToPlaneFactorAutodiff>(GPLidarFactor);
         cost_function->SetNumResiduals(1);
         vector<double *> factor_param_blocks;
@@ -726,7 +726,7 @@ void AddAnalyticGPLidarFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
         
         double lidar_loss_thres = -1.0;
         ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-        ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.f, coef.n, coef.plnrty, traj->getDt(), s);
+        ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.f, coef.n, coef.plnrty, traj->getGPMixerPtr(), s);
         auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
         res_ids_lidar.push_back(res);
     }
@@ -768,7 +768,7 @@ void AddAutodiffGPXtsFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
     double mp_loss_thres = -1;
     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-    GPExtrinsicFactorAutodiff *factor = new GPExtrinsicFactorAutodiff(mpSigmaR, mpSigmaP, traj->getDt(), traj->getDt(), ss, sf);
+    GPExtrinsicFactorAutodiff *factor = new GPExtrinsicFactorAutodiff(mpSigmaR, mpSigmaP, traj->getGPMixerPtr(), traj->getGPMixerPtr(), ss, sf);
     auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPExtrinsicFactorAutodiff>(factor);
     cost_function->SetNumResiduals(18);
 
@@ -922,7 +922,7 @@ void AddAnalyticGPXtsFactor(GaussianProcessPtr &traj, ceres::Problem &problem,
     double mp_loss_thres = -1;
     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-    ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, traj->getDt(), traj->getDt(), ss, sf);
+    ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, traj->getGPMixerPtr(), traj->getGPMixerPtr(), ss, sf);
     
     // Add res block
     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
@@ -1152,7 +1152,7 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
 
 int main(int argc, char **argv)
 {
-    GPMixer gmp(0.01102);
+    GPMixer gmp(0.01102, Vector3d(10, 10, 10).asDiagonal(), Vector3d(10, 10, 10).asDiagonal());
     Vector3d X(4.3, 5.7, 11);
     Vector3d V(2, 20, 19);
     Vector3d A(15, 07, 24);
@@ -1239,7 +1239,7 @@ int main(int argc, char **argv)
     // Check the factor jacobian
     {
         double Dt = 0.04357;
-        GaussianProcessPtr traj(new GaussianProcess(Dt));
+        GaussianProcessPtr traj(new GaussianProcess(Dt, Vector3d(10, 10, 10).asDiagonal(), Vector3d(10, 10, 10).asDiagonal()));
         traj->setStartTime(0.5743);
         traj->genRandomTrajectory(6);
 

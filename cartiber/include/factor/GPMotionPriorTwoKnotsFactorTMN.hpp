@@ -15,11 +15,11 @@ class GPMotionPriorTwoKnotsFactorTMN
 typedef Eigen::Matrix<double, STATE_DIM, 2*STATE_DIM> MatJ;
 public:
 
-    GPMotionPriorTwoKnotsFactorTMN(double wR_, double wP_, double Dt_)
+    GPMotionPriorTwoKnotsFactorTMN(double wR_, double wP_, GPMixerPtr gpm_)
     :   wR          (wR_             ),
         wP          (wP_             ),
-        Dt          (Dt_             ),
-        gpm         (Dt_             )
+        Dt          (gpm_->getDt()   ),
+        gpm         (gpm_            )
     {
 
         // // 6-element residual: (3x1 rotation, 3x1 position)
@@ -46,8 +46,8 @@ public:
         Qtilde << 1.0/20.0*Dtpow[5], 1.0/8.0*Dtpow[4], 1.0/6.0*Dtpow[3],
                   1.0/08.0*Dtpow[4], 1.0/3.0*Dtpow[3], 1.0/2.0*Dtpow[2],
                   1.0/06.0*Dtpow[3], 1.0/2.0*Dtpow[2], 1.0/1.0*Dtpow[1];
-        Info.block<9, 9>(0, 0) = gpm.kron(Qtilde, Vec3(wR, wR, wR).asDiagonal());
-        Info.block<9, 9>(9, 9) = gpm.kron(Qtilde, Vec3(wP, wP, wP).asDiagonal());
+        Info.block<9, 9>(0, 0) = gpm->kron(Qtilde, gpm->getQr());
+        Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getQc());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
@@ -64,8 +64,8 @@ public:
         SO3d Rab = Xa.R.inverse()*Xb.R;
         Vec3 Theb = Rab.log();
 
-        Mat3 JrInvTheb = gpm.JrInv(Theb);
-        Mat3 DJrInvThebOb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.O);
+        Mat3 JrInvTheb = gpm->JrInv(Theb);
+        Mat3 DJrInvThebOb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.O);
 
         Vec3 Thedotb = JrInvTheb*Xb.O;
         Vec3 Theddotb = DJrInvThebOb_DTheb*Thedotb + JrInvTheb*Xb.S;
@@ -108,19 +108,19 @@ public:
         Mat3 DTheb_DRa = -JrInvTheb*Rab.inverse().matrix();
         Mat3 DTheb_DRb =  JrInvTheb;
 
-        Mat3 DThedotb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.O);
+        Mat3 DThedotb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.O);
         Mat3 DThedotb_DRa = DThedotb_DTheb*DTheb_DRa;
         Mat3 DThedotb_DRb = DThedotb_DTheb*DTheb_DRb;
 
-        Mat3 DJrInvThebSb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.S);
-        // Mat3 DJrInvThebOb_DTheb = gpm.DJrInvXV_DX(Theb, Xb.O);
-        Mat3 DDJrInvThebObThedotb_DThebDTheb = gpm.DDJrInvXVA_DXDX(Theb, Xb.O, Thedotb);
+        Mat3 DJrInvThebSb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.S);
+        // Mat3 DJrInvThebOb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.O);
+        Mat3 DDJrInvThebObThedotb_DThebDTheb = gpm->DDJrInvXVA_DXDX(Theb, Xb.O, Thedotb);
         
         Mat3 DTheddotb_DTheb = DJrInvThebSb_DTheb + DDJrInvThebObThedotb_DThebDTheb + DJrInvThebOb_DTheb*DJrInvThebOb_DTheb;
         Mat3 DTheddotb_DRa = DTheddotb_DTheb*DTheb_DRa;
         Mat3 DTheddotb_DRb = DTheddotb_DTheb*DTheb_DRb;
 
-        Mat3 DDJrInvThebObThedotb_DThebDOb = gpm.DDJrInvXVA_DXDV(Theb, Xb.O, Thedotb);
+        Mat3 DDJrInvThebObThedotb_DThebDOb = gpm->DDJrInvXVA_DXDV(Theb, Xb.O, Thedotb);
         Mat3 DTheddotb_DOb = DDJrInvThebObThedotb_DThebDOb + DJrInvThebOb_DTheb*JrInvTheb;        
 
         size_t idx;
@@ -278,5 +278,5 @@ private:
     double Dt;
 
     // Mixer for gaussian process
-    GPMixer gpm;
+    GPMixerPtr gpm;
 };

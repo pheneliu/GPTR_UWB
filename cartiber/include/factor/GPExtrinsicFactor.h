@@ -15,13 +15,13 @@ class GPExtrinsicFactor : public ceres::CostFunction
 {
 public:
 
-    GPExtrinsicFactor(double wR_, double wP_, double Dts_, double Dtf_, double ss_, double sf_)
+    GPExtrinsicFactor(double wR_, double wP_, GPMixerPtr gpms_, GPMixerPtr gpmf_, double ss_, double sf_)
     :   wR          (wR_             ),
         wP          (wP_             ),
-        Dts         (Dts_            ),
-        Dtf         (Dtf_            ),
-        gpms        (Dts_            ),
-        gpmf        (Dtf_            ),
+        Dts         (gpms_->getDt()  ),
+        Dtf         (gpmf_->getDt()  ),
+        gpms        (gpms_           ),
+        gpmf        (gpmf_           ),
         ss          (ss_             ),
         sf          (sf_             )
     {
@@ -48,11 +48,11 @@ public:
         sqrtW.block<3, 3>(9, 9) = Vector3d(wP, wP, wP).asDiagonal();
     }
 
-    GPExtrinsicFactor(MatrixXd InvCov_, double Dts_, double Dtf_, double ss_, double sf_)
-    :   Dts         (Dts_            ),
-        Dtf         (Dtf_            ),
-        gpms        (Dts_            ),
-        gpmf        (Dtf_            ),
+    GPExtrinsicFactor(MatrixXd InvCov_, GPMixerPtr gpms_, GPMixerPtr gpmf_, double ss_, double sf_)
+    :   Dts         (gpms_->getDt()  ),
+        Dtf         (gpmf_->getDt()  ),
+        gpms        (gpms_           ),
+        gpmf        (gpmf_           ),
         ss          (ss_             ),
         sf          (sf_             )
     {
@@ -82,12 +82,12 @@ public:
         /* #region Map the memory to control points -----------------------------------------------------------------*/
 
         // Map parameters to the control point states
-        GPState Xsa(0);   gpms.MapParamToState(parameters, RsaIdx, Xsa);
-        GPState Xsb(Dts); gpms.MapParamToState(parameters, RsbIdx, Xsb);
+        GPState Xsa(0);   gpms->MapParamToState(parameters, RsaIdx, Xsa);
+        GPState Xsb(Dts); gpms->MapParamToState(parameters, RsbIdx, Xsb);
 
         // Map parameters to the control point states
-        GPState Xfa(0);   gpmf.MapParamToState(parameters, RfaIdx, Xfa);
-        GPState Xfb(Dtf); gpmf.MapParamToState(parameters, RfbIdx, Xfb);
+        GPState Xfa(0);   gpmf->MapParamToState(parameters, RfaIdx, Xfa);
+        GPState Xfb(Dtf); gpmf->MapParamToState(parameters, RfbIdx, Xfb);
 
         SO3d Rsf = Eigen::Map<SO3d const>(parameters[RsfIdx]);
         Vec3 Psf = Eigen::Map<Vec3 const>(parameters[PsfIdx]);
@@ -102,8 +102,8 @@ public:
         Eigen::Matrix<double, 9, 1> gammasa, gammasb, gammast;
         Eigen::Matrix<double, 9, 1> gammafa, gammafb, gammaft;
 
-        gpms.ComputeXtAndJacobians(Xsa, Xsb, Xst, DXst_DXsa, DXst_DXsb, gammasa, gammasb, gammast);
-        gpmf.ComputeXtAndJacobians(Xfa, Xfb, Xft, DXft_DXfa, DXft_DXfb, gammafa, gammafb, gammaft);
+        gpms->ComputeXtAndJacobians(Xsa, Xsb, Xst, DXst_DXsa, DXst_DXsb, gammasa, gammasb, gammast);
+        gpmf->ComputeXtAndJacobians(Xfa, Xfb, Xft, DXft_DXfa, DXft_DXfb, gammafa, gammafb, gammaft);
 
         /* #endregion Compute the interpolated states ---------------------------------------------------------------*/
 
@@ -141,7 +141,7 @@ public:
         Mat3 Psfskw = SO3d::hat(Psf);
 
         Mat3 RfInvRs = (Xft.R.inverse()*Xst.R).matrix();
-        Mat3 JrInvrR =  gpms.JrInv(rR);
+        Mat3 JrInvrR =  gpms->JrInv(rR);
 
         Mat3 DrR_DRft =  JrInvrR;
         Mat3 DrR_DRst = -JrInvrR*RfInvRs;
@@ -169,7 +169,7 @@ public:
         Mat3 DrA_DAft =  Eye;
         Mat3 DrA_DAst = -Eye;
         Mat3 DrA_DRst =  Rstmat*SO3d::hat(SstxPsf + Ostx*OstxPsf);
-        Mat3 DrA_DOst = -Rstmat*gpms.Fu(Xst.O, Psf);
+        Mat3 DrA_DOst = -Rstmat*gpms->Fu(Xst.O, Psf);
         Mat3 DrA_DSst =  Rstmat*SO3d::hat(Psf);
         Mat3 DrA_DPsf = -Rstmat*Sstx - Rstmat*Ostx*Ostx;
 
@@ -564,6 +564,6 @@ private:
     double sf;
 
     // Mixer for gaussian process
-    GPMixer gpms;
-    GPMixer gpmf;
+    GPMixerPtr gpms;
+    GPMixerPtr gpmf;
 };
