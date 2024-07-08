@@ -6,16 +6,6 @@
 
 #include <ceres/local_parameterization.h>   // For the local parameterization
 
-// #define KNRM  "\x1B[0m"
-// #define KRED  "\x1B[31m"
-// #define KGRN  "\x1B[32m"
-// #define KYEL  "\x1B[33m"
-// #define KBLU  "\x1B[34m"
-// #define KMAG  "\x1B[35m"
-// #define KCYN  "\x1B[36m"
-// #define KWHT  "\x1B[37m"
-// #define RESET "\033[0m"
-
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
 typedef Vector3d Vec3;
@@ -401,7 +391,7 @@ public:
         Vec3T XsksqV = SO3T::hat(X)*SO3T::hat(X)*V;
         Mat3T DXsksqV_DX = Fu<T>(X, V);
 
-        return SO3T::hat(V)*gXn - SO3T::hat(X)*V*DgXn_DXn*Xb.transpose() + DXsksqV_DX*hXn + XsksqV*DhXn_DXn*Xb.transpose();
+        return SO3T::hat(V)*gXn + SO3T::hat(V)*X*DgXn_DXn*Xb.transpose() + DXsksqV_DX*hXn + XsksqV*DhXn_DXn*Xb.transpose();
     }
 
     template <class T = double>
@@ -558,9 +548,10 @@ public:
         // T cXnp2 = cXn*cXn;
         T c2Xn = cos(2.0*Xn);
         
-        T gXn = (1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn));
-        T DgXn_DXn = -2.0/Xnp3 + (Xn*sXnp2 + (sXn + Xn*cXn)*(1.0 + cXn))/(2.0*Xnp2*sXnp2);
-        T DDgXn_DXnDXn = (Xn + 6.0*s2Xn - 12.0*sXn - Xn*c2Xn + Xnp3*cXn + 2.0*Xnp2*sXn + Xnp3)/(Xnp4*(s2Xn - 2.0*sXn));
+        T gXn = 1.0/Xnp2 - (1.0 + cXn)/(2.0*Xn*sXn);
+        T DgXn_DXn = -2.0/Xnp3 + (sXn + Xn)*(1.0 + cXn)/(2.0*Xnp2*sXnp2);
+        // T DDgXn_DXnDXn = 6.0/Xnp4 + (1.0 - c2Xn + Xnp2*cXn + 2.0*Xn*sXn + Xnp2)/(Xnp3*2.0*sXn*(cXn - 1.0));
+        T DDgXn_DXnDXn = 6.0/Xnp4 + sXn/(Xnp3*(cXn - 1.0)) + (Xn*cXn + 2.0*sXn + Xn)/(2.0*Xnp2*sXn*(cXn - 1.0));
 
         Vec3T Xb = X/Xn;
         Mat3T DXb_DX = 1.0/Xn*(Mat3T::Identity(3, 3) - Xb*Xb.transpose());
