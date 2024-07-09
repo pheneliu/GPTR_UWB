@@ -621,7 +621,8 @@ public:
                                vector<vector<Eigen::Matrix<T, 3, 3>>> &DXt_DXb,
                                Eigen::Matrix<T, 9, 1> &gammaa_,
                                Eigen::Matrix<T, 9, 1> &gammab_,
-                               Eigen::Matrix<T, 9, 1> &gammat_
+                               Eigen::Matrix<T, 9, 1> &gammat_,
+                               bool debug = false
                               ) const
     {
         using SO3T  = Sophus::SO3<T>;
@@ -646,7 +647,7 @@ public:
         Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   Qc).cast<T>();
 
         // Find the relative rotation
-        Sophus::SO3<T> Rab = Xa.R.inverse()*Xb.R;
+        SO3T Rab = Xa.R.inverse()*Xb.R;
 
         // Calculate the SO3 knots in relative form
         Vec3T Thead0 = Vec3T::Zero();
@@ -679,7 +680,7 @@ public:
         Vec3T Thetd2 = gammat.block(6, 0, 3, 1);
 
         Mat3T JrThet  = Jr(Thetd0);
-        SO3T  ExpThet = Sophus::SO3<T>::exp(Thetd0);
+        SO3T  ExpThet = SO3T::exp(Thetd0);
         Mat3T HThet_ThetThetd1 = DJrXV_DX(Thetd0, Thetd1);
 
         // Assign the interpolated state
@@ -712,7 +713,7 @@ public:
 
         Mat3T HThet_ThetThetd2 = DJrXV_DX(Thetd0, Thetd2);
         Mat3T LThetThet_ThetThetd1Thetd1 = DDJrXVA_DXDX(Thetd0, Thetd1, Thetd1);
-        Mat3T LThetThetd1_ThetThetd1Thetd1 = DDJrXVA_DXDX(Thetd0, Thetd1, Thetd1);
+        Mat3T LThetThetd1_ThetThetd1Thetd1 = DDJrXVA_DXDV(Thetd0, Thetd1, Thetd1);
         
 
         // Jacobians from L1 to L0
@@ -725,8 +726,8 @@ public:
         Mat3T  JThebd1Rb = HpTheb_ThebOb*JThebd0Rb;
         Mat3T &JThebd1Ob = JrInvTheb;
 
-        Mat3T  JThebd2Ra = HpTheb_ThebSb*JThebd0Ra + LpThebTheb_ThebObThebd1*JThebd0Ra + HpTheb_ThebOb*JThebd1Ra;
-        Mat3T  JThebd2Rb = HpTheb_ThebSb*JThebd0Rb + LpThebTheb_ThebObThebd1*JThebd0Rb + HpTheb_ThebOb*JThebd1Rb;
+        Mat3T  JThebd2Ra = HpTheb_ThebSb*JThebd0Ra + HpTheb_ThebOb*JThebd1Ra + LpThebTheb_ThebObThebd1*JThebd0Ra;
+        Mat3T  JThebd2Rb = HpTheb_ThebSb*JThebd0Rb + HpTheb_ThebOb*JThebd1Rb + LpThebTheb_ThebObThebd1*JThebd0Rb;
         Mat3T  JThebd2Ob = LpThebOb_ThebObThebd1 + HpTheb_ThebOb*JThebd1Ob;
         Mat3T &JThebd2Sb = JrInvTheb;
 
@@ -754,7 +755,7 @@ public:
         Mat3T JThetd1Oa = JThetd1Thead1*JThead1Oa;
         Mat3T JThetd1Ob = JThetd1Thebd1*JThebd1Ob + JThetd1Thebd2*JThebd2Ob;
         Mat3T JThetd1Sa = JThetd1Thead2*JThead2Sa;
-        Mat3T JThetd1Sb = JThetd1Thead2*JThebd2Sb;
+        Mat3T JThetd1Sb = JThetd1Thebd2*JThebd2Sb;
 
         Mat3T JThetd2Ra = JThetd2Thebd0*JThebd0Ra + JThetd2Thebd1*JThebd1Ra + JThetd2Thebd2*JThebd2Ra;
         Mat3T JThetd2Rb = JThetd2Thebd0*JThebd0Rb + JThetd2Thebd1*JThebd1Rb + JThetd2Thebd2*JThebd2Rb;
@@ -766,13 +767,15 @@ public:
 
         // Jacobians from L3 to L2
         Mat3T &JRtThetd0 = JrThet;
+
         Mat3T &JOtThetd0 = HThet_ThetThetd1;
         Mat3T &JOtThetd1 = JrThet;
+
         Mat3T  JStThetd0 = HThet_ThetThetd2 + LThetThet_ThetThetd1Thetd1;
         Mat3T  JStThetd1 = LThetThetd1_ThetThetd1Thetd1 + HThet_ThetThetd1;
         Mat3T &JStThetd2 = JrThet;
 
-        
+
         // DRt_DRa
         DXt_DXa[RIDX][RIDX] = ExpThetInv.matrix() + JRtThetd0*JThetd0Ra;
         // DRt_DOa
@@ -807,19 +810,19 @@ public:
         // DRt_DPb DRt_DVb DRt_DAb are all zeros
         
         // DOt_Rb
-        DXt_DXa[OIDX][RIDX] = JOtThetd0*JThetd0Rb + JOtThetd1*JThetd1Rb;
+        DXt_DXb[OIDX][RIDX] = JOtThetd0*JThetd0Rb + JOtThetd1*JThetd1Rb;
         // DOt_Ob
-        DXt_DXa[OIDX][OIDX] = JOtThetd0*JThetd0Ob + JOtThetd1*JThetd1Ob;
+        DXt_DXb[OIDX][OIDX] = JOtThetd0*JThetd0Ob + JOtThetd1*JThetd1Ob;
         // DOt_Sb
-        DXt_DXa[OIDX][SIDX] = JOtThetd0*JThetd0Sb + JOtThetd1*JThetd1Sb;
+        DXt_DXb[OIDX][SIDX] = JOtThetd0*JThetd0Sb + JOtThetd1*JThetd1Sb;
         // DOt_DPb DOt_DVb DOt_DAb are all zeros
 
         // DSt_Rb
-        DXt_DXa[SIDX][RIDX] = JStThetd0*JThetd0Rb + JStThetd1*JThetd1Rb + JStThetd2*JThetd2Rb;
+        DXt_DXb[SIDX][RIDX] = JStThetd0*JThetd0Rb + JStThetd1*JThetd1Rb + JStThetd2*JThetd2Rb;
         // DSt_Ob
-        DXt_DXa[SIDX][OIDX] = JStThetd0*JThetd0Ob + JStThetd1*JThetd1Ob + JStThetd2*JThetd2Ob;
+        DXt_DXb[SIDX][OIDX] = JStThetd0*JThetd0Ob + JStThetd1*JThetd1Ob + JStThetd2*JThetd2Ob;
         // DSt_Sb
-        DXt_DXa[SIDX][SIDX] = JStThetd0*JThetd0Sb + JStThetd1*JThetd1Sb + JStThetd2*JThetd2Sb;
+        DXt_DXb[SIDX][SIDX] = JStThetd0*JThetd0Sb + JStThetd1*JThetd1Sb + JStThetd2*JThetd2Sb;
         // DSt_DPb DSt_DVb DSt_DAb are all zeros
 
 

@@ -1104,8 +1104,8 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
                    factorMetaAutodiff.parameter_blocks(),
                    cost_autodiff, time_autodiff = tt_autodiff.Toc());
             residual_autodiff_ = Eigen::Map<Eigen::VectorXd>(residual_autodiff.data(), residual_autodiff.size());
-            // Jacobian_autodiff_ = J_autodiff;
-            Jacobian_autodiff_ = J_autodiff.block(0, 0, 18, 9);
+            Jacobian_autodiff_ = J_autodiff;
+            // Jacobian_autodiff_ = J_autodiff.block(0, 0, 18, 9);
             // cout << "residual:\n" << residual_autodiff_.transpose() << endl;
             // cout << "jacobian:\n" << Jacobian_autodiff_ << RESET << endl;
         }
@@ -1133,16 +1133,16 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
                    factorMetaAnalytic.parameter_blocks(),
                    cost_analytic, time_analytic = tt_analytic.Toc());
             residual_analytic_ = Eigen::Map<Eigen::VectorXd>(residual_analytic.data(), residual_analytic.size());
-            // Jacobian_analytic_ = J_analytic;
-            Jacobian_analytic_ = J_analytic.block(0, 0, 18, 9);
+            Jacobian_analytic_ = J_analytic;
+            // Jacobian_analytic_ = J_analytic.block(0, 0, 18, 9);
             // cout << "residual:\n" << residual_analytic_.transpose() << endl;
             // cout << "jacobian:\n" << Jacobian_analytic_ << RESET << endl;
         }
         // Compare the two jacobians
         VectorXd resdiff = residual_autodiff_ - residual_analytic_;
         MatrixXd jcbdiff = Jacobian_autodiff_ - Jacobian_analytic_;
-        cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
-        cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
+        // cout << KRED "residual diff:\n" RESET << resdiff.transpose() << endl;
+        // cout << KRED "jacobian diff:\n" RESET << jcbdiff << endl;
         // if (maxCoef < jcbdiff.cwiseAbs().maxCoeff() && cidx != 0)
         //     maxCoef = jcbdiff.cwiseAbs().maxCoeff();
         printf(KGRN "CIDX: %d. Extrinsic jacobian max error: %.4f. Time: %.3f, %.3f. Ratio: %.0f\%\n\n" RESET,

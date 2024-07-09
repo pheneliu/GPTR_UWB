@@ -9,6 +9,8 @@
 using SO3d = Sophus::SO3<double>;
 using SE3d = Sophus::SE3<double>;
 
+#define RES_DIM 18
+
 class GPExtrinsicFactorAutodiff
 {
 public:
@@ -42,8 +44,9 @@ public:
         // mutable_parameter_block_sizes()->push_back(3);
         
         // // Find the square root info
-        sqrtW = Matrix<double, 18, 18>::Identity(18, 18);
-        // sqrtW = Eigen::LLT<Matrix<double, 18, 18>>(Info.inverse()).matrixL().transpose();
+        sqrtW = Matrix<double, RES_DIM, RES_DIM>::Identity(RES_DIM, RES_DIM);
+        sqrtW.block<3, 3>(0, 0) = Vector3d(wR, wR, wR).asDiagonal();
+        sqrtW.block<3, 3>(9, 9) = Vector3d(wP, wP, wP).asDiagonal();
     }
 
     template <class T>
