@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
   livox_ros_driver
+  cf_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -161,3 +162,9 @@ add_executable(${PROJECT_NAME}_test src/test.cpp include/ikdTree/ikd_Tree.cpp)
 add_dependencies(${PROJECT_NAME}_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
+# UWB fusion
+add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp)
+add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})

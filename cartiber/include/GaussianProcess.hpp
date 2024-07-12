@@ -728,7 +728,7 @@ public:
 
         Mat3T  JThebd2Ra = HpTheb_ThebSb*JThebd0Ra + HpTheb_ThebOb*JThebd1Ra + LpThebTheb_ThebObThebd1*JThebd0Ra;
         Mat3T  JThebd2Rb = HpTheb_ThebSb*JThebd0Rb + HpTheb_ThebOb*JThebd1Rb + LpThebTheb_ThebObThebd1*JThebd0Rb;
-        Mat3T  JThebd2Ob = LpThebOb_ThebObThebd1 + HpTheb_ThebOb*JThebd1Ob;
+        Mat3T  JThebd2Ob = LpThebOb_ThebObThebd1   + HpTheb_ThebOb*JThebd1Ob;
         Mat3T &JThebd2Sb = JrInvTheb;
 
 
