@@ -235,7 +235,6 @@ void processData()
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
                 UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size());
 
-
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {

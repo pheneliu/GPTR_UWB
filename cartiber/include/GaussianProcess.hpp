@@ -4,7 +4,9 @@
 #include <algorithm>    // Include this header for std::max
 #include <Eigen/Dense>
 
-#include <ceres/local_parameterization.h>   // For the local parameterization
+// Sophus
+#include <sophus/se3.hpp>
+// #include <ceres/local_parameterization.h>   // For the local parameterization
 
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;

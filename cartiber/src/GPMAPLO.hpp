@@ -274,6 +274,36 @@ public:
         }
     }
 
+    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef)
+    {
+        // Sample and publish the slinding window trajectory
+        CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
+        for(double ts = tmin; ts < tmax; ts += traj->getDt()/5)
+            if(traj->TimeInInterval(ts))
+                poseSampled->points.push_back(myTf(traj->pose(ts)).Pose6D(ts));
+
+        // static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
+        Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
+
+        CloudXYZIPtr assoc_cloud(new CloudXYZI());
+        for (int widx = 0; widx < swCloudCoef.size(); widx++)
+        {
+            for(auto &coef : swCloudCoef[widx])
+                {
+                    PointXYZI p;
+                    p.x = coef.finW.x();
+                    p.y = coef.finW.y();
+                    p.z = coef.finW.z();
+                    p.intensity = widx;
+                    assoc_cloud->push_back(p);
+                }
+        }
+        
+        // static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+        if (assoc_cloud->size() != 0)
+            Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
+    }
+
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
     {
         Matrix3d Qr = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
@@ -438,40 +468,19 @@ public:
                                               tf_W_Be.pos, tf_W_Be.rot);
 
                     // Associate between feature and map
-                    Associate(swTraj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
+                    Associate(traj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
                 }
 
-                // Prepare some visualization
-                GPState XtsK = traj->getStateAt(tmin);
-                GPState XteK = traj->getStateAt(tmax);
-
-                // Sample and publish the slinding window trajectory
-                CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
-                for(double ts = swTraj->getMinTime(); ts < swTraj->getMaxTime(); ts += swTraj->getDt()/5)
-                    if(swTraj->TimeInInterval(ts))
-                        poseSampled->points.push_back(myTf(swTraj->pose(ts)).Pose6D(ts));
-                // static ros::Publisher swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
-                Util::publishCloud(swTrajPub, *poseSampled, ros::Time::now(), "world");
-
-                CloudXYZIPtr assoc_cloud(new CloudXYZI());
-                for (int widx = 0; widx < WDZ; widx++)
-                    for(auto &coef : swCloudCoef[widx])
-                        {
-                            PointXYZI p;
-                            p.x = coef.finW.x();
-                            p.y = coef.finW.y();
-                            p.z = coef.finW.z();
-                            p.intensity = widx;
-                            assoc_cloud->push_back(p);
-                        }
-                // static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
-                Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
-
-                gniter++;
+                // Visualize the result on the sliding window
+                Visualize(tmin, tmax, swCloudCoef);
 
                 tt_aftop.Toc();
 
+                // Make report
+                gniter++;
                 // Print a report
+                GPState XtsK = traj->getStateAt(tmin);
+                GPState XteK = traj->getStateAt(tmax);
                 double swTs = swCloudSeg.front()->points.front().t;
                 double swTe = swCloudSeg.back()->points.back().t;
                 report[gniter-1] = 
