@@ -44,7 +44,7 @@ void GPMLC::AddMP2kFactors(ceres::Problem &problem, GaussianProcessPtr &traj, ve
     // Add the GP factors based on knot difference
     for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
     {
-        if (traj->getKnotTime(kidx+1) <= tmin || traj->getKnotTime(kidx) >= tmax)
+        if (traj->getKnotTime(kidx + 1) <= tmin || traj->getKnotTime(kidx) >= tmax)
             continue;
 
         vector<double *> factor_param_blocks;
@@ -187,7 +187,7 @@ void GPMLC::AddGPExtrinsicFactors(ceres::Problem &problem, GaussianProcessPtr &t
 }
 
 // Prototype
-void GPMLC::Evaluate(GaussianProcessPtr &traj0,
+void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
                      GaussianProcessPtr &traji,
                      double tmin, double tmax,
                      const deque<vector<LidarCoef>> &cloudCoef0,
@@ -245,20 +245,23 @@ void GPMLC::Evaluate(GaussianProcessPtr &traj0,
     Util::ComputeCeresCost(res_ids_lidar, cost_lidar_final, problem);
 
     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
-    myTf T_err = T_B_Li_gndtr.inverse()*T_L0_Li;
+    myTf T_err_1 = T_B_Li_gndtr.inverse()*T_L0_Li;
+    myTf T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr;
+    MatrixXd T_err(6, 1); T_err << T_err_1.pos, T_err_2.pos;
     
     printf(KGRN
-           "GPX Opt: Iter: %d. Time: %.0f.\n"
+           "GPX Opt #%d: Iter: %d. Time: %.0f.\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f.\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f.\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n\n"
            RESET,
+           iter,
            summary.iterations.size(), tt_slv.GetLastStop(),
            res_ids_mp2k.size(), res_ids_gpx.size(), res_ids_lidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final,
            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.norm());
 
 }

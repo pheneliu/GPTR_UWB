@@ -54,7 +54,7 @@ public:
     void AddLidarFactors(ceres::Problem &problem, GaussianProcessPtr &traj, const deque<vector<LidarCoef>> &cloudCoef, vector<ceres::ResidualBlockId> &res_ids);
     void AddGPExtrinsicFactors(ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy, vector<ceres::ResidualBlockId> &res_ids, double tmin, double tmax);
 
-    void Evaluate(GaussianProcessPtr &traj0,
+    void Evaluate(int iter, GaussianProcessPtr &traj0,
                   GaussianProcessPtr &traji,
                   double tmin, double tmax,
                   const deque<vector<LidarCoef>> &cloudCoef0,

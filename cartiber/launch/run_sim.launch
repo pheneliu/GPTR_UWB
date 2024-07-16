@@ -43,7 +43,7 @@
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.04357"/>
-        <param name="WINDOW_SIZE"    value="5"      />
+        <param name="WINDOW_SIZE"    value="3"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="0.1"    />
@@ -60,8 +60,8 @@
         <param name="ppSigmaP"       value="-1.0"   />
         
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="10.0"    />
-        <param name="mpSigmaP"       value="10.0"    />
+        <param name="mpSigmaR"       value="1.0"    />
+        <param name="mpSigmaP"       value="1.0"    />
         <param name="DK"             value="2"      />
         <param name="tshift"         value="0.025"  />
 
@@ -78,7 +78,7 @@
         <!-- Extrinsic estimation -->
         <param name="Nsample"        value="1000"   />
         <param name="Nseg"           value="2"      />
-        <param name="t_shift"        value="0.0"    />
+        <param name="t_shift"        value="0.02"    />
 
     </node>
 
