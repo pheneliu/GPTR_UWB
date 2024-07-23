@@ -88,6 +88,7 @@ double UV_NOISE = 10.0;
 // Number of poses per knot in the extrinsic optimization
 int Nseg = 1;
 double t_shift = 0.0;
+int max_outer_iter = 3;
 
 vector<myTf<double>> T_B_Li_gndtr;
 
@@ -1083,6 +1084,9 @@ int main(int argc, char **argv)
     nh_ptr->getParam("pc_topics",  pc_topics);
     nh_ptr->getParam("lidar_type", lidar_type);
     
+    double SKIPPED_TIME = 0.0;
+    nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
+
     printf("Get bag at %s and prior map at %s\n", lidar_bag_file.c_str(), priormap_file.c_str());
     printf("MAX_CLOUDS: %d\n", MAX_CLOUDS);
 
@@ -1105,6 +1109,7 @@ int main(int argc, char **argv)
     // Find the Nseg
     nh_ptr->getParam("Nseg", Nseg);
     nh_ptr->getParam("t_shift", t_shift);
+    nh_ptr->getParam("max_outer_iter", max_outer_iter);
 
     // Determine the number of lidar
     int Nlidar = pc_topics.size();
@@ -1381,15 +1386,24 @@ int main(int argc, char **argv)
     GPMLCPtr gpmlc(new GPMLC(nh_ptr));
 
     // Do optimization with inter-trajectory factors
-    for(int iter = 0; iter < 3; iter++)
+    for(int iter = 0; iter < max_outer_iter; iter++)
     {
         int CLOUDS_XW = 5;
         int CLOUDS_XW_HALF = int(CLOUDS_XW/2);
         for(int cidx = 0; cidx < cloudsx[0].size() - CLOUDS_XW_HALF; cidx+= int(CLOUDS_XW_HALF))
         {
+            if (cloudsx[0][cidx]->points.front().t < SKIPPED_TIME)
+                continue;
+
             int SW_BEG = cidx;
-            int SW_END = min(cidx + CLOUDS_XW, int(cloudsx[0].size()));
+            int SW_END = min(cidx + CLOUDS_XW, int(cloudsx[0].size())-1);
             int CLOUDS_XW_EFF = SW_END - SW_BEG;
+
+            double tmin = cloudsx[0][SW_BEG]->points.front().t;
+            double tmax = cloudsx[0][SW_END]->points.back().t;
+            double dt   = cloudsx[0][SW_BEG]->points.back().t - cloudsx[0][SW_BEG]->points.front().t;
+
+            // printf("CLOUDS_XW: %d. %d. %d. %f. %f. %f\n", CLOUDS_XW, CLOUDS_XW_HALF, CLOUDS_XW_EFF, tmin, tmax, dt);
 
             deque<CloudXYZITPtr> swCloud0(CLOUDS_XW_EFF);
             deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_XW_EFF);
@@ -1432,8 +1446,6 @@ int main(int argc, char **argv)
             }
 
             // Optimize
-            double tmin = swCloud0.front()->points.front().t;
-            double tmax = swCloud0.back()->points.back().t;
             gpmlc->Evaluate(iter, gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj(), tmin, tmax, swCloudCoef0, swCloudCoefi, T_B_Li_gndtr[1]);
 
             // Visualize the result on each trajectory
@@ -1453,43 +1465,43 @@ int main(int argc, char **argv)
     ros::Rate rate(0.2);
     while(ros::ok())
     {
-        // Optimize the extrinics
-        for(int n = 1; n < Nlidar; n++)
-        {
-            GaussianProcessPtr traj0 = gpmaplo[0]->GetTraj();
-            GaussianProcessPtr trajn = gpmaplo[n]->GetTraj();
+        // // Optimize the extrinics
+        // for(int n = 1; n < Nlidar; n++)
+        // {
+        //     GaussianProcessPtr traj0 = gpmaplo[0]->GetTraj();
+        //     GaussianProcessPtr trajn = gpmaplo[n]->GetTraj();
 
-            // Sample the trajectory
-            double tmin = max(traj0->getMinTime(), trajn->getMinTime());
-            double tmax = min(traj0->getMaxTime(), trajn->getMaxTime());
+        //     // Sample the trajectory
+        //     double tmin = max(traj0->getMinTime(), trajn->getMinTime());
+        //     double tmax = min(traj0->getMaxTime(), trajn->getMaxTime());
 
-            // Sample the trajectories:
-            printf("Sampling the trajectories %d, %d\n", 0, n);
-            int Nsample = 1000; nh_ptr->getParam("Nsample", Nsample);
-            CloudPosePtr posesample0(new CloudPose()); posesample0->resize(Nsample);
-            CloudPosePtr posesamplen(new CloudPose()); posesamplen->resize(Nsample);
-            vector<GPState<double>> gpstate0(Nsample);
-            vector<GPState<double>> gpstaten(Nsample);
-            // #pragma omp parallel for num_threads(MAX_THREADS)
-            for (int pidx = 0; pidx < Nsample; pidx++)
-            {
-                double ts = tmin + pidx*(tmax - tmin)/Nsample;
-                posesample0->points[pidx] = myTf(traj0->pose(ts)).Pose6D(ts);
-                posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
+        //     // Sample the trajectories:
+        //     printf("Sampling the trajectories %d, %d\n", 0, n);
+        //     int Nsample = 1000; nh_ptr->getParam("Nsample", Nsample);
+        //     CloudPosePtr posesample0(new CloudPose()); posesample0->resize(Nsample);
+        //     CloudPosePtr posesamplen(new CloudPose()); posesamplen->resize(Nsample);
+        //     vector<GPState<double>> gpstate0(Nsample);
+        //     vector<GPState<double>> gpstaten(Nsample);
+        //     // #pragma omp parallel for num_threads(MAX_THREADS)
+        //     for (int pidx = 0; pidx < Nsample; pidx++)
+        //     {
+        //         double ts = tmin + pidx*(tmax - tmin)/Nsample;
+        //         posesample0->points[pidx] = myTf(traj0->pose(ts)).Pose6D(ts);
+        //         posesamplen->points[pidx] = myTf(trajn->pose(ts)).Pose6D(ts);
 
-                gpstate0[pidx] = traj0->getStateAt(ts);
-                gpstaten[pidx] = trajn->getStateAt(ts);
-            }
+        //         gpstate0[pidx] = traj0->getStateAt(ts);
+        //         gpstaten[pidx] = trajn->getStateAt(ts);
+        //     }
 
-            Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");
-            Util::publishCloud(poseSamplePub[n], *posesamplen, ros::Time::now(), "world");
+        //     Util::publishCloud(poseSamplePub[0], *posesample0, ros::Time::now(), "world");
+        //     Util::publishCloud(poseSamplePub[n], *posesamplen, ros::Time::now(), "world");
 
-            // Run the inter traj optimization
-            optimizeExtrinsics(posesample0, posesamplen, n);
-            optimizeExtrinsics(gpstate0, gpstaten, n);
-            optimizeExtrinsics(traj0, trajn, n);
-            cout << endl;
-        }
+        //     // Run the inter traj optimization
+        //     optimizeExtrinsics(posesample0, posesamplen, n);
+        //     optimizeExtrinsics(gpstate0, gpstaten, n);
+        //     optimizeExtrinsics(traj0, trajn, n);
+        //     cout << endl;
+        // }
 
         rate.sleep();
     }

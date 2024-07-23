@@ -69,7 +69,7 @@ void GPMLC::AddMP2kFactors(ceres::Problem &problem, GaussianProcessPtr &traj, ve
 }
 
 // Add lidar factors
-void GPMLC::AddLidarFactors(ceres::Problem &problem, GaussianProcessPtr &traj, const deque<vector<LidarCoef>> &cloudCoef, vector<ceres::ResidualBlockId> &res_ids)
+void GPMLC::AddLidarFactors(ceres::Problem &problem, GaussianProcessPtr &traj, const deque<vector<LidarCoef>> &cloudCoef, vector<ceres::ResidualBlockId> &res_ids, double tmin, double tmax)
 {
     for (auto &Coef : cloudCoef)
     {
@@ -87,6 +87,10 @@ void GPMLC::AddLidarFactors(ceres::Problem &problem, GaussianProcessPtr &traj, c
             auto   us = traj->computeTimeIndex(coef.t);
             int    u  = us.first;
             double s  = us.second;
+
+            if (traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax)
+                continue;
+
             vector<double *> factor_param_blocks;
             // Add the parameter blocks for rotation
             for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
@@ -122,10 +126,16 @@ void GPMLC::AddGPExtrinsicFactors(ceres::Problem &problem, GaussianProcessPtr &t
     for (int kidx = 0; kidx < trajx->getNumKnots() - 2; kidx++)
     {
         if (trajx->getKnotTime(kidx+1) <= tmin || trajx->getKnotTime(kidx) >= tmax)
+        {
+            // printf("Skipping %f. %f, %f, %f\n", trajx->getKnotTime(kidx+1), tmin, trajx->getKnotTime(kidx), tmax);
             continue;
+        }
 
         if (trajy->getKnotTime(kidx+1) <= tmin || trajy->getKnotTime(kidx) >= tmax)
+        {
+            // printf("Skipping %f. %f, %f, %f\n", trajy->getKnotTime(kidx+1), tmin, trajy->getKnotTime(kidx), tmax);
             continue;
+        }
 
         for(int i = 0; i < Nseg; i++)
         {
@@ -220,8 +230,8 @@ void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
     // Add the lidar factors
     vector<ceres::ResidualBlockId> res_ids_lidar;
     double cost_lidar_init = -1; double cost_lidar_final = -1;
-    AddLidarFactors(problem, traj0, cloudCoef0, res_ids_lidar);
-    AddLidarFactors(problem, traji, cloudCoefi, res_ids_lidar);
+    AddLidarFactors(problem, traj0, cloudCoef0, res_ids_lidar, tmin, tmax);
+    AddLidarFactors(problem, traji, cloudCoefi, res_ids_lidar, tmin, tmax);
 
     // Add the extrinsics factors
     vector<ceres::ResidualBlockId> res_ids_gpx;
@@ -237,7 +247,7 @@ void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
     TicToc tt_slv;
 
     ceres::Solve(options, &problem, &summary);
-    
+
     tt_slv.Toc();
 
     Util::ComputeCeresCost(res_ids_mp2k,  cost_mp2k_final,  problem);
@@ -248,20 +258,20 @@ void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
     myTf T_err_1 = T_B_Li_gndtr.inverse()*T_L0_Li;
     myTf T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr;
     MatrixXd T_err(6, 1); T_err << T_err_1.pos, T_err_2.pos;
-    
+
     printf(KGRN
-           "GPX Opt #%d: Iter: %d. Time: %.0f.\n"
+           "GPX Opt #%d: Iter: %d. Time: %.0f. Tmin-Tmax: %.3f, %.3f\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f.\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n\n"
+           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
            iter,
-           summary.iterations.size(), tt_slv.GetLastStop(),
+           summary.iterations.size(), tt_slv.GetLastStop(), tmin, tmax,
            res_ids_mp2k.size(), res_ids_gpx.size(), res_ids_lidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final,
            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.norm());
+           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err_1.pos.norm(), T_err_2.pos.norm(), T_err.norm());
 
 }

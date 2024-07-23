@@ -16,7 +16,7 @@
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="150"/>
+        <param name="MAX_CLOUDS"     value="100"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
@@ -42,8 +42,8 @@
         <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.04357"/>
-        <param name="WINDOW_SIZE"    value="3"      />
+        <param name="deltaT"         value="0.01102"/>
+        <param name="WINDOW_SIZE"    value="5"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
         <param name="lambda"         value="0.1"    />
@@ -77,8 +77,10 @@
 
         <!-- Extrinsic estimation -->
         <param name="Nsample"        value="1000"   />
-        <param name="Nseg"           value="2"      />
-        <param name="t_shift"        value="0.02"    />
+        <param name="Nseg"           value="1"      />
+        <param name="t_shift"        value="0.005"  />
+        <param name="max_outer_iter" value="4"      />
+        
 
     </node>
 
