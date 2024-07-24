@@ -79,7 +79,7 @@
         <param name="Nsample"        value="1000"   />
         <param name="Nseg"           value="1"      />
         <param name="t_shift"        value="0.005"  />
-        <param name="max_outer_iter" value="4"      />
+        <param name="max_outer_iter" value="5"      />
         
 
     </node>

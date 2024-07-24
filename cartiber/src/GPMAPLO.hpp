@@ -86,6 +86,7 @@ private:
     deque<CloudXYZITPtr> cloud_seg_buf;
 
     // Publisher
+    ros::Publisher trajPub;
     ros::Publisher swTrajPub;
     ros::Publisher assocCloudPub;
 
@@ -139,6 +140,7 @@ public:
         nh_ptr->getParam("smSigmaR", smSigmaR);
         nh_ptr->getParam("smSigmaP", smSigmaP);
 
+        trajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gp_traj", LIDX), 1);
         swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
         assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
         
@@ -274,8 +276,18 @@ public:
         }
     }
 
-    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef)
+    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef, bool publish_full_traj=false)
     {
+        if (publish_full_traj)
+        {
+            CloudPosePtr trajCP = CloudPosePtr(new CloudPose());
+            for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+                trajCP->points.push_back(myTf(traj->getKnotPose(kidx)).Pose6D(traj->getKnotTime(kidx)));
+
+            // Publish global trajectory
+            Util::publishCloud(trajPub, *trajCP, ros::Time::now(), "world");
+        }
+
         // Sample and publish the slinding window trajectory
         CloudPosePtr poseSampled = CloudPosePtr(new CloudPose());
         for(double ts = tmin; ts < tmax; ts += traj->getDt()/5)

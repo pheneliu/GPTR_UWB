@@ -204,6 +204,8 @@ void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
                      const deque<vector<LidarCoef>> &cloudCoefi,
                      myTf<double> &T_B_Li_gndtr)
 {
+    TicToc tt_tbuild;
+
     // Ceres problem
     ceres::Problem problem;
     ceres::Solver::Options options;
@@ -220,6 +222,10 @@ void GPMLC::Evaluate(int iter, GaussianProcessPtr &traj0,
     // Add the extrinsic params
     problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+
+    tt_tbuild.Toc();
+
+    tt
 
     // Add the motion prior factor
     vector<ceres::ResidualBlockId> res_ids_mp2k;

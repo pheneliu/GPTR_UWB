@@ -1450,8 +1450,8 @@ int main(int argc, char **argv)
 
             // Visualize the result on each trajectory
             {
-                gpmaplo[0]->Visualize(tmin, tmax, swCloudCoef0);
-                gpmaplo[1]->Visualize(tmin, tmax, swCloudCoefi);
+                gpmaplo[0]->Visualize(tmin, tmax, swCloudCoef0, true);
+                gpmaplo[1]->Visualize(tmin, tmax, swCloudCoefi, true);
             }
         }
     }

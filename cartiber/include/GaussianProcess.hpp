@@ -1059,6 +1059,11 @@ public:
         return GPState(getKnotTime(kidx), R[kidx], O[kidx], S[kidx], P[kidx], V[kidx], A[kidx]);
     }
 
+    SE3d getKnotPose(int kidx) const
+    {
+        return SE3d(R[kidx], P[kidx]);
+    }
+
     SE3d pose(double t) const
     {
         GPState X = getStateAt(t);
