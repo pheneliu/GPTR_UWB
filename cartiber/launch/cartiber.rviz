@@ -4,7 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded: ~
-      Splitter Ratio: 0.6352941393852234
+      Splitter Ratio: 0.6441176533699036
     Tree Height: 746
   - Class: rviz/Selection
     Name: Selection
@@ -231,7 +231,7 @@ Visualization Manager:
           Color: 11; 171; 255
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: false
+          Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -240,13 +240,13 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.029999999329447746
-          Style: Spheres
+          Size (m): 0.012500000186264515
+          Style: Boxes
           Topic: /lidar_0/sw_opt
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: false
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -268,7 +268,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.009999999776482582
+          Size (m): 0.019999999552965164
           Style: Spheres
           Topic: /lidar_0/gp_traj
           Unreliable: false
@@ -468,8 +468,8 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.029999999329447746
-          Style: Spheres
+          Size (m): 0.012500000186264515
+          Style: Boxes
           Topic: /lidar_1/sw_opt
           Unreliable: false
           Use Fixed Frame: true
@@ -496,7 +496,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.009999999776482582
+          Size (m): 0.019999999552965164
           Style: Spheres
           Topic: /lidar_1/gp_traj
           Unreliable: false
@@ -561,7 +561,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 1.9313267469406128
+      Distance: 2.526613235473633
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -569,17 +569,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 1.6556950807571411
-        Y: 1.1175616979599
-        Z: -1.9490571503411047e-06
+        X: 0.564978837966919
+        Y: 0.4128316044807434
+        Z: -2.1874757294426672e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.33979764580726624
+      Pitch: 0.959797203540802
       Target Frame: body
-      Yaw: 3.1089441776275635
+      Yaw: 2.613942861557007
     Saved: ~
 Window Geometry:
   Displays:

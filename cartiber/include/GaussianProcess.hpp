@@ -30,7 +30,7 @@ public:
     ///  T * exp(x)
     ///
     virtual bool Plus(double const *T_raw, double const *delta_raw,
-                        double *T_plus_delta_raw) const
+                      double *T_plus_delta_raw) const
     {
         Eigen::Map<Groupd const> const T(T_raw);
         Eigen::Map<Tangentd const> const delta(delta_raw);
@@ -40,13 +40,14 @@ public:
     }
 
     virtual bool ComputeJacobian(double const *T_raw,
-                                    double *jacobian_raw) const
+                                 double *jacobian_raw) const
     {
         Eigen::Map<Groupd const> T(T_raw);
-        Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF,
-                                    Eigen::RowMajor>>
-            jacobian(jacobian_raw);
+        Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF, Eigen::RowMajor>>
+        
+        jacobian(jacobian_raw);
         jacobian.setZero();
+
         jacobian(0, 0) = 1;
         jacobian(1, 1) = 1;
         jacobian(2, 2) = 1;
@@ -101,7 +102,6 @@ public:
 
     GPState(double t_, const GPState<T> &other)
         : t(t_), R(other.R), O(other.O), S(other.S), P(other.P), V(other.V), A(other.A) {}
-
     GPState &operator=(const GPState &Xother)
     {
         this->t = Xother.t;

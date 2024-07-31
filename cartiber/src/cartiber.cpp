@@ -225,6 +225,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
     {
         problem.AddParameterBlock(traj->getKnotSO3(knot_idx).data(), 4, local_parameterization);
         problem.AddParameterBlock(traj->getKnotOmg(knot_idx).data(), 3);
+        problem.AddParameterBlock(traj->getKnotAlp(knot_idx).data(), 3);
         problem.AddParameterBlock(traj->getKnotPos(knot_idx).data(), 3);
         problem.AddParameterBlock(traj->getKnotVel(knot_idx).data(), 3);
         problem.AddParameterBlock(traj->getKnotAcc(knot_idx).data(), 3);
@@ -255,6 +256,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
     //     {
     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+    //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -280,6 +282,7 @@ string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd
     //     {
     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+    //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -1388,7 +1391,7 @@ int main(int argc, char **argv)
     // Do optimization with inter-trajectory factors
     for(int iter = 0; iter < max_outer_iter; iter++)
     {
-        int CLOUDS_XW = 5;
+        int CLOUDS_XW = 2; nh_ptr->getParam("CLOUDS_XW", CLOUDS_XW);
         int CLOUDS_XW_HALF = int(CLOUDS_XW/2);
         for(int cidx = 0; cidx < cloudsx[0].size() - CLOUDS_XW_HALF; cidx+= int(CLOUDS_XW_HALF))
         {
@@ -1397,10 +1400,13 @@ int main(int argc, char **argv)
 
             int SW_BEG = cidx;
             int SW_END = min(cidx + CLOUDS_XW, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + CLOUDS_XW_HALF, int(cloudsx[0].size())-1);
+
             int CLOUDS_XW_EFF = SW_END - SW_BEG;
 
             double tmin = cloudsx[0][SW_BEG]->points.front().t;
             double tmax = cloudsx[0][SW_END]->points.back().t;
+            double tmid = cloudsx[0][SW_MID]->points.front().t;
             double dt   = cloudsx[0][SW_BEG]->points.back().t - cloudsx[0][SW_BEG]->points.front().t;
 
             // printf("CLOUDS_XW: %d. %d. %d. %f. %f. %f\n", CLOUDS_XW, CLOUDS_XW_HALF, CLOUDS_XW_EFF, tmin, tmax, dt);
@@ -1446,7 +1452,7 @@ int main(int argc, char **argv)
             }
 
             // Optimize
-            gpmlc->Evaluate(iter, gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj(), tmin, tmax, swCloudCoef0, swCloudCoefi, T_B_Li_gndtr[1]);
+            gpmlc->Evaluate(iter, gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj(), tmin, tmax, tmid, swCloudCoef0, swCloudCoefi, T_B_Li_gndtr[1]);
 
             // Visualize the result on each trajectory
             {

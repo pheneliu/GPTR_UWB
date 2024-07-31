@@ -149,6 +149,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -182,6 +183,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -207,6 +209,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -241,6 +244,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //     //     {
 //     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -249,6 +253,7 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //     //     {
 //     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -329,11 +334,13 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -347,11 +354,13 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -400,11 +409,13 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -413,11 +424,13 @@ void CreateCeresProblem(ceres::Problem &problem, ceres::Solver::Options &options
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -559,11 +572,13 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
@@ -603,11 +618,13 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
 //         {
 //             so3_param.push_back(traj->getKnotSO3(knot_idx).data());
 //             r3_param.push_back(traj->getKnotOmg(knot_idx).data());
+//             r3_param.push_back(traj->getKnotAlp(knot_idx).data());
 //             r3_param.push_back(traj->getKnotPos(knot_idx).data());
 //             r3_param.push_back(traj->getKnotVel(knot_idx).data());
 //             r3_param.push_back(traj->getKnotAcc(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//             factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
 //             factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
