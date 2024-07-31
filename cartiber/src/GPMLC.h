@@ -34,6 +34,16 @@
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 // #include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
 
+enum class ParamType
+{
+    SO3, RV3, UNKNOWN
+};
+
+enum class ParamRole
+{
+    GPSTATE, EXTRINSIC, UNKNOWN
+};
+
 struct TKPIDX
 {
     TKPIDX(int tidx_, int kidx_, int pidx_)
@@ -45,36 +55,121 @@ struct TKPIDX
     int pidx; // parameter index
 };
 
-struct FactorMeta
+class ParamInfo
 {
-    int knots_coupled = 2;
-    vector<ceres::ResidualBlockId> res;
-    vector<vector<int>> kidx;
-    vector<vector<int>> tidx;
-    vector<double> stamp;     // Time of the sample
+public:
+    double* address = NULL; // Actual address of the param block
+    ParamType type;         // Type of the param block (SO3 or RV3)
+    ParamRole role;         // What this param is used for state or role
+    int pidx;               // Index of the parameter in the problem
+    int tidx;               // Index of the trajectory
+    int kidx;               // Index of the knot
+    int sidx;               // Index of state in the knot
 
-    FactorMeta()
-        : knots_coupled(2)
-    {};
-
-    FactorMeta(int knots_coupled_)
-        : knots_coupled(knots_coupled_)
-    {};
-
-    void ResizeTidx(int idx)
+    ParamInfo()
     {
-        tidx.resize(kidx.size(), vector<int>(knots_coupled, idx));
+        address = NULL;
+        type = ParamType::UNKNOWN;
+        role = ParamRole::UNKNOWN;
+        pidx = -1;
+        tidx = -1;
+        kidx = -1;
+        sidx = -1;
+    }
+
+    ParamInfo(double* address_, ParamType type_, ParamRole role_,
+              int pidx_, int tidx_, int kidx_, int sidx_)
+        : address(address_), type(type_), role(role_),
+          pidx(pidx_), tidx(tidx_), kidx(kidx_), sidx(sidx_)
+    {};
+
+    // bool operator<(const ParamInfo &other) const
+    // {
+    //     if (tidx == -1 && other.tidx != -1)
+    //         return false;
+
+    //     if (tidx != -1 && other.tidx == -1)
+    //         return true;
+
+    //     if ((tidx != -1 && other.tidx != -1) && (tidx < other.tidx))
+    //         return true;
+
+    //     if ((tidx != -1 && other.tidx != -1) && (tidx > other.tidx))
+    //         return false;
+
+    //     // Including the situation that two knots are 01
+    //     if (tidx == other.tidx)
+    //     {
+    //         if (kidx == -1 && other.kidx != -1)
+    //             return false;
+
+    //         if (kidx != -1 && other.kidx == -1)
+    //             return true;
+
+    //         if ((kidx != -1 && other.kidx != -1) && (kidx < other.kidx))
+    //             return true;
+
+    //         if ((kidx != -1 && other.kidx != -1) && (kidx > other.kidx))
+    //             return false;
+
+    //         if (kidx == other.kidx)
+    //         {
+    //             if (sidx == -1 && other.sidx != -1)
+    //                 return false;
+
+    //             if (sidx != -1 && other.sidx == -1)
+    //                 return true;
+
+    //             if ((sidx != -1 && other.sidx != -1) && (sidx < other.sidx))
+    //                 return true;
+
+    //             if ((sidx != -1 && other.sidx != -1) && (sidx > other.sidx))
+    //                 return false;
+
+    //             return false;    
+    //         }    
+    //     }                
+    // }
+};
+
+class FactorMeta
+{
+public:
+
+    // int knots_coupled = 2;
+    vector<double> stamp; // Time of the factor
+    vector<ceres::ResidualBlockId> res;
+    vector<vector<ParamInfo>> coupled_params;
+
+    FactorMeta() {};
+    FactorMeta(const FactorMeta &other)
+        : res(other.res), coupled_params(other.coupled_params), stamp(other.stamp)
+    {};
+
+    // FactorMeta(int knots_coupled_)
+    //     : knots_coupled(knots_coupled_)
+    // {};
+
+    // void ResizeTidx(int idx)
+    // {
+    //     tidx.resize(kidx.size(), vector<int>(knots_coupled, idx));
+    // }
+
+    FactorMeta operator+(const FactorMeta other)
+    {
+        FactorMeta added(*this);
+        
+        added.stamp.insert(added.stamp.end(), other.stamp.begin(), other.stamp.end());
+        added.res.insert(added.res.end(), other.res.begin(), other.res.end());
+        added.coupled_params.insert(added.coupled_params.end(), other.coupled_params.begin(), other.coupled_params.end());
+
+        return added;
     }
 
     int size()
     {
         return res.size();
     }
-};
-
-enum class ParamType
-{
-    SO3, RV3
 };
 
 struct MarginalizationInfo
@@ -298,22 +393,40 @@ public:
     // Constructor
     GPMLC(ros::NodeHandlePtr &nh_);
 
-    void AddTrajParams(ceres::Problem &problem, GaussianProcessPtr &traj, double tmin, double tmax, double tmid, vector<int> &kpidx);
-    void AddMP2KFactors(ceres::Problem &problem, GaussianProcessPtr &traj, FactorMeta &factorMeta, double tmin, double tmax);
-    void AddLidarFactors(ceres::Problem &problem, GaussianProcessPtr &traj, const deque<vector<LidarCoef>> &cloudCoef, FactorMeta &factorMeta, double tmin, double tmax);
-    void AddGPExtrinsicFactors(ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy, FactorMeta &factorMeta, double tmin, double tmax);
-    void AddPriorFactor(ceres::Problem &problem, GaussianProcessPtr &traj0, GaussianProcessPtr &traji, FactorMeta &factorMeta, double tmin, double tmax);
+    void AddTrajParams(
+        ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, int &tidx,
+        map<double*, ParamInfo> &paramInfo, double tmin, double tmax, double tmid);
+    
+    void AddMP2KFactors(
+        ceres::Problem &problem, GaussianProcessPtr &traj,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        double tmin, double tmax);
 
-    void Marginalize(ceres::Problem &problem, GaussianProcessPtr &traj0, GaussianProcessPtr &traji,
-                     double tmin, double tmax, double tmid,
-                     FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx,
-                     const deque<vector<LidarCoef>> &cloudCoef0,
-                     const deque<vector<LidarCoef>> &cloudCoefi);
+    void AddLidarFactors(
+        ceres::Problem &problem, GaussianProcessPtr &traj,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        const deque<vector<LidarCoef>> &cloudCoef,
+        double tmin, double tmax);
 
-    void Evaluate(int iter, GaussianProcessPtr &traj0, GaussianProcessPtr &traji,
+    void AddGPExtrinsicFactors(
+        ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        double tmin, double tmax);
+
+    void AddPriorFactor(
+        ceres::Problem &problem, GaussianProcessPtr &traj0, GaussianProcessPtr &traji,
+        FactorMeta &factorMeta, double tmin, double tmax);
+
+    void Marginalize(
+        ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
+        double tmin, double tmax, double tmid,
+        map<double*, ParamInfo> &paramInfo,
+        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx);
+
+    void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
                   double tmin, double tmax, double tmid,
-                  const deque<vector<LidarCoef>> &cloudCoef0,
-                  const deque<vector<LidarCoef>> &cloudCoefi,
+                  const vector<deque<vector<LidarCoef>>> &cloudCoef,
+                //   const deque<vector<LidarCoef>> &cloudCoefi,
                   myTf<double> &T_B_Li_gndtr);
 };
 

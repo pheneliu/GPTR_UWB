@@ -86,6 +86,7 @@ double UW_NOISE = 10.0;
 double UV_NOISE = 10.0;
 
 // Number of poses per knot in the extrinsic optimization
+int CLOUDS_SW = 2;
 int Nseg = 1;
 double t_shift = 0.0;
 int max_outer_iter = 3;
@@ -1109,7 +1110,8 @@ int main(int argc, char **argv)
     nh_ptr->getParam("UV_NOISE", UV_NOISE);
     printf("Proccess noise: %.3f, %.3f\n", UW_NOISE, UV_NOISE);
 
-    // Find the Nseg
+    // Find the settings for cross trajectory optimmization
+    nh_ptr->getParam("CLOUDS_SW", CLOUDS_SW);
     nh_ptr->getParam("Nseg", Nseg);
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
@@ -1391,35 +1393,38 @@ int main(int argc, char **argv)
     // Do optimization with inter-trajectory factors
     for(int iter = 0; iter < max_outer_iter; iter++)
     {
-        int CLOUDS_XW = 2; nh_ptr->getParam("CLOUDS_XW", CLOUDS_XW);
-        int CLOUDS_XW_HALF = int(CLOUDS_XW/2);
-        for(int cidx = 0; cidx < cloudsx[0].size() - CLOUDS_XW_HALF; cidx+= int(CLOUDS_XW_HALF))
+        int CLOUDS_SW_HALF = int(CLOUDS_SW/2);
+        for(int cidx = 0; cidx < cloudsx[0].size() - CLOUDS_SW_HALF; cidx+= int(CLOUDS_SW_HALF))
         {
             if (cloudsx[0][cidx]->points.front().t < SKIPPED_TIME)
                 continue;
 
             int SW_BEG = cidx;
-            int SW_END = min(cidx + CLOUDS_XW, int(cloudsx[0].size())-1);
-            int SW_MID = min(cidx + CLOUDS_XW_HALF, int(cloudsx[0].size())-1);
+            int SW_END = min(cidx + CLOUDS_SW, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + CLOUDS_SW_HALF, int(cloudsx[0].size())-1);
 
-            int CLOUDS_XW_EFF = SW_END - SW_BEG;
+            // The effective length of the sliding window by the number of point clouds
+            int CLOUDS_SW_EFF = SW_END - SW_BEG;
 
-            double tmin = cloudsx[0][SW_BEG]->points.front().t;
-            double tmax = cloudsx[0][SW_END]->points.back().t;
-            double tmid = cloudsx[0][SW_MID]->points.front().t;
-            double dt   = cloudsx[0][SW_BEG]->points.back().t - cloudsx[0][SW_BEG]->points.front().t;
+            double tmin = cloudsx[0][SW_BEG]->points.front().t;     // Start time of the sliding window
+            double tmax = cloudsx[0][SW_END]->points.back().t;      // End time of the sliding window
+            double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window,
+                                                                    // also determines the marginalization time limit
+            
+            // double dt = cloudsx[0][SW_BEG]->points.back().t - cloudsx[0][SW_BEG]->points.front().t;
+            // printf("CLOUDS_SW: %d. %d. %d. %f. %f. %f\n", CLOUDS_SW, CLOUDS_SW_HALF, CLOUDS_SW_EFF, tmin, tmax, dt);
 
-            // printf("CLOUDS_XW: %d. %d. %d. %f. %f. %f\n", CLOUDS_XW, CLOUDS_XW_HALF, CLOUDS_XW_EFF, tmin, tmax, dt);
+            vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(CLOUDS_SW_EFF));
 
-            deque<CloudXYZITPtr> swCloud0(CLOUDS_XW_EFF);
-            deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_XW_EFF);
-            deque<CloudXYZIPtr> swCloudUndiInW0(CLOUDS_XW_EFF);
-            deque<vector<LidarCoef>> swCloudCoef0(CLOUDS_XW_EFF);
+            deque<CloudXYZITPtr> swCloud0(CLOUDS_SW_EFF);
+            deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_SW_EFF);
+            deque<CloudXYZIPtr> swCloudUndiInW0(CLOUDS_SW_EFF);
+            deque<vector<LidarCoef>> &swCloudCoef0 = swCloudCoef[0];
 
-            deque<CloudXYZITPtr> swCloudi(CLOUDS_XW_EFF);
-            deque<CloudXYZIPtr> swCloudUndii(CLOUDS_XW_EFF);
-            deque<CloudXYZIPtr> swCloudUndiInWi(CLOUDS_XW_EFF);
-            deque<vector<LidarCoef>> swCloudCoefi(CLOUDS_XW_EFF);
+            deque<CloudXYZITPtr> swCloudi(CLOUDS_SW_EFF);
+            deque<CloudXYZIPtr> swCloudUndii(CLOUDS_SW_EFF);
+            deque<CloudXYZIPtr> swCloudUndiInWi(CLOUDS_SW_EFF);
+            deque<vector<LidarCoef>> &swCloudCoefi = swCloudCoef[1];
 
             // Deskew, Transform and Associate
             auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
@@ -1451,8 +1456,10 @@ int main(int argc, char **argv)
                 ProcessCloud(gpmaplo[1], swCloudi[swIdx], swCloudUndii[swIdx], swCloudUndiInWi[swIdx], swCloudCoefi[swIdx]);
             }
 
+            vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
+
             // Optimize
-            gpmlc->Evaluate(iter, gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj(), tmin, tmax, tmid, swCloudCoef0, swCloudCoefi, T_B_Li_gndtr[1]);
+            gpmlc->Evaluate(iter, trajs, tmin, tmax, tmid, swCloudCoef, T_B_Li_gndtr[1]);
 
             // Visualize the result on each trajectory
             {
