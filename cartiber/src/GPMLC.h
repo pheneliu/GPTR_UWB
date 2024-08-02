@@ -231,13 +231,13 @@ public:
     }
 
     template<typename T>
-    Sophus::SO3<T> DoubleToSO3(double* &rot)
+    Sophus::SO3<T> DoubleToSO3(const double* rot)
     {
         return Sophus::SO3<T>(Quaternion<T>(rot[3], rot[0], rot[1], rot[2]));
     }
 
     template<typename T>
-    Matrix<T, 3, 1> DoubleToRV3(double* &vec)
+    Matrix<T, 3, 1> DoubleToRV3(const double* vec)
     {
         return Matrix<T, 3, 1>(vec[0], vec[1], vec[2]);
     }
@@ -254,9 +254,10 @@ public:
     void HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r)
     {
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> saes(H);
+
         Eigen::VectorXd S = Eigen::VectorXd((saes.eigenvalues().array() > 0).select(saes.eigenvalues().array(), 0));
         Eigen::VectorXd S_inv = Eigen::VectorXd((saes.eigenvalues().array() > 0).select(saes.eigenvalues().array().inverse(), 0));
-
+        
         Eigen::VectorXd S_sqrt = S.cwiseSqrt();
         Eigen::VectorXd S_inv_sqrt = S_inv.cwiseSqrt();
 
@@ -269,22 +270,14 @@ class MarginalizationFactor : public ceres::CostFunction
 {
 private:
         MarginalizationInfo* margInfo;
+        map<const double*, ParamInfo> keptParamMap;
 
 public:
-
-    int *iteration;
-
-    // ~MarginalizationFactor()
-    // {
-    //     delete iteration;
-    // }
 
     MarginalizationFactor(MarginalizationInfo* margInfo_, map<double*, ParamInfo> &paramInfoMap)
     {
         margInfo = margInfo_;
-        
-        // iteration = new int;
-        // *iteration = 0;
+        keptParamMap.clear();
 
         int res_size = 0;
 
@@ -292,7 +285,7 @@ public:
         for(auto &param : margInfo->keptParamInfo)
         {
             // Confirm that the param is in the new map
-            ROS_ASSERT(paramInfoMap.find(param.address) != paramInfoMap.end());
+            // ROS_ASSERT(paramInfoMap.find(param.address) != paramInfoMap.end());
 
             if (param.type == ParamType::SO3)
                 mutable_parameter_block_sizes()->push_back(4);
@@ -300,6 +293,8 @@ public:
                 mutable_parameter_block_sizes()->push_back(3);
 
             res_size += param.delta_size;
+
+            keptParamMap[param.address] = param;
         }
 
         // Set the residual sizes
@@ -316,12 +311,15 @@ public:
         int PRIOR_SIZE = 0;
 
         // Iterate over groups of param blocks (9 for GP state)
-        for(auto &param : margInfo->keptParamInfo)
+        for(int idx = 0; idx < margInfo->keptParamInfo.size(); idx++)
         {
+            ParamInfo &param = margInfo->keptParamInfo[idx];
+            // ROS_ASSERT(keptParamMap.find(parameters[idx]) != keptParamMap.end());
+
             // Find the residual
             if (param.type == ParamType::SO3)
             {
-                SO3d xso3_est = margInfo->DoubleToSO3<double>(param.address);
+                SO3d xso3_est = margInfo->DoubleToSO3<double>(parameters[idx]);
                 SO3d xso3_pri = margInfo->DoubleToSO3<double>(margInfo->keptParamPrior[param.address]);
                 Vector3d res = (xso3_pri.inverse()*xso3_est).log();
                 rprior_.push_back(res);
@@ -333,7 +331,7 @@ public:
             }
             else if (param.type == ParamType::RV3)
             {
-                Vector3d xr3_est = margInfo->DoubleToRV3<double>(param.address);
+                Vector3d xr3_est = margInfo->DoubleToRV3<double>(parameters[idx]);
                 Vector3d xr3_pri = margInfo->DoubleToRV3<double>(margInfo->keptParamPrior[param.address]);
                 Vector3d res = xr3_est - xr3_pri;
                 rprior_.push_back(res);
@@ -429,6 +427,9 @@ private:
     SO3d R_Lx_Ly;
     Vec3 P_Lx_Ly;
 
+    bool fix_kidxmin = false;
+    bool fix_kidxmax = false;
+
     deque<int> kidx_marg;
     deque<int> kidx_keep;
 
@@ -467,19 +468,18 @@ public:
         double tmin, double tmax);
 
     void AddPriorFactor(
-        ceres::Problem &problem, GaussianProcessPtr &traj0, GaussianProcessPtr &traji,
+        ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
         FactorMeta &factorMeta, double tmin, double tmax);
 
     void Marginalize(
         ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
         double tmin, double tmax, double tmid,
         map<double*, ParamInfo> &paramInfo,
-        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx);
+        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior);
 
     void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
                   double tmin, double tmax, double tmid,
                   const vector<deque<vector<LidarCoef>>> &cloudCoef,
-                //   const deque<vector<LidarCoef>> &cloudCoefi,
                   myTf<double> &T_B_Li_gndtr);
 };
 

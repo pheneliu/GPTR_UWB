@@ -82,6 +82,8 @@
         <param name="t_shift"        value="0.025"  />
         <param name="max_outer_iter" value="20"     />
         <param name="max_debug"      value="-1"     />
+        <param name="fix_kidxmin"    value="0"      />
+        <param name="fix_kidxmax"    value="0"      />
     </node>
 
     <!-- Visualize -->

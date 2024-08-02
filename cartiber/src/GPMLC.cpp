@@ -4,7 +4,12 @@
 GPMLC::~GPMLC(){};
 
 // Constructor
-GPMLC::GPMLC(ros::NodeHandlePtr &nh_) : nh(nh_), R_Lx_Ly(Quaternd(1, 0, 0, 0)), P_Lx_Ly(Vec3(0, 0, 0)) {};
+GPMLC::GPMLC(ros::NodeHandlePtr &nh_)
+    : nh(nh_), R_Lx_Ly(Quaternd(1, 0, 0, 0)), P_Lx_Ly(Vec3(0, 0, 0))
+{
+    fix_kidxmin = Util::GetBoolParam(nh, "fix_kidxmin", false);
+    fix_kidxmax = Util::GetBoolParam(nh, "fix_kidxmax", false);
+};
 
 // Add parameters
 void GPMLC::AddTrajParams(ceres::Problem &problem,
@@ -45,25 +50,25 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
         paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
         paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
         
-        // if (kidx == kidxmin)
-        // {
-        //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-        //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
-        // }
+        if (kidx == kidxmin && fix_kidxmin)
+        {
+            problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
+            // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
+            // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+            problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
+            // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
+            // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
+        }
 
-        // if (kidx == kidxmax)
-        // {
-        //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-        //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
-        //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
-        // }
+        if (kidx == kidxmax && fix_kidxmax)
+        {
+            problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
+            // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
+            // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+            problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
+            // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
+            // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
+        }
     }
 }
 
@@ -293,35 +298,80 @@ void GPMLC::AddGPExtrinsicFactors(
     }
 }
 
-void GPMLC::AddPriorFactor(ceres::Problem &problem, GaussianProcessPtr &traj0, GaussianProcessPtr &traji,
-                           FactorMeta &factorMeta, double tmin, double tmax)
+void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, FactorMeta &factorMeta, double tmin, double tmax)
 {
-// 
-//     if (margFactor != NULL)
-//         delete margFactor;
+    // Check if kept states are still in the param list
+    bool kept_state_present = true;
+    for(auto &param : margInfo->keptParamInfo)
+    {
+        bool state_found = (paramInfoMap.find(param.address) != paramInfoMap.end());
+        // printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
+        //         param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
+        
+        if (!state_found)
+            kept_state_present = false;
+    }
 
-    MarginalizationFactor* margFactor = new MarginalizationFactor(margInfo, paramInfoMap);
+    // If all marginalized states are found, add the marginalized factor
+    if (kept_state_present)
+    {
+        MarginalizationFactor* margFactor = new MarginalizationFactor(margInfo, paramInfoMap);
 
-    // Add the involved parameters blocks
-    auto res_block = problem.AddResidualBlock(margFactor, NULL, margInfo->getAllParamBlocks());
+        // Add the involved parameters blocks
+        auto res_block = problem.AddResidualBlock(margFactor, NULL, margInfo->getAllParamBlocks());
 
-    factorMeta.res.push_back(res_block);
+        // Save the residual block
+        factorMeta.res.push_back(res_block);
 
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotSO3(idx).data()]);
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotOmg(idx).data()]);
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotAlp(idx).data()]);
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotPos(idx).data()]);
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotVel(idx).data()]);
-    // factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotAcc(idx).data()]);
+        // Add the coupled param
+        factorMeta.coupled_params.push_back(margInfo->keptParamInfo);
 
-    // // Record the time stamp of the factor
-    // factorMeta.stamp.push_back(t);
+        // Record the time stamp of the factor
+        factorMeta.stamp.push_back(tmin);
+    }
+    // else // If not all marginalization state is found, simply fix the first knot
+    // {
+    //     for(auto &traj : trajs)
+    //     {
+    //         auto usmin = traj->computeTimeIndex(tmin);
+    //         auto usmax = traj->computeTimeIndex(tmax);
+
+    //         int kidxmin = usmin.first;
+    //         int kidxmax = usmax.first+1;
+
+    //         for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+    //         {
+    //             if (kidx < kidxmin || kidx > kidxmax)
+    //                 continue;
+
+    //             if (kidx == kidxmin)
+    //             {
+    //                 problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
+    //                 // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
+    //                 // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+    //                 problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
+    //                 // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
+    //                 // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
+    //             }
+
+    //             // if (kidx == kidxmax)
+    //             // {
+    //             //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
+    //             //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
+    //             //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+    //             //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
+    //             //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
+    //             //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
+    //             // }
+    //         }
+    //     }
+    // }
 }
 
 void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
                         double tmin, double tmax, double tmid,
                         map<double*, ParamInfo> &paramInfoMap,
-                        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx)
+                        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior)
 {
 
     // Deskew, Transform and Associate
@@ -357,43 +407,30 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         }
     };
 
-    auto GetJacobian = [](ceres::CRSMatrix &J) -> MatrixXd
-    {
-        MatrixXd eJ(J.num_rows, J.num_cols);
-        eJ.setZero();
-        for (int r = 0; r < J.num_rows; ++r)
-        {
-            for (int idx = J.rows[r]; idx < J.rows[r + 1]; ++idx)
-            {
-                const int c = J.cols[idx];
-                eJ(r, c) = J.values[idx];
-            }
-        }
-        return eJ;
-    };
-
     // Find the MP2k factors that will be removed
     FactorMeta factorMetaMp2kRemoved, factorMetaMp2kRetained;
     FindRemovedFactors(factorMetaMp2k, factorMetaMp2kRemoved, factorMetaMp2kRetained);
-    printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
+    // printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
 
     // Find the lidar factors that will be removed
     FactorMeta factorMetaLidarRemoved, factorMetaLidarRetained;
     FindRemovedFactors(factorMetaLidar, factorMetaLidarRemoved, factorMetaLidarRetained);
-    printf("factorMetaLidar: %d. Removed: %d\n", factorMetaLidar.size(), factorMetaLidarRemoved.size());
+    // printf("factorMetaLidar: %d. Removed: %d\n", factorMetaLidar.size(), factorMetaLidarRemoved.size());
 
     // Find the extrinsic factors that will be removed
     FactorMeta factorMetaGpxRemoved, factorMetaGpxRetained;
     FindRemovedFactors(factorMetaGpx, factorMetaGpxRemoved, factorMetaGpxRetained);
-    printf("factorMetaGpx: %d. Removed: %d\n", factorMetaGpx.size(), factorMetaGpxRemoved.size());
+    // printf("factorMetaGpx: %d. Removed: %d\n", factorMetaGpx.size(), factorMetaGpxRemoved.size());
+
+    FactorMeta factorMetaPriorRemoved, factorMetaPriorRetained;
+    FindRemovedFactors(factorMetaPrior, factorMetaPriorRemoved, factorMetaPriorRetained);
 
     FactorMeta factorMetaRemoved;
     FactorMeta factorMetaRetained;
 
-    factorMetaRemoved = factorMetaMp2kRemoved + factorMetaLidarRemoved + factorMetaGpxRemoved;
-    factorMetaRetained = factorMetaMp2kRetained + factorMetaLidarRetained + factorMetaGpxRetained;
-
-    printf("Factor removed %d. Factor retained: %d\n", factorMetaRemoved.size(), factorMetaRetained.size());
+    factorMetaRemoved = factorMetaMp2kRemoved + factorMetaLidarRemoved + factorMetaGpxRemoved + factorMetaPriorRemoved;
+    factorMetaRetained = factorMetaMp2kRetained + factorMetaLidarRetained + factorMetaGpxRetained + factorMetaPriorRetained;
+    // printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
 
     // Find the set of params belonging to removed factors
     map<double*, ParamInfo> removed_params;
@@ -549,6 +586,21 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     for (auto &paramblock : parameter_blocks)
         problem.SetParameterBlockVariable(paramblock);
 
+    auto GetJacobian = [](ceres::CRSMatrix &J) -> MatrixXd
+    {
+        MatrixXd eJ(J.num_rows, J.num_cols);
+        eJ.setZero();
+        for (int r = 0; r < J.num_rows; ++r)
+        {
+            for (int idx = J.rows[r]; idx < J.rows[r + 1]; ++idx)
+            {
+                const int c = J.cols[idx];
+                eJ(r, c) = J.values[idx];
+            }
+        }
+        return eJ;
+    };
+
     // Find the jacobians of factors that will be removed
     ceres::Problem::EvaluateOptions e_option;
     e_option.residual_blocks = factorMetaRemoved.res;
@@ -635,13 +687,13 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     MatrixXd Jkeep; VectorXd rkeep;
     margInfo->HbToJr(Hkeep, bkeep, Jkeep, rkeep);
 
-    printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
-           "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
-           "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
-            Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
-            Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
-            Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
-            0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
+    // printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
+    //        "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
+    //        "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
+    //         Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
+    //         Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
+    //         Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
+    //         0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
 
     // // Show the marginalization matrices
     // cout << "Jkeep\n" << Hkeep << endl;
@@ -689,14 +741,19 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         ROS_ASSERT(wierdRes.find(res) == wierdRes.end());
     // printf("Wierd res: %d. No overlap with Gpx\n", wierdRes.size());
 
+    for(auto &res : factorMetaPriorRemoved.res)
+        ROS_ASSERT(wierdRes.find(res) == wierdRes.end());
+    // printf("Wierd res: %d. No overlap with Gpx\n", wierdRes.size());
+
     // Save the marginalization factors and states
-    if (margInfo == NULL)
-        margInfo = new MarginalizationInfo();
+    if (margInfo == NULL) margInfo = new MarginalizationInfo();
+    // Copy the marginalization matrices
     margInfo->Hkeep = Hkeep;
     margInfo->bkeep = bkeep;
     margInfo->Jkeep = Jkeep;
     margInfo->rkeep = rkeep;
     margInfo->keptParamInfo = kept_params;
+    // Add the prior of kept params
     margInfo->keptParamPrior.clear();
     for(auto &param : kept_params)
     {
@@ -809,7 +866,7 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     FactorMeta factorMetaPrior;
     double cost_prior_init = -1; double cost_prior_final = -1;
     if (margInfo != NULL)
-        AddPriorFactor(problem, trajs[0], trajs[1], factorMetaPrior, tmin, tmax);
+        AddPriorFactor(problem, trajs, factorMetaPrior, tmin, tmax);
 
     tt_build.Toc();
 
@@ -821,9 +878,6 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
     Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
-    // if (margFactor != NULL)
-    //     *(margFactor->iteration) = 0;
-
     ceres::Solve(options, &problem, &summary);
 
     Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
@@ -832,11 +886,7 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
 
     // Determine the factors to remove
-    Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx);
-
-    // if (factorMetaPrior.res.size() == 0)
-    //     AddPriorFactor(problem, trajs[0], trajs[1], factorMetaPrior, tmin, tmax);
-    // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
+    Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
 
     tt_slv.Toc();
 
@@ -853,14 +903,14 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     optnum++;
 
     printf(KGRN
-           "GPX Opt #%4d / %2d: Iter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmax: %.3f, %.3f. Debug: %d / %d\n"
+           "GPX Opt #%4d / %2d: Iter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d. Debug: %d / %d\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
            optnum, iter,
-           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmax, debug_check, max_debug,
+           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_kidxmin, fix_kidxmax, debug_check, max_debug,
            factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final,
