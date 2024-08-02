@@ -251,7 +251,7 @@ void GNSolver::HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorX
     Eigen::VectorXd S_inv_sqrt = S_inv.cwiseSqrt();
 
     J = S_sqrt.asDiagonal() * saes.eigenvectors().transpose();
-    r = S_inv_sqrt.asDiagonal() * saes.eigenvectors().transpose() * b;
+    r = S_inv_sqrt.asDiagonal() * saes.eigenvectors().transpose() * (-b);
 }
 
 void GNSolver::Marginalize

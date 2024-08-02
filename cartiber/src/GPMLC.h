@@ -61,16 +61,21 @@ public:
     double* address = NULL; // Actual address of the param block
     ParamType type;         // Type of the param block (SO3 or RV3)
     ParamRole role;         // What this param is used for state or role
+    // int param_size;         // Size of the param block
     int pidx;               // Index of the parameter in the problem
     int tidx;               // Index of the trajectory
     int kidx;               // Index of the knot
     int sidx;               // Index of state in the knot
+
+    int param_size;         // Size of the param in doubles
+    int delta_size;         // Size of the dx in the "X \boxplus dx" of the param
 
     ParamInfo()
     {
         address = NULL;
         type = ParamType::UNKNOWN;
         role = ParamRole::UNKNOWN;
+        // param_size = -1;
         pidx = -1;
         tidx = -1;
         kidx = -1;
@@ -81,62 +86,77 @@ public:
               int pidx_, int tidx_, int kidx_, int sidx_)
         : address(address_), type(type_), role(role_),
           pidx(pidx_), tidx(tidx_), kidx(kidx_), sidx(sidx_)
-    {};
+    {
+        if(type == ParamType::SO3)
+        {
+            param_size = 4;
+            delta_size = 3;
+        }
+        else if(type == ParamType::RV3)
+        {
+            param_size = 3;
+            delta_size = 3;
+        }
+        else
+        {
+            printf("Unknown type! %d\n", type);
+            exit(-1);
+        }
+    };
 
-    // bool operator<(const ParamInfo &other) const
-    // {
-    //     if (tidx == -1 && other.tidx != -1)
-    //         return false;
+    bool operator<(const ParamInfo &other) const
+    {
+        if (tidx == -1 && other.tidx != -1)
+            return false;
 
-    //     if (tidx != -1 && other.tidx == -1)
-    //         return true;
+        if (tidx != -1 && other.tidx == -1)
+            return true;
 
-    //     if ((tidx != -1 && other.tidx != -1) && (tidx < other.tidx))
-    //         return true;
+        if ((tidx != -1 && other.tidx != -1) && (tidx < other.tidx))
+            return true;
 
-    //     if ((tidx != -1 && other.tidx != -1) && (tidx > other.tidx))
-    //         return false;
+        if ((tidx != -1 && other.tidx != -1) && (tidx > other.tidx))
+            return false;
 
-    //     // Including the situation that two knots are 01
-    //     if (tidx == other.tidx)
-    //     {
-    //         if (kidx == -1 && other.kidx != -1)
-    //             return false;
+        // Including the situation that two knots are 01
+        if (tidx == other.tidx)
+        {
+            if (kidx == -1 && other.kidx != -1)
+                return false;
 
-    //         if (kidx != -1 && other.kidx == -1)
-    //             return true;
+            if (kidx != -1 && other.kidx == -1)
+                return true;
 
-    //         if ((kidx != -1 && other.kidx != -1) && (kidx < other.kidx))
-    //             return true;
+            if ((kidx != -1 && other.kidx != -1) && (kidx < other.kidx))
+                return true;
 
-    //         if ((kidx != -1 && other.kidx != -1) && (kidx > other.kidx))
-    //             return false;
+            if ((kidx != -1 && other.kidx != -1) && (kidx > other.kidx))
+                return false;
 
-    //         if (kidx == other.kidx)
-    //         {
-    //             if (sidx == -1 && other.sidx != -1)
-    //                 return false;
+            if (kidx == other.kidx)
+            {
+                if (sidx == -1 && other.sidx != -1)
+                    return false;
 
-    //             if (sidx != -1 && other.sidx == -1)
-    //                 return true;
+                if (sidx != -1 && other.sidx == -1)
+                    return true;
 
-    //             if ((sidx != -1 && other.sidx != -1) && (sidx < other.sidx))
-    //                 return true;
+                if ((sidx != -1 && other.sidx != -1) && (sidx < other.sidx))
+                    return true;
 
-    //             if ((sidx != -1 && other.sidx != -1) && (sidx > other.sidx))
-    //                 return false;
+                if ((sidx != -1 && other.sidx != -1) && (sidx > other.sidx))
+                    return false;
 
-    //             return false;    
-    //         }    
-    //     }                
-    // }
+                return false;    
+            }    
+        }                
+    }
 };
 
 class FactorMeta
 {
 public:
 
-    // int knots_coupled = 2;
     vector<double> stamp; // Time of the factor
     vector<ceres::ResidualBlockId> res;
     vector<vector<ParamInfo>> coupled_params;
@@ -172,10 +192,18 @@ public:
     }
 };
 
-struct MarginalizationInfo
+class MarginalizationInfo
 {
+public:
     MatrixXd Hkeep;
     VectorXd bkeep;
+    MatrixXd Jkeep;
+    VectorXd rkeep;
+
+    vector<ParamInfo> keptParamInfo;
+    map<double*, vector<double>> keptParamPrior;
+
+    MarginalizationInfo() {};
 
     template<typename T>
     vector<T> SO3ToDouble(Sophus::SO3<T> &rot)
@@ -214,6 +242,14 @@ struct MarginalizationInfo
         return Matrix<T, 3, 1>(vec[0], vec[1], vec[2]);
     }
 
+    vector<double*> getAllParamBlocks()
+    {
+        vector<double*> params;
+        for(auto &kpi : keptParamInfo)
+            params.push_back(kpi.address);
+        return params;    
+    }
+
     // Convert the H, b matrices to J, r matrices
     void HbToJr(const MatrixXd &H, const VectorXd &b, MatrixXd &J, VectorXd &r)
     {
@@ -226,59 +262,44 @@ struct MarginalizationInfo
 
         J = S_sqrt.asDiagonal() * saes.eigenvectors().transpose();
         r = S_inv_sqrt.asDiagonal() * saes.eigenvectors().transpose() * b;
-    };
-
-    vector<double*> getAllParamBlocks()
-    {
-        vector<double*> all_param_blocks;
-        for(auto &pbg : param_block)
-            for(auto &pb : pbg)
-                all_param_blocks.push_back(pb);
-
-        return all_param_blocks;
     }
-    
-    vector<vector<double*>> param_block;
-    vector<vector<vector<double>>> param_prior;
-    vector<vector<ParamType>> param_block_type;
-    // vector<SE3d> xtrs_prior;
-    vector<pair<int, int>> tk_idx;
-
-    int so3_states = 0;
-    int rv3_states = 0;
-    vector<ParamType> type;
 };
 
 class MarginalizationFactor : public ceres::CostFunction
 {
-  public:
-    MarginalizationFactor(MarginalizationInfo* margInfo_)
+private:
+        MarginalizationInfo* margInfo;
+
+public:
+
+    int *iteration;
+
+    // ~MarginalizationFactor()
+    // {
+    //     delete iteration;
+    // }
+
+    MarginalizationFactor(MarginalizationInfo* margInfo_, map<double*, ParamInfo> &paramInfoMap)
     {
         margInfo = margInfo_;
+        
+        // iteration = new int;
+        // *iteration = 0;
 
         int res_size = 0;
 
         // Set the parameter blocks sizes
-        for(int gidx = 0; gidx < margInfo->param_block.size(); gidx++)
+        for(auto &param : margInfo->keptParamInfo)
         {
-            auto pbt_group = margInfo->param_block_type[gidx];
-            for (auto &type : pbt_group)
-            {
-                margInfo->type.push_back(type);
+            // Confirm that the param is in the new map
+            ROS_ASSERT(paramInfoMap.find(param.address) != paramInfoMap.end());
 
-                if (type == ParamType::SO3)
-                {
-                    mutable_parameter_block_sizes()->push_back(4);
-                    margInfo->so3_states++;
-                }                    
-                else
-                {
-                    mutable_parameter_block_sizes()->push_back(3);
-                    margInfo->rv3_states++;
-                }
+            if (param.type == ParamType::SO3)
+                mutable_parameter_block_sizes()->push_back(4);
+            else
+                mutable_parameter_block_sizes()->push_back(3);
 
-                res_size += 3;
-            }
+            res_size += param.delta_size;
         }
 
         // Set the residual sizes
@@ -290,82 +311,112 @@ class MarginalizationFactor : public ceres::CostFunction
         vector<Vector3d> rprior_;
         vector<Matrix3d> Jprior_;
         vector<ParamType> type;
+        vector<int> RES_BASE;
+
+        int PRIOR_SIZE = 0;
 
         // Iterate over groups of param blocks (9 for GP state)
-        for(int gidx = 0; gidx < margInfo->param_block.size(); gidx++)
+        for(auto &param : margInfo->keptParamInfo)
         {
-            int Npg = margInfo->param_block[gidx].size();
-            
-            // Iterate over param blocks
-            for(int pidx = 0; pidx < Npg; pidx++)
+            // Find the residual
+            if (param.type == ParamType::SO3)
             {
-                // Find the residual
-                if (margInfo->param_block_type[gidx][pidx] == ParamType::SO3)
-                {
-                    SO3d xso3_est = margInfo->DoubleToSO3<double>(margInfo->param_block[gidx][pidx]);
-                    SO3d xso3_pri = margInfo->DoubleToSO3<double>(margInfo->param_prior[gidx][pidx]);
-                    Vector3d res = (xso3_pri.inverse()*xso3_est).log();
-                    rprior_.push_back(res);
-                    Jprior_.push_back(GPMixer::JrInv(res));
-                    type.push_back(ParamType::SO3);
-                }
-                else
-                {
-                    Vector3d xr3_est = margInfo->DoubleToRV3<double>(margInfo->param_block[gidx][pidx]);
-                    Vector3d xr3_pri = margInfo->DoubleToRV3<double>(margInfo->param_prior[gidx][pidx]);
-                    Vector3d res = xr3_est - xr3_pri;
-                    rprior_.push_back(res);
-                    Jprior_.push_back(GPMixer::JrInv(res));
-                    type.push_back(ParamType::RV3);
-                }
+                SO3d xso3_est = margInfo->DoubleToSO3<double>(param.address);
+                SO3d xso3_pri = margInfo->DoubleToSO3<double>(margInfo->keptParamPrior[param.address]);
+                Vector3d res = (xso3_pri.inverse()*xso3_est).log();
+                rprior_.push_back(res);
+                Jprior_.push_back(GPMixer::JrInv(res));
+                type.push_back(ParamType::SO3);
+
+                RES_BASE.push_back(PRIOR_SIZE);
+                PRIOR_SIZE += param.delta_size;
+            }
+            else if (param.type == ParamType::RV3)
+            {
+                Vector3d xr3_est = margInfo->DoubleToRV3<double>(param.address);
+                Vector3d xr3_pri = margInfo->DoubleToRV3<double>(margInfo->keptParamPrior[param.address]);
+                Vector3d res = xr3_est - xr3_pri;
+                rprior_.push_back(res);
+                Jprior_.push_back(Matrix3d::Identity());
+                type.push_back(ParamType::RV3);
+
+                RES_BASE.push_back(PRIOR_SIZE);
+                PRIOR_SIZE += param.delta_size;
+            }
+            else
+            {
+                yolos("Unknown param type! %d\n", param.type);
+                exit(-1);
             }
         }
 
         int Nprior = rprior_.size();
-        VectorXd rprior(Nprior*3, 1);
-        MatrixXd Jprior(Nprior*3, Nprior*3);
+        VectorXd rprior = VectorXd::Zero(PRIOR_SIZE, 1);
+        MatrixXd Jprior = MatrixXd::Zero(PRIOR_SIZE, PRIOR_SIZE);
         for(int idx = 0; idx < Nprior; idx++)
         {
-            rprior.block<3, 1>(idx*3, 0) = rprior_[idx];
-            Jprior.block<3, 3>(idx*3, idx*3) = Jprior_[idx];
+            rprior.block<3, 1>(RES_BASE[idx], 0) = rprior_[idx];
+            Jprior.block<3, 3>(RES_BASE[idx], RES_BASE[idx]) = Jprior_[idx];
         }
+
+        VectorXd &rkeep = margInfo->rkeep;
+        MatrixXd &Jkeep = margInfo->Jkeep;
 
         const MatrixXd &bkeep = margInfo->bkeep;
         const MatrixXd &Hkeep = margInfo->Hkeep;
-        MatrixXd bprior = bkeep - Hkeep*Jprior*rprior;
-        MatrixXd Hprior = Jprior.transpose()*Hkeep*Jprior;
-        margInfo->HbToJr(Hprior, bprior, Jprior, rprior);
+        MatrixXd bmarg = bkeep + Hkeep*Jprior*rprior;
+        MatrixXd Hmarg = Jprior.transpose()*Hkeep*Jprior;
+        
+        VectorXd rmarg(PRIOR_SIZE, 1);
+        MatrixXd Jmarg(PRIOR_SIZE, PRIOR_SIZE);
+        // margInfo->HbToJr(Hmarg, bmarg, Jmarg, rmarg);
+        rmarg = rkeep + Jkeep*rprior;
+        Jmarg = Jkeep;
 
         // Export the residual
-        Eigen::Map<VectorXd>(residuals, Nprior*3) = rprior;
+        Eigen::Map<VectorXd>(residuals, bkeep.rows()) = rmarg;
+
+        // (*iteration)++;
+        // printf("Iter: %d. rkeep: %.3f. rmarg: %.3f. Jkeep: %.3f. Jmarg: %.3f. Dif: %.3f. %.3f\n",
+        //         (*iteration),
+        //         rkeep.cwiseAbs().maxCoeff(), rmarg.cwiseAbs().maxCoeff(),
+        //         Jkeep.cwiseAbs().maxCoeff(), Jmarg.cwiseAbs().maxCoeff(),
+        //         (rkeep - rmarg).cwiseAbs().maxCoeff(),
+        //         (Jkeep - Jmarg).cwiseAbs().maxCoeff());
+        //         // cout << rkeep - rmarg << endl;
+
+        // if (*iteration == 1 && (rmarg.hasNaN() || Jmarg.hasNaN()))
+        // {
+        //     printf("Marg has NaN\n");
+        //     cout << "rmarg\n" << endl;
+        //     cout << rmarg << endl;
+        //     cout << "Jmarg\n" << endl;
+        //     cout << Jmarg << endl;
+        // }
 
         // Export the Jacobian
         if(jacobians)
         {
             for(int pidx = 0; pidx < Nprior; pidx++)
             {
+                ParamInfo &param = margInfo->keptParamInfo[pidx];
                 if(jacobians[pidx])
                 {
-                    if(type[pidx] == ParamType::SO3)
-                    {
-                        Eigen::Map<Matrix<double, -1, -1, Eigen::RowMajor>> J(jacobians[pidx], rprior.rows(), 4);
-                        J.setZero();
-                        J.leftCols(3) = Jprior.middleCols(pidx*3, 3);
-                    }
-                    else if(type[pidx] == ParamType::RV3)
-                    {
-                        Eigen::Map<Matrix<double, -1, -1, Eigen::RowMajor>> J(jacobians[pidx], rprior.rows(), 3);
-                        J.setZero();
-                        J.leftCols(3) = Jprior.middleCols(pidx*3, 3);
-                    }
+                    Eigen::Map<Matrix<double, -1, -1, Eigen::RowMajor>> J(jacobians[pidx], rprior.rows(), param.param_size);
+                    J.setZero();
+                    J.leftCols(3) = Jmarg.middleCols(pidx*param.delta_size, param.delta_size);
+
+                    MatrixXd Jtmp = MatrixXd::Zero(rprior.rows(), param.param_size);
+                    Jtmp.leftCols(3) = J.leftCols(3);
+
+                    // printf("Jprior %3d: %9.3f, %9.3f\n", pidx, Jtmp.cwiseAbs().maxCoeff(), Jkeep.middleCols(pidx*param.delta_size, param.delta_size).cwiseAbs().maxCoeff());
+                    // cout << rprior << endl;
                 }
             }
         }
 
         return true;
     }
-
-    MarginalizationInfo* margInfo;
 };
 
 class GPMLC
@@ -383,7 +434,9 @@ private:
 
     // Map of traj-kidx and parameter id
     map<pair<int, int>, int> tk2p;
-    MarginalizationInfo margInfo;
+    map<double*, ParamInfo> paramInfoMap;
+    MarginalizationInfo* margInfo = NULL;
+    // MarginalizationFactor* margFactor = NULL;
 
 public:
 
