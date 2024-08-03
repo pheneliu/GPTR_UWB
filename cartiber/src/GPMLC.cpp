@@ -302,14 +302,21 @@ void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &
 {
     // Check if kept states are still in the param list
     bool kept_state_present = true;
-    for(auto &param : margInfo->keptParamInfo)
+    vector<int> missing_param_idx;
+    int removed_dims = 0;
+    for(int idx = 0; idx < margInfo->keptParamInfo.size(); idx++)
     {
+        ParamInfo &param = margInfo->keptParamInfo[idx];
         bool state_found = (paramInfoMap.find(param.address) != paramInfoMap.end());
         // printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
         //         param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
         
         if (!state_found)
+        {
             kept_state_present = false;
+            missing_param_idx.push_back(idx);
+            removed_dims += param.delta_size;
+        }
     }
 
     // If all marginalized states are found, add the marginalized factor
@@ -329,43 +336,141 @@ void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &
         // Record the time stamp of the factor
         factorMeta.stamp.push_back(tmin);
     }
-    // else // If not all marginalization state is found, simply fix the first knot
-    // {
-    //     for(auto &traj : trajs)
-    //     {
-    //         auto usmin = traj->computeTimeIndex(tmin);
-    //         auto usmax = traj->computeTimeIndex(tmax);
+    else if (missing_param_idx.size() <= margInfo->keptParamInfo.size()) // If some marginalization states are missing, delete the missing states
+    {
+        // printf("Remove %d params missing from %d keptParamInfos\n", missing_param_idx.size(), margInfo->keptParamInfo.size());
+        auto removeElementsByIndices = [](vector<ParamInfo>& vec, const std::vector<int>& indices) -> void
+        {
+            // Copy indices to a new vector and sort it in descending order
+            std::vector<int> sortedIndices(indices);
+            std::sort(sortedIndices.rbegin(), sortedIndices.rend());
 
-    //         int kidxmin = usmin.first;
-    //         int kidxmax = usmax.first+1;
+            // Remove elements based on sorted indices
+            for (int index : sortedIndices)
+            {
+                if (index >= 0 && index < vec.size())
+                    vec.erase(vec.begin() + index);
+                else
+                    std::cerr << "Index out of bounds: " << index << std::endl;
+            }
+        };
 
-    //         for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
-    //         {
-    //             if (kidx < kidxmin || kidx > kidxmax)
-    //                 continue;
+        auto removeColOrRow = [](const MatrixXd& matrix, const vector<int>& idxToRemove, int cor) -> MatrixXd // set cor = 0 to remove cols, 1 to remove rows
+        {
+            MatrixXd matrix_tp = matrix;
 
-    //             if (kidx == kidxmin)
-    //             {
-    //                 problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-    //                 // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-    //                 // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-    //                 problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-    //                 // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-    //                 // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
-    //             }
+            if (cor == 1)
+                matrix_tp.transposeInPlace();
 
-    //             // if (kidx == kidxmax)
-    //             // {
-    //             //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
-    //             //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
-    //             //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-    //             //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
-    //             //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
-    //             //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
-    //             // }
-    //         }
-    //     }
-    // }
+            vector<int> idxToRemove_;
+            for(int idx : idxToRemove)
+                if(idx < matrix_tp.cols())
+                    idxToRemove_.push_back(idx);
+
+            // for(auto idx : idxToRemove_)
+            //     printf("To remove: %d\n", idx);
+
+            // Determine the number of columns to keep
+            int idxToKeep = matrix_tp.cols() - idxToRemove_.size();
+            if (idxToKeep <= 0)
+                throw std::invalid_argument("All columns (all rows) are removed or invalid number of columns (or rows) to keep");
+
+            // Create a new matrix with the appropriate size
+            MatrixXd result(matrix_tp.rows(), idxToKeep);
+
+            // Copy columns that are not in idxToRemove
+            int currentCol = 0;
+            for (int col = 0; col < matrix_tp.cols(); ++col)
+                if (std::find(idxToRemove_.begin(), idxToRemove_.end(), col) == idxToRemove_.end())
+                {
+// yolos("matrix: %d, %d. matrix_tp: %d %d. result %d %d. idxToRemove: %d. idxToRemove_: %d. idxToKeep: %d. currentCol: %d. %d.\n",
+//        matrix.rows(), matrix.cols(),
+//        matrix_tp.rows(), matrix_tp.cols(),
+//        result.rows(), result.cols(),
+//        idxToRemove.size(), idxToRemove_.size(), idxToKeep,
+//        currentCol, col);
+                    result.col(currentCol) = matrix_tp.col(col);
+                    currentCol++;
+                }
+
+            if (cor == 1)
+                result.transposeInPlace();
+
+            return result;
+        };
+
+        int cidx = 0;
+        vector<int> removed_cidx;
+        for(int idx = 0; idx < margInfo->keptParamInfo.size(); idx++)
+        {
+
+            int &param_cols = margInfo->keptParamInfo[idx].delta_size;
+            if(std::find(missing_param_idx.begin(), missing_param_idx.end(), idx) != missing_param_idx.end())
+                for(int c = 0; c < param_cols; c++)
+                {
+                    removed_cidx.push_back(cidx + c);
+                    // yolos("%d %d %d\n", cidx, c, removed_cidx.size());
+                    // printf("idx: %d. param_cols: %d. cidx: %d. c: %d\n", idx, param_cols, cidx, c);
+                }
+            cidx += (margInfo->keptParamInfo[idx].delta_size);
+        }
+
+        // Remove the rows and collumns of the marginalization matrices
+        margInfo->Hkeep = removeColOrRow(margInfo->Hkeep, removed_cidx, 0);
+        margInfo->Hkeep = removeColOrRow(margInfo->Hkeep, removed_cidx, 1);
+        margInfo->bkeep = removeColOrRow(margInfo->bkeep, removed_cidx, 1);
+
+        margInfo->Jkeep = removeColOrRow(margInfo->Jkeep, removed_cidx, 0);
+        margInfo->Jkeep = removeColOrRow(margInfo->Jkeep, removed_cidx, 1);
+        margInfo->rkeep = removeColOrRow(margInfo->rkeep, removed_cidx, 1);
+
+        // printf("Jkeep: %d %d. rkeep: %d %d. Hkeep: %d %d. bkeep: %d %d. ParamPrior: %d. ParamInfo: %d. missing_param_idx: %d\n",
+        //         margInfo->Jkeep.rows(), margInfo->Jkeep.cols(),
+        //         margInfo->rkeep.rows(), margInfo->rkeep.cols(),
+        //         margInfo->Hkeep.rows(), margInfo->Hkeep.cols(),
+        //         margInfo->bkeep.rows(), margInfo->bkeep.cols(),
+        //         margInfo->keptParamPrior.size(),
+        //         margInfo->keptParamInfo.size(),
+        //         missing_param_idx.size());
+
+        // Remove the stored priors
+        for(auto &param_idx : missing_param_idx)
+        {
+            // printf("Deleting %d\n", param_idx);
+            margInfo->keptParamPrior.erase(margInfo->keptParamInfo[param_idx].address);
+        }
+
+        // Remove the unfound states
+        removeElementsByIndices(margInfo->keptParamInfo, missing_param_idx);
+
+        // printf("Jkeep: %d %d. rkeep: %d %d. Hkeep: %d %d. bkeep: %d %d. ParamPrior: %d. ParamInfo: %d. missing_param_idx: %d\n",
+        //         margInfo->Jkeep.rows(), margInfo->Jkeep.cols(),
+        //         margInfo->rkeep.rows(), margInfo->rkeep.cols(),
+        //         margInfo->Hkeep.rows(), margInfo->Hkeep.cols(),
+        //         margInfo->bkeep.rows(), margInfo->bkeep.cols(),
+        //         margInfo->keptParamPrior.size(),
+        //         margInfo->keptParamInfo.size(),
+        //         missing_param_idx.size());
+
+        // Add the factor
+        {
+            MarginalizationFactor* margFactor = new MarginalizationFactor(margInfo, paramInfoMap);
+
+            // Add the involved parameters blocks
+            auto res_block = problem.AddResidualBlock(margFactor, NULL, margInfo->getAllParamBlocks());
+
+            // Save the residual block
+            factorMeta.res.push_back(res_block);
+
+            // Add the coupled param
+            factorMeta.coupled_params.push_back(margInfo->keptParamInfo);
+
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(tmin);
+        }
+    }
+    else
+        printf(KYEL "All kept params in marginalization missing. Please check\n" RESET);
 }
 
 void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
@@ -570,6 +675,8 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         //        param.pidx, param.tidx, param.kidx, param.sidx);
     }
 
+    ROS_ASSERT(kept_count != 0);
+
     // Just make sure that all of the column index will increase
     {
         int prev_idx = -1;
@@ -613,7 +720,6 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     MatrixXd Jacobian = GetJacobian(Jacobian_);
 
     // Extract all collumns corresponding to the marginalized states
-    // int PAR_BLK_SIZE = 3;
     int MARG_SIZE = 0; for(auto &param : marg_params) MARG_SIZE += param.delta_size;
     int KEPT_SIZE = 0; for(auto &param : kept_params) KEPT_SIZE += param.delta_size;
 

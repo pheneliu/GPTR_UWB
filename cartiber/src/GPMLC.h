@@ -9,30 +9,13 @@
 
 #include "utility.h"
 
-// /* All needed for filter of custom point type----------*/
-// #include <pcl/pcl_base.h>
-// #include <pcl/impl/pcl_base.hpp>
-// #include <pcl/filters/filter.h>
-// #include <pcl/filters/impl/filter.hpp>
-// #include <pcl/filters/uniform_sampling.h>
-// #include <pcl/filters/impl/uniform_sampling.hpp>
-// #include <pcl/filters/impl/voxel_grid.hpp>
-// #include <pcl/filters/crop_box.h>
-// #include <pcl/filters/impl/crop_box.hpp>
-// /* All needed for filter of custom point type----------*/
-
 // All about gaussian process
 #include "GaussianProcess.hpp"
 
-// Custom solver
-// #include "GNSolver.h"
-
-// #include "factor/ExtrinsicFactor.h"
-// #include "factor/FullExtrinsicFactor.h"
+// Factors
 #include "factor/GPExtrinsicFactor.h"
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
-// #include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
 
 enum class ParamType
 {
@@ -42,17 +25,6 @@ enum class ParamType
 enum class ParamRole
 {
     GPSTATE, EXTRINSIC, UNKNOWN
-};
-
-struct TKPIDX
-{
-    TKPIDX(int tidx_, int kidx_, int pidx_)
-        : tidx(tidx_), kidx(kidx_), pidx(pidx_)
-    {};
-
-    int tidx; // trajectory index
-    int kidx; // knot index 
-    int pidx; // parameter index
 };
 
 class ParamInfo
