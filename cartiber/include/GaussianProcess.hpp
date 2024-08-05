@@ -168,10 +168,10 @@ private:
     const Mat3 Eye = Mat3::Identity();
 
     // Covariance of angular jerk
-    Mat3 Qr = Eye;
+    Mat3 SigGa = Eye;
 
     // Covariance of translational jerk
-    Mat3 Qc = Eye;
+    Mat3 SigNu = Eye;
 
 public:
 
@@ -179,11 +179,11 @@ public:
    ~GPMixer() {};
 
     // Constructor
-    GPMixer(double dt_, const Mat3 Qr_, const Mat3 Qc_) : dt(dt_), Qr(Qr_), Qc(Qc_) {};
+    GPMixer(double dt_, const Mat3 SigGa_, const Mat3 SigNu_) : dt(dt_), SigGa(SigGa_), SigNu(SigNu_) {};
 
     double getDt() const { return dt; }
-    Mat3   getQr() const { return Qr; }
-    Mat3   getQc() const { return Qc; }
+    Mat3   getSigGa() const { return SigGa; }
+    Mat3   getSigNu() const { return SigNu; }
 
     template <typename MatrixType1, typename MatrixType2>
     MatrixXd kron(const MatrixType1& A, const MatrixType2& B) const
@@ -197,7 +197,7 @@ public:
     }
 
     // Transition Matrix, PHI(tau, 0)
-    MatrixXd Ftilde(const double dtau, int N) const
+    MatrixXd Fbase(const double dtau, int N) const
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
 
@@ -209,8 +209,8 @@ public:
         return Phi;
     }
 
-    // Gaussian Process covariance, Q = \int{Phi*F*Qc*F'*Phi'}
-    MatrixXd Qtilde(const double dtau, int N) const 
+    // Gaussian Process covariance, Q = \int{Phi*F*SigNu*F'*Phi'}
+    MatrixXd Qbase(const double dtau, int N) const 
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
         
@@ -227,11 +227,11 @@ public:
         Matrix<double, STATE_DIM, STATE_DIM> F; F.setZero();
         Matrix<double, STATE_DIM, STATE_DIM> Q; Q.setZero();
         
-        F.block<9, 9>(0, 0) = kron(Ftilde(dt, 3), Eye);
-        F.block<9, 9>(9, 9) = kron(Ftilde(dt, 3), Eye);
+        F.block<9, 9>(0, 0) = kron(Fbase(dt, 3), Eye);
+        F.block<9, 9>(9, 9) = kron(Fbase(dt, 3), Eye);
 
-        Q.block<9, 9>(0, 0) = kron(Qtilde(dt, 3), Qr);
-        Q.block<9, 9>(9, 9) = kron(Qtilde(dt, 3), Qc);
+        Q.block<9, 9>(0, 0) = kron(Qbase(dt, 3), SigGa);
+        Q.block<9, 9>(9, 9) = kron(Qbase(dt, 3), SigNu);
 
         return F*P0*F.transpose() + Q;
     }
@@ -241,40 +241,40 @@ public:
         if (dtau < 1e-4)
             return kron(MatrixXd::Zero(3, 3), Eye);
 
-        MatrixXd Phidtaubar = kron(Ftilde(dt - dtau, 3), Eye);
-        MatrixXd Qdtau = kron(Qtilde(dtau, 3), Q);
-        MatrixXd Qdt = kron(Qtilde(dt, 3), Q);
+        MatrixXd Phidtaubar = kron(Fbase(dt - dtau, 3), Eye);
+        MatrixXd Qdtau = kron(Qbase(dtau, 3), Q);
+        MatrixXd Qdt = kron(Qbase(dt, 3), Q);
 
         return Qdtau*Phidtaubar.transpose()*Qdt.inverse();
     }
 
     MatrixXd PSI_ROS(const double dtau) const
     {
-        return PSI(dtau, Qr);
+        return PSI(dtau, SigGa);
     }
 
     MatrixXd PSI_PVA(const double dtau) const
     {
-        return PSI(dtau, Qc);
+        return PSI(dtau, SigNu);
     }
 
     MatrixXd LAMDA(const double dtau, const Mat3 &Q) const
     {
         MatrixXd PSIdtau = PSI(dtau, Q);
-        MatrixXd Fdtau = kron(Ftilde(dtau, 3), Eye);
-        MatrixXd Fdt = kron(Ftilde(dt, 3), Eye);
+        MatrixXd Fdtau = kron(Fbase(dtau, 3), Eye);
+        MatrixXd Fdt = kron(Fbase(dt, 3), Eye);
 
         return Fdtau - PSIdtau*Fdt;
     }
 
     MatrixXd LAMDA_ROS(const double dtau) const
     {
-        return LAMDA(dtau, Qr);
+        return LAMDA(dtau, SigGa);
     }
 
     MatrixXd LAMDA_PVA(const double dtau) const
     {
-        return LAMDA(dtau, Qc);
+        return LAMDA(dtau, SigNu);
     }
 
     template <class T = double>
@@ -643,10 +643,10 @@ public:
         Vec3T  &At = Xt.A;
         
         // Calculate the the mixer matrixes
-        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAMDA(tau, Qr).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI(tau,   Qr).cast<T>();
-        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMDA(tau, Qc).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   Qc).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAMDA(tau, SigGa).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI(tau,   SigGa).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMDA(tau, SigNu).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   SigNu).cast<T>();
 
         // Find the relative rotation
         SO3T Rab = Xa.R.inverse()*Xb.R;
@@ -889,8 +889,8 @@ public:
     GPMixer &operator=(const GPMixer &other)
     {
         this->dt = other.dt;
-        this->Qr = other.Qr;
-        this->Qc = other.Qc;
+        this->SigGa = other.SigGa;
+        this->SigNu = other.SigNu;
     }
 };
 
@@ -936,11 +936,11 @@ public:
     ~GaussianProcess(){};
 
     // Constructor
-    GaussianProcess(double dt_, Mat3 Qr_, Mat3 Qc_, bool keepCov_=false)
-        : dt(dt_), gpm(GPMixerPtr(new GPMixer(dt_, Qr_, Qc_))), keepCov(keepCov_) {};
+    GaussianProcess(double dt_, Mat3 SigGa_, Mat3 SigNu_, bool keepCov_=false)
+        : dt(dt_), gpm(GPMixerPtr(new GPMixer(dt_, SigGa_, SigNu_))), keepCov(keepCov_) {};
 
-    Mat3 getQr() const { return gpm->getQr(); }
-    Mat3 getQc() const { return gpm->getQc(); }
+    Mat3 getSigGa() const { return gpm->getSigGa(); }
+    Mat3 getSigNu() const { return gpm->getSigNu(); }
 
     GPMixerPtr getGPMixerPtr()
     {
