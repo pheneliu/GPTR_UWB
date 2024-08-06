@@ -74,7 +74,14 @@ public:
         mutable_parameter_block_sizes()->push_back(3);
         
         // Find the square root info
-        sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(InvCov_.block<RES_DIM, RES_DIM>(0, 0)).matrixL().transpose();
+        // sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(InvCov_.block<RES_DIM, RES_DIM>(0, 0)).matrixL().transpose();
+        // cout << "InvCov_\n" << InvCov_ << endl;
+
+        MatrixXd Cov(RES_DIM, RES_DIM); Cov.setZero();
+        Cov.block<9, 9>(0, 0) += gpms_->Qga(ss, 3) + gpms_->Qga(sf, 3);
+        Cov.block<9, 9>(9, 9) += gpms_->Qnu(ss, 3) + gpms_->Qnu(sf, 3);
+        sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(Cov.inverse()/1e6).matrixL().transpose();
+        // cout << "InvQ\n" << Cov.inverse() << endl;
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const

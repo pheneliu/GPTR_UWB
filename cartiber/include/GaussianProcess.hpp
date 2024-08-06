@@ -222,6 +222,34 @@ public:
         return Q;
     }
 
+    MatrixXd Qga(const double s, int N) const 
+    {
+        double dtau = s*dt;
+
+        std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
+        
+        MatrixXd Q(N, N);
+        for(int n = 0; n < N; n++)
+            for(int m = 0; m < N; m++)
+                Q(n, m) = pow(dtau, 2*N-1-n-m)/double(2*N-1-n-m)/double(factorial(N-1-n))/double(factorial(N-1-m));
+
+        return kron(Qbase(dt, 3), SigGa);
+    }
+
+    MatrixXd Qnu(const double s, int N) const 
+    {
+        double dtau = s*dt;
+
+        std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
+        
+        MatrixXd Q(N, N);
+        for(int n = 0; n < N; n++)
+            for(int m = 0; m < N; m++)
+                Q(n, m) = pow(dtau, 2*N-1-n-m)/double(2*N-1-n-m)/double(factorial(N-1-n))/double(factorial(N-1-m));
+
+        return kron(Qbase(dt, 3), SigNu);
+    }
+
     Matrix<double, STATE_DIM, STATE_DIM> PropagateFullCov(Matrix<double, STATE_DIM, STATE_DIM> P0) const
     {
         Matrix<double, STATE_DIM, STATE_DIM> F; F.setZero();
