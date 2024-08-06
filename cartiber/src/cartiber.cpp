@@ -204,624 +204,624 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     // return T_W_Li0;
 }
 
-// Fit the spline with data
-string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
-{
-    // Create spline
-    int KNOTS = traj->getNumKnots();
+// // Fit the spline with data
+// string FitGP(GaussianProcessPtr &traj, vector<double> ts, MatrixXd pos, MatrixXd rot, vector<double> wp, vector<double> wr, double loss_thres)
+// {
+//     // Create spline
+//     int KNOTS = traj->getNumKnots();
 
-    // Ceres problem
-    ceres::Problem problem;
-    ceres::Solver::Options options;
-    ceres::Solver::Summary summary;
+//     // Ceres problem
+//     ceres::Problem problem;
+//     ceres::Solver::Options options;
+//     ceres::Solver::Summary summary;
 
-    // Set up the ceres problem
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 50;
+//     // Set up the ceres problem
+//     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+//     options.num_threads = MAX_THREADS;
+//     options.max_num_iterations = 50;
 
-    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
+//     ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
 
-    // Add the parameter blocks for rotation
-    for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
-    {
-        problem.AddParameterBlock(traj->getKnotSO3(knot_idx).data(), 4, local_parameterization);
-        problem.AddParameterBlock(traj->getKnotOmg(knot_idx).data(), 3);
-        problem.AddParameterBlock(traj->getKnotAlp(knot_idx).data(), 3);
-        problem.AddParameterBlock(traj->getKnotPos(knot_idx).data(), 3);
-        problem.AddParameterBlock(traj->getKnotVel(knot_idx).data(), 3);
-        problem.AddParameterBlock(traj->getKnotAcc(knot_idx).data(), 3);
-    }
+//     // Add the parameter blocks for rotation
+//     for (int knot_idx = 0; knot_idx < KNOTS; knot_idx++)
+//     {
+//         problem.AddParameterBlock(traj->getKnotSO3(knot_idx).data(), 4, local_parameterization);
+//         problem.AddParameterBlock(traj->getKnotOmg(knot_idx).data(), 3);
+//         problem.AddParameterBlock(traj->getKnotAlp(knot_idx).data(), 3);
+//         problem.AddParameterBlock(traj->getKnotPos(knot_idx).data(), 3);
+//         problem.AddParameterBlock(traj->getKnotVel(knot_idx).data(), 3);
+//         problem.AddParameterBlock(traj->getKnotAcc(knot_idx).data(), 3);
+//     }
 
-    double cost_pose_init = -1;
-    double cost_pose_final = -1;
-    vector<ceres::internal::ResidualBlock *> res_ids_pose;
-    // Add the pose factors
-    // for (int k = 0; k < ts.size(); k++)
-    // {
-    //     double t = ts[k];
+//     double cost_pose_init = -1;
+//     double cost_pose_final = -1;
+//     vector<ceres::internal::ResidualBlock *> res_ids_pose;
+//     // Add the pose factors
+//     // for (int k = 0; k < ts.size(); k++)
+//     // {
+//     //     double t = ts[k];
 
-    //     // Continue if sample is in the window
-    //     if (!traj->TimeInInterval(t, 1e-6))
-    //         continue;
+//     //     // Continue if sample is in the window
+//     //     if (!traj->TimeInInterval(t, 1e-6))
+//     //         continue;
 
-    //     auto   us = traj->computeTimeIndex(t);
-    //     int    u  = us.first;
-    //     double s  = us.second;
+//     //     auto   us = traj->computeTimeIndex(t);
+//     //     int    u  = us.first;
+//     //     double s  = us.second;
 
-    //     Quaternd q(rot(k, 3), rot(k, 0), rot(k, 1), rot(k, 2));
-    //     Vector3d p(pos(k, 0), pos(k, 1), pos(k, 2));
+//     //     Quaternd q(rot(k, 3), rot(k, 0), rot(k, 1), rot(k, 2));
+//     //     Vector3d p(pos(k, 0), pos(k, 1), pos(k, 2));
 
-    //     // Find the coupled poses
-    //     vector<double *> factor_param_blocks;
-    //     for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
-    //     {
-    //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-    //     }
+//     //     // Find the coupled poses
+//     //     vector<double *> factor_param_blocks;
+//     //     for (int knot_idx = u; knot_idx < u + 2; knot_idx++)
+//     //     {
+//     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+//     //     }
 
-    //     double pp_loss_thres = -1.0;
-    //     nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
-    //     ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
-    //     ceres::CostFunction *cost_function = new GPPoseFactor(SE3d(q, p), 1.0, 1.0, traj->getDt(), s);
-    //     auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
-    //     res_ids_pose.push_back(res_block);
-    // }
+//     //     double pp_loss_thres = -1.0;
+//     //     nh_ptr->getParam("pp_loss_thres", pp_loss_thres);
+//     //     ceres::LossFunction *pose_loss_function = pp_loss_thres <= 0 ? NULL : new ceres::CauchyLoss(pp_loss_thres);
+//     //     ceres::CostFunction *cost_function = new GPPoseFactor(SE3d(q, p), 1.0, 1.0, traj->getDt(), s);
+//     //     auto res_block = problem.AddResidualBlock(cost_function, pose_loss_function, factor_param_blocks);
+//     //     res_ids_pose.push_back(res_block);
+//     // }
 
-    // Add the GP factors based on knot difference
-    double cost_mp_init = -1;
-    double cost_mp_final = -1;
-    vector<ceres::internal::ResidualBlock *> res_ids_mp;
-    // for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
-    // {
-    //     vector<double *> factor_param_blocks;
-    //     // Add the parameter blocks
-    //     for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
-    //     {
-    //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
-    //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
-    //     }
+//     // Add the GP factors based on knot difference
+//     double cost_mp_init = -1;
+//     double cost_mp_final = -1;
+//     vector<ceres::internal::ResidualBlock *> res_ids_mp;
+//     // for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
+//     // {
+//     //     vector<double *> factor_param_blocks;
+//     //     // Add the parameter blocks
+//     //     for (int knot_idx = kidx; knot_idx < kidx + 2; knot_idx++)
+//     //     {
+//     //         factor_param_blocks.push_back(traj->getKnotSO3(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotOmg(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAlp(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotPos(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotVel(knot_idx).data());
+//     //         factor_param_blocks.push_back(traj->getKnotAcc(knot_idx).data());
+//     //     }
 
-    //     // Create the factors
-    //     double mp_loss_thres = -1;
-    //     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-    //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(1.0, 1.0, traj->getDt());
-    //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-    //     res_ids_mp.push_back(res_block);
-    // }
+//     //     // Create the factors
+//     //     double mp_loss_thres = -1;
+//     //     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+//     //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+//     //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(1.0, 1.0, traj->getDt());
+//     //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+//     //     res_ids_mp.push_back(res_block);
+//     // }
 
-    // Init cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+//     // Init cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
 
-    // Solve the optimization problem
-    ceres::Solve(options, &problem, &summary);
+//     // Solve the optimization problem
+//     ceres::Solve(options, &problem, &summary);
 
-    // Final cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+//     // Final cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
 
-    string report = myprintf("GP Fitting. Cost: %f -> %f. Iterations: %d.\n",
-                             cost_pose_init, cost_pose_final, summary.iterations.size());
-    return report;
-}
+//     string report = myprintf("GP Fitting. Cost: %f -> %f. Iterations: %d.\n",
+//                              cost_pose_init, cost_pose_final, summary.iterations.size());
+//     return report;
+// }
 
-myTf<double> umeyamaAlign(const MatrixXd &x, const MatrixXd &y)
-{
-    int Nsample = x.cols();
+// myTf<double> umeyamaAlign(const MatrixXd &x, const MatrixXd &y)
+// {
+//     int Nsample = x.cols();
 
-    // Calculate the mean
-    Vector3d meanx(0, 0, 0);
-    Vector3d meany(0, 0, 0);
-    for(int sidx = 0; sidx < Nsample; sidx++)
-    {
-        meanx += x.col(sidx);
-        meany += y.col(sidx);
-    }
-    meanx /= Nsample;
-    meany /= Nsample;
+//     // Calculate the mean
+//     Vector3d meanx(0, 0, 0);
+//     Vector3d meany(0, 0, 0);
+//     for(int sidx = 0; sidx < Nsample; sidx++)
+//     {
+//         meanx += x.col(sidx);
+//         meany += y.col(sidx);
+//     }
+//     meanx /= Nsample;
+//     meany /= Nsample;
 
-    // variance
-    // double sigmax = 0;
-    // double sigmay = 0;
-    MatrixXd covxy = MatrixXd::Zero(3, 3);
-    for(int sidx = 0; sidx < Nsample; sidx++)
-    {
-        Vector3d xtilde = x.col(sidx) - meanx;
-        Vector3d ytilde = y.col(sidx) - meany;
-        // sigmax += pow(xtilde.norm(), 2)/n;
-        // sigmay += pow(ytilde.norm(), 2)/n;
-        covxy += xtilde*ytilde.transpose();
-    }
-    covxy /= Nsample;
+//     // variance
+//     // double sigmax = 0;
+//     // double sigmay = 0;
+//     MatrixXd covxy = MatrixXd::Zero(3, 3);
+//     for(int sidx = 0; sidx < Nsample; sidx++)
+//     {
+//         Vector3d xtilde = x.col(sidx) - meanx;
+//         Vector3d ytilde = y.col(sidx) - meany;
+//         // sigmax += pow(xtilde.norm(), 2)/n;
+//         // sigmay += pow(ytilde.norm(), 2)/n;
+//         covxy += xtilde*ytilde.transpose();
+//     }
+//     covxy /= Nsample;
 
-    // SVD
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(covxy, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Matrix3d U = svd.matrixU();
-    // VectorXd S = svd.singularValues();
-    Matrix3d V = svd.matrixV();
+//     // SVD
+//     Eigen::JacobiSVD<Eigen::MatrixXd> svd(covxy, Eigen::ComputeThinU | Eigen::ComputeThinV);
+//     Matrix3d U = svd.matrixU();
+//     // VectorXd S = svd.singularValues();
+//     Matrix3d V = svd.matrixV();
 
-    double detU = U.determinant();
-    double detV = V.determinant();
+//     double detU = U.determinant();
+//     double detV = V.determinant();
 
-    Matrix3d S = MatrixXd::Identity(3, 3);
-    if (detU * detV < 0.0)
-        S(2, 2) = -1;
+//     Matrix3d S = MatrixXd::Identity(3, 3);
+//     if (detU * detV < 0.0)
+//         S(2, 2) = -1;
     
-    Matrix3d R = U*S*V;
-    Vector3d p = meany - R*meanx;
+//     Matrix3d R = U*S*V;
+//     Vector3d p = meany - R*meanx;
 
-    return myTf(R, p);
-}
+//     return myTf(R, p);
+// }
 
-myTf<double> umeyamaAlign(const CloudPosePtr &x_, const CloudPosePtr &y_)
-{
-    ROS_ASSERT(x_->size() == y_->size());
+// myTf<double> umeyamaAlign(const CloudPosePtr &x_, const CloudPosePtr &y_)
+// {
+//     ROS_ASSERT(x_->size() == y_->size());
 
-    int Npoints = x_->size();
-    MatrixXd x(3, Npoints);
-    MatrixXd y(3, Npoints);
+//     int Npoints = x_->size();
+//     MatrixXd x(3, Npoints);
+//     MatrixXd y(3, Npoints);
 
-    #pragma omp parallel for num_threads(MAX_THREADS)
-    for(int idx = 0; idx < Npoints; idx++)
-    {
-        x.block<3, 1>(0, idx) << x_->points[idx].x, x_->points[idx].y, x_->points[idx].z;
-        y.block<3, 1>(0, idx) << y_->points[idx].x, y_->points[idx].y, y_->points[idx].z;
-    }
+//     #pragma omp parallel for num_threads(MAX_THREADS)
+//     for(int idx = 0; idx < Npoints; idx++)
+//     {
+//         x.block<3, 1>(0, idx) << x_->points[idx].x, x_->points[idx].y, x_->points[idx].z;
+//         y.block<3, 1>(0, idx) << y_->points[idx].x, y_->points[idx].y, y_->points[idx].z;
+//     }
 
-    return umeyamaAlign(x, y);
-}
+//     return umeyamaAlign(x, y);
+// }
 
-myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &trajy, int lidx=-1)
-{
-    // Trajectory should have 1:1 correspondence
-    ROS_ASSERT(trajx->size() == trajy->size());
-    int Nsample = trajx->size();
+// myTf<double> optimizeExtrinsics(const CloudPosePtr &trajx, const CloudPosePtr &trajy, int lidx=-1)
+// {
+//     // Trajectory should have 1:1 correspondence
+//     ROS_ASSERT(trajx->size() == trajy->size());
+//     int Nsample = trajx->size();
 
-    // Ceres problem
-    ceres::Problem problem;
-    ceres::Solver::Options options;
-    ceres::Solver::Summary summary;
+//     // Ceres problem
+//     ceres::Problem problem;
+//     ceres::Solver::Options options;
+//     ceres::Solver::Summary summary;
 
-    // Set up the ceres problem
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 50;
+//     // Set up the ceres problem
+//     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+//     options.num_threads = MAX_THREADS;
+//     options.max_num_iterations = 50;
 
-    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
+//     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+//     ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
 
-    SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
-    problem.AddParameterBlock(R_Lx_Ly.data(), 4, local_parameterization);
+//     SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+//     problem.AddParameterBlock(R_Lx_Ly.data(), 4, local_parameterization);
 
-    Vector3d P_Lx_Ly(0, 0, 0);
-    problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+//     Vector3d P_Lx_Ly(0, 0, 0);
+//     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
     
-    vector<double *> factor_param_blocks;
-    factor_param_blocks.emplace_back(R_Lx_Ly.data());
-    factor_param_blocks.emplace_back(P_Lx_Ly.data());
+//     vector<double *> factor_param_blocks;
+//     factor_param_blocks.emplace_back(R_Lx_Ly.data());
+//     factor_param_blocks.emplace_back(P_Lx_Ly.data());
 
-    double cost_pose_init;
-    double cost_pose_final;
-    vector<ceres::internal::ResidualBlock *> res_ids_pose;
-    for(int sidx = 0; sidx < Nsample; sidx++)
-    {
-        myTf Ti(trajx->points[sidx]);
-        myTf Tj(trajy->points[sidx]);
-        SE3d Tji = (Ti.inverse()*Tj).getSE3();
+//     double cost_pose_init;
+//     double cost_pose_final;
+//     vector<ceres::internal::ResidualBlock *> res_ids_pose;
+//     for(int sidx = 0; sidx < Nsample; sidx++)
+//     {
+//         myTf Ti(trajx->points[sidx]);
+//         myTf Tj(trajy->points[sidx]);
+//         SE3d Tji = (Ti.inverse()*Tj).getSE3();
 
-        ceres::CostFunction *cost_function = new ExtrinsicFactor(Tji.so3(), Tji.translation(), 1.0, 1.0);
-        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
-        res_ids_pose.push_back(res_block);
-    }
+//         ceres::CostFunction *cost_function = new ExtrinsicFactor(Tji.so3(), Tji.translation(), 1.0, 1.0);
+//         auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+//         res_ids_pose.push_back(res_block);
+//     }
 
-    TicToc tt_slv;
+//     TicToc tt_slv;
 
-    // Init cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+//     // Init cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
 
-    // Solve the optimization problem
-    ceres::Solve(options, &problem, &summary);
+//     // Solve the optimization problem
+//     ceres::Solve(options, &problem, &summary);
 
-    // Final cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+//     // Final cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
     
-    tt_slv.Toc();
+//     tt_slv.Toc();
 
-    myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
-    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
+//     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+//     myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
 
-    printf(KCYN
-           "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
-           "Factor: Cross: %d.\n"
-           "J0: %12.3f. Xtrs: %9.3f.\n"
-           "Jk: %12.3f. Xtrs: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
-           RESET,
-           summary.iterations.size(), tt_slv.GetLastStop(),
-           res_ids_pose.size(),
-           summary.initial_cost, cost_pose_init, 
-           summary.final_cost, cost_pose_final,
-           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+//     printf(KCYN
+//            "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
+//            "Factor: Cross: %d.\n"
+//            "J0: %12.3f. Xtrs: %9.3f.\n"
+//            "Jk: %12.3f. Xtrs: %9.3f.\n"
+//            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
+//            RESET,
+//            summary.iterations.size(), tt_slv.GetLastStop(),
+//            res_ids_pose.size(),
+//            summary.initial_cost, cost_pose_init, 
+//            summary.final_cost, cost_pose_final,
+//            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+//            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
-    return T_L0_Li;
-}
+//     return T_L0_Li;
+// }
 
-myTf<double> optimizeExtrinsics(const vector<GPState<double>> &trajx, const vector<GPState<double>> &trajy, int lidx=-1)
-{
-    // Trajectory should have 1:1 correspondence
-    ROS_ASSERT(trajx.size() == trajy.size());
-    int Nsample = trajx.size();
+// myTf<double> optimizeExtrinsics(const vector<GPState<double>> &trajx, const vector<GPState<double>> &trajy, int lidx=-1)
+// {
+//     // Trajectory should have 1:1 correspondence
+//     ROS_ASSERT(trajx.size() == trajy.size());
+//     int Nsample = trajx.size();
 
-    // Ceres problem
-    ceres::Problem problem;
-    ceres::Solver::Options options;
-    ceres::Solver::Summary summary;
+//     // Ceres problem
+//     ceres::Problem problem;
+//     ceres::Solver::Options options;
+//     ceres::Solver::Summary summary;
 
-    // Set up the ceres problem
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 50;
+//     // Set up the ceres problem
+//     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+//     options.num_threads = MAX_THREADS;
+//     options.max_num_iterations = 50;
 
-    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-    ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
+//     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+//     ceres::LocalParameterization *local_parameterization = new GPSO3dLocalParameterization();
 
-    SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
-    problem.AddParameterBlock(R_Lx_Ly.data(), 4, local_parameterization);
+//     SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+//     problem.AddParameterBlock(R_Lx_Ly.data(), 4, local_parameterization);
 
-    Vector3d P_Lx_Ly(0, 0, 0);
-    problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+//     Vector3d P_Lx_Ly(0, 0, 0);
+//     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
     
-    vector<double *> factor_param_blocks;
-    factor_param_blocks.emplace_back(R_Lx_Ly.data());
-    factor_param_blocks.emplace_back(P_Lx_Ly.data());
+//     vector<double *> factor_param_blocks;
+//     factor_param_blocks.emplace_back(R_Lx_Ly.data());
+//     factor_param_blocks.emplace_back(P_Lx_Ly.data());
 
-    double cost_pose_init;
-    double cost_pose_final;
-    vector<ceres::internal::ResidualBlock *> res_ids_pose;
-    for(int sidx = 0; sidx < Nsample; sidx++)
-    {
-        GPState Xi = trajx[sidx];
-        GPState Xj = trajy[sidx];
+//     double cost_pose_init;
+//     double cost_pose_final;
+//     vector<ceres::internal::ResidualBlock *> res_ids_pose;
+//     for(int sidx = 0; sidx < Nsample; sidx++)
+//     {
+//         GPState Xi = trajx[sidx];
+//         GPState Xj = trajy[sidx];
 
-        // printf("Xi: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
-        //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
-        //         Xi.P.x(), Xi.P.y(), Xi.P.z(),
-        //         Xi.V.x(), Xi.V.y(), Xi.V.z(),
-        //         Xi.A.x(), Xi.A.y(), Xi.A.z());
+//         // printf("Xi: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
+//         //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
+//         //         Xi.P.x(), Xi.P.y(), Xi.P.z(),
+//         //         Xi.V.x(), Xi.V.y(), Xi.V.z(),
+//         //         Xi.A.x(), Xi.A.y(), Xi.A.z());
 
-        // printf("Xj: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
-        //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
-        //         Xj.P.x(), Xj.P.y(), Xj.P.z(),
-        //         Xj.V.x(), Xj.V.y(), Xj.V.z(),
-        //         Xj.A.x(), Xj.A.y(), Xj.A.z());
+//         // printf("Xj: %f, %f, %f. %f, %f, %f. %f, %f, %f\n",
+//         //         // Xi.yaw(), Xi.pitch(), Xi.roll(),
+//         //         Xj.P.x(), Xj.P.y(), Xj.P.z(),
+//         //         Xj.V.x(), Xj.V.y(), Xj.V.z(),
+//         //         Xj.A.x(), Xj.A.y(), Xj.A.z());
                 
-        ceres::CostFunction *cost_function
-            = new FullExtrinsicFactor(Xi.R, Xi.O, Xi.S, Xi.P, Xi.V, Xi.A,
-                                      Xj.R, Xj.O, Xj.S, Xj.P, Xj.V, Xj.A, 1.0, 1.0);
-        auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
-        res_ids_pose.push_back(res_block);
-    }
+//         ceres::CostFunction *cost_function
+//             = new FullExtrinsicFactor(Xi.R, Xi.O, Xi.S, Xi.P, Xi.V, Xi.A,
+//                                       Xj.R, Xj.O, Xj.S, Xj.P, Xj.V, Xj.A, 1.0, 1.0);
+//         auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+//         res_ids_pose.push_back(res_block);
+//     }
 
-    TicToc tt_slv;
+//     TicToc tt_slv;
 
-    // Init cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
+//     // Init cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_init, problem);
 
-    // Solve the optimization problem
-    ceres::Solve(options, &problem, &summary);
+//     // Solve the optimization problem
+//     ceres::Solve(options, &problem, &summary);
 
-    // Final cost
-    Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
+//     // Final cost
+//     Util::ComputeCeresCost(res_ids_pose, cost_pose_final, problem);
     
-    tt_slv.Toc();
+//     tt_slv.Toc();
 
-    myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
-    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
+//     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+//     myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
 
-    printf(KMAG
-           "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
-           "Factor: Cross: %d.\n"
-           "J0: %12.3f. Xtrs: %9.3f.\n"
-           "Jk: %12.3f. Xtrs: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
-           RESET,
-           summary.iterations.size(), tt_slv.GetLastStop(),
-           res_ids_pose.size(),
-           summary.initial_cost, cost_pose_init, 
-           summary.final_cost, cost_pose_final,
-           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+//     printf(KMAG
+//            "Pose-Only Extrinsic Opt: Iter: %d. Time: %.0f.\n"
+//            "Factor: Cross: %d.\n"
+//            "J0: %12.3f. Xtrs: %9.3f.\n"
+//            "Jk: %12.3f. Xtrs: %9.3f.\n"
+//            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
+//            RESET,
+//            summary.iterations.size(), tt_slv.GetLastStop(),
+//            res_ids_pose.size(),
+//            summary.initial_cost, cost_pose_init, 
+//            summary.final_cost, cost_pose_final,
+//            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+//            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
-    return T_L0_Li;
-}
+//     return T_L0_Li;
+// }
 
-myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianProcessPtr &trajy, int lidx=-1)
-{
-    // Ceres problem
-    ceres::Problem problem;
-    ceres::Solver::Options options;
-    ceres::Solver::Summary summary;
+// myTf<double> optimizeExtrinsics(const GaussianProcessPtr &trajx, const GaussianProcessPtr &trajy, int lidx=-1)
+// {
+//     // Ceres problem
+//     ceres::Problem problem;
+//     ceres::Solver::Options options;
+//     ceres::Solver::Summary summary;
 
-    // Set up the ceres problem
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-    options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 50;
+//     // Set up the ceres problem
+//     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+//     options.num_threads = MAX_THREADS;
+//     options.max_num_iterations = 50;
 
-    ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-    ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
+//     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+//     ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
 
-    // Add params to the problem --------------------------------------------------------------------------------------
+//     // Add params to the problem --------------------------------------------------------------------------------------
 
-    for (int kidx = 0; kidx < trajx->getNumKnots(); kidx++)
-    {
-        problem.AddParameterBlock(trajx->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
-        problem.AddParameterBlock(trajx->getKnotOmg(kidx).data(), 3);
-        problem.AddParameterBlock(trajx->getKnotAlp(kidx).data(), 3);
-        problem.AddParameterBlock(trajx->getKnotPos(kidx).data(), 3);
-        problem.AddParameterBlock(trajx->getKnotVel(kidx).data(), 3);
-        problem.AddParameterBlock(trajx->getKnotAcc(kidx).data(), 3);
+//     for (int kidx = 0; kidx < trajx->getNumKnots(); kidx++)
+//     {
+//         problem.AddParameterBlock(trajx->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
+//         problem.AddParameterBlock(trajx->getKnotOmg(kidx).data(), 3);
+//         problem.AddParameterBlock(trajx->getKnotAlp(kidx).data(), 3);
+//         problem.AddParameterBlock(trajx->getKnotPos(kidx).data(), 3);
+//         problem.AddParameterBlock(trajx->getKnotVel(kidx).data(), 3);
+//         problem.AddParameterBlock(trajx->getKnotAcc(kidx).data(), 3);
 
-        // Fix the pose
-        problem.SetParameterBlockConstant(trajx->getKnotSO3(kidx).data());
-        problem.SetParameterBlockConstant(trajx->getKnotOmg(kidx).data());
-        problem.SetParameterBlockConstant(trajx->getKnotAlp(kidx).data());
-        problem.SetParameterBlockConstant(trajx->getKnotPos(kidx).data());
-        problem.SetParameterBlockConstant(trajx->getKnotVel(kidx).data());
-        problem.SetParameterBlockConstant(trajx->getKnotAcc(kidx).data());
-    }
+//         // Fix the pose
+//         problem.SetParameterBlockConstant(trajx->getKnotSO3(kidx).data());
+//         problem.SetParameterBlockConstant(trajx->getKnotOmg(kidx).data());
+//         problem.SetParameterBlockConstant(trajx->getKnotAlp(kidx).data());
+//         problem.SetParameterBlockConstant(trajx->getKnotPos(kidx).data());
+//         problem.SetParameterBlockConstant(trajx->getKnotVel(kidx).data());
+//         problem.SetParameterBlockConstant(trajx->getKnotAcc(kidx).data());
+//     }
 
-    for (int kidx = 0; kidx < trajy->getNumKnots(); kidx++)
-    {
-        problem.AddParameterBlock(trajy->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
-        problem.AddParameterBlock(trajy->getKnotOmg(kidx).data(), 3);
-        problem.AddParameterBlock(trajy->getKnotAlp(kidx).data(), 3);
-        problem.AddParameterBlock(trajy->getKnotPos(kidx).data(), 3);
-        problem.AddParameterBlock(trajy->getKnotVel(kidx).data(), 3);
-        problem.AddParameterBlock(trajy->getKnotAcc(kidx).data(), 3);
+//     for (int kidx = 0; kidx < trajy->getNumKnots(); kidx++)
+//     {
+//         problem.AddParameterBlock(trajy->getKnotSO3(kidx).data(), 4, new GPSO3dLocalParameterization());
+//         problem.AddParameterBlock(trajy->getKnotOmg(kidx).data(), 3);
+//         problem.AddParameterBlock(trajy->getKnotAlp(kidx).data(), 3);
+//         problem.AddParameterBlock(trajy->getKnotPos(kidx).data(), 3);
+//         problem.AddParameterBlock(trajy->getKnotVel(kidx).data(), 3);
+//         problem.AddParameterBlock(trajy->getKnotAcc(kidx).data(), 3);
 
-        // Fix the pose
-        problem.SetParameterBlockConstant(trajy->getKnotSO3(kidx).data());
-        problem.SetParameterBlockConstant(trajy->getKnotOmg(kidx).data());
-        problem.SetParameterBlockConstant(trajy->getKnotAlp(kidx).data());
-        problem.SetParameterBlockConstant(trajy->getKnotPos(kidx).data());
-        problem.SetParameterBlockConstant(trajy->getKnotVel(kidx).data());
-        problem.SetParameterBlockConstant(trajy->getKnotAcc(kidx).data());
-    }
+//         // Fix the pose
+//         problem.SetParameterBlockConstant(trajy->getKnotSO3(kidx).data());
+//         problem.SetParameterBlockConstant(trajy->getKnotOmg(kidx).data());
+//         problem.SetParameterBlockConstant(trajy->getKnotAlp(kidx).data());
+//         problem.SetParameterBlockConstant(trajy->getKnotPos(kidx).data());
+//         problem.SetParameterBlockConstant(trajy->getKnotVel(kidx).data());
+//         problem.SetParameterBlockConstant(trajy->getKnotAcc(kidx).data());
+//     }
 
-    SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
-    problem.AddParameterBlock(R_Lx_Ly.data(), 4, so3parameterization);
+//     SO3d R_Lx_Ly(Quaternd(1, 0, 0, 0));
+//     problem.AddParameterBlock(R_Lx_Ly.data(), 4, so3parameterization);
 
-    Vector3d P_Lx_Ly(0, 0, 0);
-    problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+//     Vector3d P_Lx_Ly(0, 0, 0);
+//     problem.AddParameterBlock(P_Lx_Ly.data(), 3);
 
-    // Fix the first pose of each trajectory
-    // problem.SetParameterBlockConstant(trajx->getKnotSO3(0).data());
-    // problem.SetParameterBlockConstant(trajx->getKnotPos(0).data());
-    // problem.SetParameterBlockConstant(trajy->getKnotSO3(0).data());
-    // problem.SetParameterBlockConstant(trajy->getKnotPos(0).data());
+//     // Fix the first pose of each trajectory
+//     // problem.SetParameterBlockConstant(trajx->getKnotSO3(0).data());
+//     // problem.SetParameterBlockConstant(trajx->getKnotPos(0).data());
+//     // problem.SetParameterBlockConstant(trajy->getKnotSO3(0).data());
+//     // problem.SetParameterBlockConstant(trajy->getKnotPos(0).data());
 
-    //-----------------------------------------------------------------------------------------------------------------
+//     //-----------------------------------------------------------------------------------------------------------------
 
 
-    // Add the motion prior factors
-    double cost_mp2k_init = -1;
-    double cost_mp2k_final = -1;
-    vector<ceres::internal::ResidualBlock *> res_ids_mp2k;
-    // for (int kidx = 0; kidx < trajx->getNumKnots() - 1; kidx++)
-    // {
-    //     vector<double *> factor_param_blocks;
-    //     // Add the parameter blocks
-    //     for (int idx = kidx; idx < kidx + 2; idx++)
-    //     {
-    //         factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
-    //         factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
-    //         factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
-    //         factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
-    //         factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
-    //         factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
-    //     }
+//     // Add the motion prior factors
+//     double cost_mp2k_init = -1;
+//     double cost_mp2k_final = -1;
+//     vector<ceres::internal::ResidualBlock *> res_ids_mp2k;
+//     // for (int kidx = 0; kidx < trajx->getNumKnots() - 1; kidx++)
+//     // {
+//     //     vector<double *> factor_param_blocks;
+//     //     // Add the parameter blocks
+//     //     for (int idx = kidx; idx < kidx + 2; idx++)
+//     //     {
+//     //         factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
+//     //         factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
+//     //         factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
+//     //         factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
+//     //         factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
+//     //         factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
+//     //     }
 
-    //     // Create the factors
-    //     double mpSigmaR = 1.0;
-    //     double mpSigmaP = 1.0;
-    //     // double mp_loss_thres = -1;
-    //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    //     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
-    //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajx->getDt());
-    //     auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
-    //     res_ids_mp2k.push_back(res_block);
-    // }
+//     //     // Create the factors
+//     //     double mpSigmaR = 1.0;
+//     //     double mpSigmaP = 1.0;
+//     //     // double mp_loss_thres = -1;
+//     //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+//     //     ceres::LossFunction *loss_function = new ceres::CauchyLoss(1.0);
+//     //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajx->getDt());
+//     //     auto res_block = problem.AddResidualBlock(cost_function, loss_function, factor_param_blocks);
+//     //     res_ids_mp2k.push_back(res_block);
+//     // }
 
-    // for (int kidx = 0; kidx < trajy->getNumKnots() - 1; kidx++)
-    // {
-    //     vector<double *> factor_param_blocks;
-    //     // Add the parameter blocks
-    //     for (int idx = kidx; idx < kidx + 2; idx++)
-    //     {
-    //         factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
-    //         factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
-    //         factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
-    //         factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
-    //         factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
-    //         factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
-    //     }
+//     // for (int kidx = 0; kidx < trajy->getNumKnots() - 1; kidx++)
+//     // {
+//     //     vector<double *> factor_param_blocks;
+//     //     // Add the parameter blocks
+//     //     for (int idx = kidx; idx < kidx + 2; idx++)
+//     //     {
+//     //         factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
+//     //         factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
+//     //         factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
+//     //         factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
+//     //         factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
+//     //         factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
+//     //     }
 
-    //     // Create the factors
-    //     double mpSigmaR = 1.0;
-    //     double mpSigmaP = 1.0;
-    //     double mp_loss_thres = -1;
-    //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-    //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajy->getDt());
-    //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-    //     res_ids_mp2k.push_back(res_block);
-    // }
+//     //     // Create the factors
+//     //     double mpSigmaR = 1.0;
+//     //     double mpSigmaP = 1.0;
+//     //     double mp_loss_thres = -1;
+//     //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+//     //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+//     //     ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(mpSigmaR, mpSigmaP, trajy->getDt());
+//     //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+//     //     res_ids_mp2k.push_back(res_block);
+//     // }
 
-    GPMixerPtr gpmx = trajx->getGPMixerPtr();
-    GPMixerPtr gpmy = trajy->getGPMixerPtr();
+//     GPMixerPtr gpmx = trajx->getGPMixerPtr();
+//     GPMixerPtr gpmy = trajy->getGPMixerPtr();
 
-    // Add the extrinsic factors
-    double cost_xtrinsic_init = -1;
-    double cost_xtrinsic_final = -1;
-    vector<ceres::internal::ResidualBlock *> res_ids_xtrinsic;
-    for (int kidx = 0; kidx < trajx->getNumKnots() - 2; kidx++)
-    {
-        for(int i = 0; i < Nseg; i++)
-        {
-            // Get the knot time
-            double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + t_shift;
+//     // Add the extrinsic factors
+//     double cost_xtrinsic_init = -1;
+//     double cost_xtrinsic_final = -1;
+//     vector<ceres::internal::ResidualBlock *> res_ids_xtrinsic;
+//     for (int kidx = 0; kidx < trajx->getNumKnots() - 2; kidx++)
+//     {
+//         for(int i = 0; i < Nseg; i++)
+//         {
+//             // Get the knot time
+//             double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + t_shift;
 
-            // Skip if time is outside the range of the other trajectory
-            if (!trajy->TimeInInterval(t))
-                continue;
+//             // Skip if time is outside the range of the other trajectory
+//             if (!trajy->TimeInInterval(t))
+//                 continue;
 
-            pair<int, double> uss, usf;
-            uss = trajx->computeTimeIndex(t);
-            usf = trajy->computeTimeIndex(t);
+//             pair<int, double> uss, usf;
+//             uss = trajx->computeTimeIndex(t);
+//             usf = trajy->computeTimeIndex(t);
 
-            int umins = uss.first;
-            int uminf = usf.first;
-            double ss = uss.second;
-            double sf = usf.second;
+//             int umins = uss.first;
+//             int uminf = usf.first;
+//             double ss = uss.second;
+//             double sf = usf.second;
 
-            // Add the parameter blocks
-            vector<double *> factor_param_blocks;
-            for (int idx = umins; idx < umins + 2; idx++)
-            {
-                ROS_ASSERT(idx < trajx->getNumKnots());
-                // ROS_ASSERT(Util::SO3IsValid(trajx->getKnotSO3(idx)));
-                factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
-                factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
-                factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
-                factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
-                factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
-                factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
-            }
-            for (int idx = uminf; idx < uminf + 2; idx++)
-            {
-                ROS_ASSERT(idx < trajy->getNumKnots());
-                // ROS_ASSERT(Util::SO3IsValid(trajy->getKnotSO3(idx)));
-                factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
-                factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
-                factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
-                factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
-                factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
-                factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
-            }
-            factor_param_blocks.push_back(R_Lx_Ly.data());
-            factor_param_blocks.push_back(P_Lx_Ly.data());
+//             // Add the parameter blocks
+//             vector<double *> factor_param_blocks;
+//             for (int idx = umins; idx < umins + 2; idx++)
+//             {
+//                 ROS_ASSERT(idx < trajx->getNumKnots());
+//                 // ROS_ASSERT(Util::SO3IsValid(trajx->getKnotSO3(idx)));
+//                 factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotAlp(idx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
+//             }
+//             for (int idx = uminf; idx < uminf + 2; idx++)
+//             {
+//                 ROS_ASSERT(idx < trajy->getNumKnots());
+//                 // ROS_ASSERT(Util::SO3IsValid(trajy->getKnotSO3(idx)));
+//                 factor_param_blocks.push_back(trajy->getKnotSO3(idx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotOmg(idx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotAlp(idx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotPos(idx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
+//             }
+//             factor_param_blocks.push_back(R_Lx_Ly.data());
+//             factor_param_blocks.push_back(P_Lx_Ly.data());
 
-            // Create the factors
-            MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e6;
-            double mpSigmaR = 1.0;
-            double mpSigmaP = 1.0;
-            double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, gpmx, gpmy, ss, sf);
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            res_ids_xtrinsic.push_back(res_block);
-        }
-    }
+//             // Create the factors
+//             MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e6;
+//             double mpSigmaR = 1.0;
+//             double mpSigmaP = 1.0;
+//             double mp_loss_thres = -1;
+//             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+//             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+//             ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, gpmx, gpmy, ss, sf);
+//             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+//             res_ids_xtrinsic.push_back(res_block);
+//         }
+//     }
 
-    for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
-    {
-        for(int i = 0; i < Nseg; i++)
-        {
-            // Get the knot time
-            double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + t_shift;
+//     for (int kidx = 0; kidx < trajy->getNumKnots() - 2; kidx++)
+//     {
+//         for(int i = 0; i < Nseg; i++)
+//         {
+//             // Get the knot time
+//             double t = trajy->getKnotTime(kidx) + trajy->getDt()/Nseg*i + t_shift;
 
-            // Skip if time is outside the range of the other trajectory
-            if (!trajx->TimeInInterval(t))
-                continue;
+//             // Skip if time is outside the range of the other trajectory
+//             if (!trajx->TimeInInterval(t))
+//                 continue;
 
-            pair<int, double> uss, usf;
-            uss = trajy->computeTimeIndex(t);
-            usf = trajx->computeTimeIndex(t);
+//             pair<int, double> uss, usf;
+//             uss = trajy->computeTimeIndex(t);
+//             usf = trajx->computeTimeIndex(t);
 
-            int umins = uss.first;
-            int uminf = usf.first;
-            double ss = uss.second;
-            double sf = usf.second;
+//             int umins = uss.first;
+//             int uminf = usf.first;
+//             double ss = uss.second;
+//             double sf = usf.second;
 
-            // Add the parameter blocks
-            vector<double *> factor_param_blocks;
-            for (int kidx = umins; kidx < umins + 2; kidx++)
-            {
-                factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
-            }
-            for (int kidx = uminf; kidx < uminf + 2; kidx++)
-            {
-                factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
-                factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
-            }
-            factor_param_blocks.push_back(R_Lx_Ly.data());
-            factor_param_blocks.push_back(P_Lx_Ly.data());
+//             // Add the parameter blocks
+//             vector<double *> factor_param_blocks;
+//             for (int kidx = umins; kidx < umins + 2; kidx++)
+//             {
+//                 factor_param_blocks.push_back(trajx->getKnotSO3(kidx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotOmg(kidx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotAlp(kidx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotPos(kidx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotVel(kidx).data());
+//                 factor_param_blocks.push_back(trajx->getKnotAcc(kidx).data());
+//             }
+//             for (int kidx = uminf; kidx < uminf + 2; kidx++)
+//             {
+//                 factor_param_blocks.push_back(trajy->getKnotSO3(kidx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotOmg(kidx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotAlp(kidx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotPos(kidx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotVel(kidx).data());
+//                 factor_param_blocks.push_back(trajy->getKnotAcc(kidx).data());
+//             }
+//             factor_param_blocks.push_back(R_Lx_Ly.data());
+//             factor_param_blocks.push_back(P_Lx_Ly.data());
 
-            // Create the factors
-            double mpSigmaR = 1.0;
-            double mpSigmaP = 1.0;
-            double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, gpmx, gpmy, sf, ss);
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            res_ids_xtrinsic.push_back(res_block);
-        }
-    }
+//             // Create the factors
+//             double mpSigmaR = 1.0;
+//             double mpSigmaP = 1.0;
+//             double mp_loss_thres = -1;
+//             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+//             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+//             ceres::CostFunction *cost_function = new GPExtrinsicFactor(mpSigmaR, mpSigmaP, gpmx, gpmy, sf, ss);
+//             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+//             res_ids_xtrinsic.push_back(res_block);
+//         }
+//     }
 
-    TicToc tt_slv;
+//     TicToc tt_slv;
 
-    // Init cost
-    Util::ComputeCeresCost(res_ids_mp2k, cost_mp2k_init, problem);
-    Util::ComputeCeresCost(res_ids_xtrinsic, cost_xtrinsic_init, problem);
+//     // Init cost
+//     Util::ComputeCeresCost(res_ids_mp2k, cost_mp2k_init, problem);
+//     Util::ComputeCeresCost(res_ids_xtrinsic, cost_xtrinsic_init, problem);
 
-    // Solve the optimization problem
-    ceres::Solve(options, &problem, &summary);
+//     // Solve the optimization problem
+//     ceres::Solve(options, &problem, &summary);
 
-    // Final cost
-    Util::ComputeCeresCost(res_ids_mp2k, cost_mp2k_final, problem);
-    Util::ComputeCeresCost(res_ids_xtrinsic, cost_xtrinsic_final, problem);
+//     // Final cost
+//     Util::ComputeCeresCost(res_ids_mp2k, cost_mp2k_final, problem);
+//     Util::ComputeCeresCost(res_ids_xtrinsic, cost_xtrinsic_final, problem);
 
-    tt_slv.Toc();
+//     tt_slv.Toc();
 
-    myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
-    myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
+//     myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+//     myTf T_err = lidx > 0 ? T_B_Li_gndtr[lidx].inverse()*T_L0_Li : myTf() ;
 
-    printf(KGRN
-           "GaussProc Extrinsic Opt: Iter: %d. Time: %.0f.\n"
-           "Factor: MP2K: %d, Cross: %d.\n"
-           "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
-           "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
-           RESET,
-           summary.iterations.size(), tt_slv.GetLastStop(),
-           res_ids_mp2k.size(), res_ids_xtrinsic.size(),
-           summary.initial_cost, cost_mp2k_init, cost_xtrinsic_init,
-           summary.final_cost, cost_mp2k_final, cost_xtrinsic_final,
-           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
+//     printf(KGRN
+//            "GaussProc Extrinsic Opt: Iter: %d. Time: %.0f.\n"
+//            "Factor: MP2K: %d, Cross: %d.\n"
+//            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
+//            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f.\n"
+//            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %f\n"
+//            RESET,
+//            summary.iterations.size(), tt_slv.GetLastStop(),
+//            res_ids_mp2k.size(), res_ids_xtrinsic.size(),
+//            summary.initial_cost, cost_mp2k_init, cost_xtrinsic_init,
+//            summary.final_cost, cost_mp2k_final, cost_xtrinsic_final,
+//            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
+//            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err.pos.norm());
 
-    return T_L0_Li;
-}
+//     return T_L0_Li;
+// }
 
 void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
 {
@@ -867,89 +867,89 @@ void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPt
     }
 }
 
-void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
-{
-    int Ncloud = clouds.size();
-    int lastCloudIdx = 0;
-    int lastPointIdx = -1;
-    double lastCutTime = clouds.front()->points.front().t;
-    double endTime = clouds.back()->points.back().t;
+// void ChopTheClouds(vector<CloudXYZITPtr> &clouds, int lidx)
+// {
+//     int Ncloud = clouds.size();
+//     int lastCloudIdx = 0;
+//     int lastPointIdx = -1;
+//     double lastCutTime = clouds.front()->points.front().t;
+//     double endTime = clouds.back()->points.back().t;
 
-    while(ros::ok())
-    {
-        CloudXYZITPtr cloudSeg(new CloudXYZIT());
+//     while(ros::ok())
+//     {
+//         CloudXYZITPtr cloudSeg(new CloudXYZIT());
         
-        // Extract all the points within lastCutTime to lastCutTime + dt
-        for(int cidx = lastCloudIdx; cidx < Ncloud; cidx++)
-        {
-            // Shift the pointcloud base
-            lastCloudIdx = cidx;
-            bool segment_completed = false;
-            // Check the points from the base idx
-            for(int pidx = lastPointIdx + 1; pidx < clouds[cidx]->size(); pidx++)
-            {
-                // Update the new base
-                lastPointIdx = pidx;
+//         // Extract all the points within lastCutTime to lastCutTime + dt
+//         for(int cidx = lastCloudIdx; cidx < Ncloud; cidx++)
+//         {
+//             // Shift the pointcloud base
+//             lastCloudIdx = cidx;
+//             bool segment_completed = false;
+//             // Check the points from the base idx
+//             for(int pidx = lastPointIdx + 1; pidx < clouds[cidx]->size(); pidx++)
+//             {
+//                 // Update the new base
+//                 lastPointIdx = pidx;
                 
-                const PointXYZIT &point = clouds[cidx]->points[pidx];
-                const double &tp = point.t;
+//                 const PointXYZIT &point = clouds[cidx]->points[pidx];
+//                 const double &tp = point.t;
 
-                // printf("Adding point: %d, %d. time: %f. Cuttime: %f. %f\n",
-                //         cidx, cloudSeg->size(), tp, lastCutTime, lastCutTime + deltaT);
-                if (tp < lastCutTime)
-                {
-                    if(pidx == clouds[cidx]->size() - 1)
-                        lastPointIdx = -1;
-                    continue;
-                }
+//                 // printf("Adding point: %d, %d. time: %f. Cuttime: %f. %f\n",
+//                 //         cidx, cloudSeg->size(), tp, lastCutTime, lastCutTime + deltaT);
+//                 if (tp < lastCutTime)
+//                 {
+//                     if(pidx == clouds[cidx]->size() - 1)
+//                         lastPointIdx = -1;
+//                     continue;
+//                 }
 
-                // If point is too close, ignore
-                if (Util::pointDistance(point) < 0.1)
-                    continue;
+//                 // If point is too close, ignore
+//                 if (Util::pointDistance(point) < 0.1)
+//                     continue;
 
-                // If point is in the interval of interest, extract it
-                if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)
-                    cloudSeg->push_back(clouds[cidx]->points[pidx]);
+//                 // If point is in the interval of interest, extract it
+//                 if (lastCutTime <= tp && tp < lastCutTime + deltaT - 1e-3)
+//                     cloudSeg->push_back(clouds[cidx]->points[pidx]);
 
-                // If point has exceeded the interval, exit
-                if(tp >= lastCutTime + deltaT - 1e-3)
-                {
-                    if(pidx == clouds[cidx]->size() - 1)
-                        lastPointIdx = -1;
-                    segment_completed = true;
-                    break;
-                }
-                // If we have hit the end of the cloud reset the base before moving to the next cloud
-                if(pidx == clouds[cidx]->size() - 1)
-                    lastPointIdx = -1;
-            }
+//                 // If point has exceeded the interval, exit
+//                 if(tp >= lastCutTime + deltaT - 1e-3)
+//                 {
+//                     if(pidx == clouds[cidx]->size() - 1)
+//                         lastPointIdx = -1;
+//                     segment_completed = true;
+//                     break;
+//                 }
+//                 // If we have hit the end of the cloud reset the base before moving to the next cloud
+//                 if(pidx == clouds[cidx]->size() - 1)
+//                     lastPointIdx = -1;
+//             }
 
-            if (segment_completed)
-                break;
-        }
+//             if (segment_completed)
+//                 break;
+//         }
 
-        // Add the segment to the buffer
-        if (cloudSeg->size() != 0)
-        {
-            // printf("GPMAPLO %d add cloud. Time: %f\n", lidx, cloudSeg->points.front().t);
-            gpmaplo[lidx]->AddCloudSeg(cloudSeg);
-            lastCutTime += deltaT;
-        }
-        else
-        {
-            // printf("Lidx %d. No more points.\n", lidx);
-            // break;
-            // this_thread::sleep_for(chrono::milliseconds(1000));
-            lastCloudIdx = 0;
-            lastPointIdx = -1;
-        }
+//         // Add the segment to the buffer
+//         if (cloudSeg->size() != 0)
+//         {
+//             // printf("GPMAPLO %d add cloud. Time: %f\n", lidx, cloudSeg->points.front().t);
+//             gpmaplo[lidx]->AddCloudSeg(cloudSeg);
+//             lastCutTime += deltaT;
+//         }
+//         else
+//         {
+//             // printf("Lidx %d. No more points.\n", lidx);
+//             // break;
+//             // this_thread::sleep_for(chrono::milliseconds(1000));
+//             lastCloudIdx = 0;
+//             lastPointIdx = -1;
+//         }
 
-        if (lastCutTime > endTime)
-            break;
+//         if (lastCutTime > endTime)
+//             break;
 
-        this_thread::sleep_for(chrono::milliseconds(int(deltaT*1000)));
-    }
-}
+//         this_thread::sleep_for(chrono::milliseconds(int(deltaT*1000)));
+//     }
+// }
 
 void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
 {

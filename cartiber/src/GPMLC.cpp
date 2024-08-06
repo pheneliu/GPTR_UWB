@@ -832,7 +832,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         // printf("KnotParam: %2d. Traj %2d, Knot %2d. Max: %f\n",
         //         pidx, tkp.first.first, tkp.first.second, Jparam.cwiseAbs().maxCoeff());
     }
-    cout << endl;
+    // cout << endl;
 
     // Check to see if removed res are among the wierd res
     for(auto &res : factorMetaMp2kRemoved.res)
