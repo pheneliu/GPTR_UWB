@@ -852,7 +852,9 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     // printf("Wierd res: %d. No overlap with Gpx\n", wierdRes.size());
 
     // Save the marginalization factors and states
-    if (margInfo == NULL) margInfo = new MarginalizationInfo();
+    if (margInfo == nullptr)
+        margInfo = MarginalizationInfoPtr(new MarginalizationInfo());
+
     // Copy the marginalization matrices
     margInfo->Hkeep = Hkeep;
     margInfo->bkeep = bkeep;
@@ -873,6 +875,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
                      double tmin, double tmax, double tmid,
                      const vector<deque<vector<LidarCoef>>> &cloudCoef,
+                     bool do_marginalization,
                      myTf<double> &T_B_Li_gndtr)
 {
     TicToc tt_build;
@@ -992,7 +995,8 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
 
     // Determine the factors to remove
-    Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
+    if (do_marginalization)
+        Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
 
     tt_slv.Toc();
 
@@ -1006,7 +1010,8 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     debug_check++;
 
     static int optnum = -1;
-    optnum++;
+    if(optnum == -1 || do_marginalization)
+        optnum++;
 
     printf(KGRN
            "GPX Opt #%4d / %2d: Iter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d. Debug: %d / %d\n"
@@ -1026,4 +1031,9 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     if ( (max_debug > 0) && (debug_check == max_debug) )
         exit(0);
 
+}
+
+void GPMLC::Reset()
+{
+    margInfo.reset();
 }

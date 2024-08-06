@@ -238,15 +238,17 @@ public:
     }
 };
 
+typedef std::shared_ptr<MarginalizationInfo> MarginalizationInfoPtr;
+
 class MarginalizationFactor : public ceres::CostFunction
 {
 private:
-        MarginalizationInfo* margInfo;
+        MarginalizationInfoPtr margInfo;
         map<const double*, ParamInfo> keptParamMap;
 
 public:
 
-    MarginalizationFactor(MarginalizationInfo* margInfo_, map<double*, ParamInfo> &paramInfoMap)
+    MarginalizationFactor(MarginalizationInfoPtr margInfo_, map<double*, ParamInfo> &paramInfoMap)
     {
         margInfo = margInfo_;
         keptParamMap.clear();
@@ -408,7 +410,7 @@ private:
     // Map of traj-kidx and parameter id
     map<pair<int, int>, int> tk2p;
     map<double*, ParamInfo> paramInfoMap;
-    MarginalizationInfo* margInfo = NULL;
+    MarginalizationInfoPtr margInfo;
     // MarginalizationFactor* margFactor = NULL;
 
 public:
@@ -452,7 +454,10 @@ public:
     void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
                   double tmin, double tmax, double tmid,
                   const vector<deque<vector<LidarCoef>>> &cloudCoef,
+                  bool do_marginalization,
                   myTf<double> &T_B_Li_gndtr);
+
+    void Reset();  
 };
 
 typedef std::shared_ptr<GPMLC> GPMLCPtr;

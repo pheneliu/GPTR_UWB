@@ -90,6 +90,7 @@ int CLOUDS_SW = 2;
 int Nseg = 1;
 double t_shift = 0.0;
 int max_outer_iter = 3;
+int max_inner_iter = 2;
 
 vector<myTf<double>> T_B_Li_gndtr;
 
@@ -1115,6 +1116,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("Nseg", Nseg);
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
+    nh_ptr->getParam("max_inner_iter", max_inner_iter);
 
     // Determine the number of lidar
     int Nlidar = pc_topics.size();
@@ -1363,38 +1365,39 @@ int main(int argc, char **argv)
     // Find the trajectory with MAP optimization
     // vector<ros::Publisher> cloudsegpub(Nlidar);
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);
-    vector<thread> choptheclouds(Nlidar);
-    vector<thread> findtrajmap(Nlidar);
+    // vector<thread> choptheclouds(Nlidar);
+    // vector<thread> findtrajmap(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         // Create the gpmaplo objects
-        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), lidx));
+        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), cloudsx[lidx].front()->points.front().t, lidx));
         
-        // Create the cloud publisher and publisher thread
-        // cloudsegpub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_segment", lidx), 1000);
-        choptheclouds[lidx] = thread(ChopTheClouds, std::ref(cloudsx[lidx]), lidx);
+        // // Create the cloud publisher and publisher thread
+        // // cloudsegpub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_segment", lidx), 1000);
+        // choptheclouds[lidx] = thread(ChopTheClouds, std::ref(cloudsx[lidx]), lidx);
         
-        // Create the estimators
-        double t0 = cloudsx[lidx].front()->points.front().t;
-        findtrajmap[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
+        // // Create the estimators
+        // double t0 = cloudsx[lidx].front()->points.front().t;
+        // findtrajmap[lidx] = thread(std::bind(&GPMAPLO::FindTraj, gpmaplo[lidx], std::ref(kdTreeMap), std::ref(priormap), t0));
     }
 
-    // Wait for the threads to complete
-    for(auto &thr : choptheclouds)
-        thr.join();
-    for(auto &thr : findtrajmap)
-        thr.join();
+    // // Wait for the threads to complete
+    // for(auto &thr : choptheclouds)
+    //     thr.join();
+    // for(auto &thr : findtrajmap)
+    //     thr.join();
 
-    // Finish
-    printf(KGRN "All GPMAPLO processes finished.\n" RESET);
+    // // Finish
+    // printf(KGRN "All GPMAPLO processes finished.\n" RESET);
 
     GPMLCPtr gpmlc(new GPMLC(nh_ptr));
+    vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
 
     // Do optimization with inter-trajectory factors
-    for(int iter = 0; iter < max_outer_iter; iter++)
+    for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
         int CLOUDS_SW_HALF = int(CLOUDS_SW/2);
-        for(int cidx = 0; cidx < cloudsx[0].size() - CLOUDS_SW_HALF; cidx+= int(CLOUDS_SW_HALF))
+        for(int cidx = outer_iter; cidx < cloudsx[0].size() - CLOUDS_SW_HALF; cidx+= int(CLOUDS_SW_HALF))
         {
             if (cloudsx[0][cidx]->points.front().t < SKIPPED_TIME)
                 continue;
@@ -1411,62 +1414,73 @@ int main(int argc, char **argv)
             double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window,
                                                                     // also determines the marginalization time limit
             
-            // double dt = cloudsx[0][SW_BEG]->points.back().t - cloudsx[0][SW_BEG]->points.front().t;
-            // printf("CLOUDS_SW: %d. %d. %d. %f. %f. %f\n", CLOUDS_SW, CLOUDS_SW_HALF, CLOUDS_SW_EFF, tmin, tmax, dt);
-
-            vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(CLOUDS_SW_EFF));
-
-            deque<CloudXYZITPtr> swCloud0(CLOUDS_SW_EFF);
-            deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_SW_EFF);
-            deque<CloudXYZIPtr> swCloudUndiInW0(CLOUDS_SW_EFF);
-            deque<vector<LidarCoef>> &swCloudCoef0 = swCloudCoef[0];
-
-            deque<CloudXYZITPtr> swCloudi(CLOUDS_SW_EFF);
-            deque<CloudXYZIPtr> swCloudUndii(CLOUDS_SW_EFF);
-            deque<CloudXYZIPtr> swCloudUndiInWi(CLOUDS_SW_EFF);
-            deque<vector<LidarCoef>> &swCloudCoefi = swCloudCoef[1];
-
-            // Deskew, Transform and Associate
-            auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
-                                                        CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
+            // Extend the trajectories
+            for(int lidx = 0; lidx < Nlidar; lidx++)
             {
-                GaussianProcessPtr traj = gpmaplo->GetTraj();
-                
-                // Deskew
-                cloudUndi = CloudXYZIPtr(new CloudXYZI());
-                gpmaplo->Deskew(traj, cloudRaw, cloudUndi);
-                
-                // Transform
-                cloudUndiInW = CloudXYZIPtr(new CloudXYZI());
-                SE3d pose = traj->pose(cloudRaw->points.back().t);
-                pcl::transformPointCloud(*cloudUndi, *cloudUndiInW, pose.translation(), pose.so3().unit_quaternion());
-
-                // Associate
-                gpmaplo->Associate(traj, kdTreeMap, priormap, cloudRaw, cloudUndi, cloudUndiInW, cloudCoeff);
-
-            };
-            for(int idx = SW_BEG; idx < SW_END; idx++)
-            {
-                int swIdx = idx - SW_BEG;
-
-                swCloud0[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[0][idx], 0.1);
-                swCloudi[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[1][idx], 0.1);
-
-                ProcessCloud(gpmaplo[0], swCloud0[swIdx], swCloudUndi0[swIdx], swCloudUndiInW0[swIdx], swCloudCoef0[swIdx]);
-                ProcessCloud(gpmaplo[1], swCloudi[swIdx], swCloudUndii[swIdx], swCloudUndiInWi[swIdx], swCloudCoefi[swIdx]);
+                while(trajs[lidx]->getMaxTime() < tmax)
+                    trajs[lidx]->extendOneKnot();
             }
-
-            vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
-
-            // Optimize
-            gpmlc->Evaluate(iter, trajs, tmin, tmax, tmid, swCloudCoef, T_B_Li_gndtr[1]);
-
-            // Visualize the result on each trajectory
+            
+            // Deskew, Associate, Estimate, repeat three times
+            for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
-                gpmaplo[0]->Visualize(tmin, tmax, swCloudCoef0, true);
-                gpmaplo[1]->Visualize(tmin, tmax, swCloudCoefi, true);
+                // Create buffers for lidar coefficients
+                vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(CLOUDS_SW_EFF));
+
+                deque<CloudXYZITPtr> swCloud0(CLOUDS_SW_EFF);
+                deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_SW_EFF);
+                deque<CloudXYZIPtr> swCloudUndiInW0(CLOUDS_SW_EFF);
+                deque<vector<LidarCoef>> &swCloudCoef0 = swCloudCoef[0];
+
+                deque<CloudXYZITPtr> swCloudi(CLOUDS_SW_EFF);
+                deque<CloudXYZIPtr> swCloudUndii(CLOUDS_SW_EFF);
+                deque<CloudXYZIPtr> swCloudUndiInWi(CLOUDS_SW_EFF);
+                deque<vector<LidarCoef>> &swCloudCoefi = swCloudCoef[1];
+
+                // Deskew, Transform and Associate
+                auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
+                                                            CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
+                {
+                    GaussianProcessPtr traj = gpmaplo->GetTraj();
+                    
+                    // Deskew
+                    cloudUndi = CloudXYZIPtr(new CloudXYZI());
+                    gpmaplo->Deskew(traj, cloudRaw, cloudUndi);
+                    
+                    // Transform
+                    cloudUndiInW = CloudXYZIPtr(new CloudXYZI());
+                    SE3d pose = traj->pose(cloudRaw->points.back().t);
+                    pcl::transformPointCloud(*cloudUndi, *cloudUndiInW, pose.translation(), pose.so3().unit_quaternion());
+
+                    // Associate
+                    gpmaplo->Associate(traj, kdTreeMap, priormap, cloudRaw, cloudUndi, cloudUndiInW, cloudCoeff);
+
+                };
+                
+                for(int idx = SW_BEG; idx < SW_END; idx++)
+                {
+                    int swIdx = idx - SW_BEG;
+
+                    swCloud0[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[0][idx], 0.1);
+                    swCloudi[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[1][idx], 0.1);
+
+                    ProcessCloud(gpmaplo[0], swCloud0[swIdx], swCloudUndi0[swIdx], swCloudUndiInW0[swIdx], swCloudCoef0[swIdx]);
+                    ProcessCloud(gpmaplo[1], swCloudi[swIdx], swCloudUndii[swIdx], swCloudUndiInWi[swIdx], swCloudCoefi[swIdx]);
+                }
+
+                // Optimize
+                gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter < max_inner_iter - 1, T_B_Li_gndtr[1]);
+
+                // Visualize the result on each trajectory
+                {
+                    gpmaplo[0]->Visualize(tmin, tmax, swCloudCoef0, true);
+                    gpmaplo[1]->Visualize(tmin, tmax, swCloudCoefi, true);
+                }
             }
         }
+
+        // Reset the marginalization factor
+        gpmlc->Reset();
     }
 
     // Create the pose sampling publisher

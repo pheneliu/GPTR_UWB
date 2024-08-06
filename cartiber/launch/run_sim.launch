@@ -42,7 +42,7 @@
         <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.04357"/>
+        <param name="deltaT"         value="0.01102"/>
         <param name="WINDOW_SIZE"    value="5"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
@@ -80,7 +80,8 @@
         <param name="Nsample"        value="1000"   />
         <param name="Nseg"           value="1"      />
         <param name="t_shift"        value="0.005"  />
-        <param name="max_outer_iter" value="20"     />
+        <param name="max_outer_iter" value="3"      />
+        <param name="max_inner_iter" value="2"      />
         <param name="max_debug"      value="-1"     />
         <param name="fix_kidxmin"    value="0"      />
         <param name="fix_kidxmax"    value="0"      />

@@ -95,7 +95,7 @@ public:
     // Destructor
    ~GPMAPLO() {};
 
-    GPMAPLO(NodeHandlePtr &nh_ptr_, mutex & nh_mtx, const SE3d &T_W_Li0_, int &LIDX_)
+    GPMAPLO(NodeHandlePtr &nh_ptr_, mutex & nh_mtx, const SE3d &T_W_Li0_, double t0, int &LIDX_)
         : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_)
     {
         lock_guard<mutex> lg(nh_mtx);
@@ -151,6 +151,13 @@ public:
         printf("Window size: %2d. Fixes: %.3f, %.3f. DK: %.3f, %2d. lidar_weight: %.3f. ppSigma: %.3f, %.3f. mpSigmaR: %.3f, %.3f\n",
                 WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
         // printf("GPMAPLO subscribing to %s\n\n", cloudSegTopic.c_str());
+
+        Matrix3d SigGa = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
+        Matrix3d SigNu = Vector3d(mpSigmaP, mpSigmaP, mpSigmaP).asDiagonal();
+
+        traj = GaussianProcessPtr(new GaussianProcess(deltaT, SigGa, SigNu, true));
+        traj->setStartTime(t0);
+        traj->setKnot(0, GPState(t0, T_W_Li0));
 
     }
 
@@ -318,13 +325,6 @@ public:
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
     {
-        Matrix3d Qr = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
-        Matrix3d Qc = Vector3d(mpSigmaP, mpSigmaP, mpSigmaP).asDiagonal();
-
-        traj = GaussianProcessPtr(new GaussianProcess(deltaT, Qr, Qc, true));
-        traj->setStartTime(t0);
-        traj->setKnot(0, GPState(t0, T_W_Li0));
-
         deque<CloudXYZITPtr> swCloudSeg;
         deque<CloudXYZIPtr > swCloudSegUndi;
         deque<CloudXYZIPtr > swCloudSegUndiInW;
@@ -399,7 +399,7 @@ public:
             Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
             // Step 2.3: Create a local trajectory for optimization
-            GaussianProcessPtr swTraj(new GaussianProcess(deltaT, Qr, Qc));
+            GaussianProcessPtr swTraj(new GaussianProcess(deltaT, traj->getSigGa(), traj->getSigNu()));
             int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
             double tmin = traj->getKnotTime(umin);
             double tmax = min(traj->getMaxTime(), TSWEND);
