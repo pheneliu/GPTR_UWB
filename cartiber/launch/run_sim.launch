@@ -6,17 +6,13 @@
 
     <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
-    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="valgrind"> -->
-    <!-- <node required="false" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
-          launch-prefix="gdb -ex run - -args"> -->
 
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/priormap.pcd" />
 
         <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid_no_offset.bag" /> -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/cartiber/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="100"/>
+        <param name="MAX_CLOUDS"     value="600"/>
         <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
         
         <param name="pc_topics"      value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
@@ -33,13 +29,6 @@
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size" value="0.15"   />
-
-        <!-- EKF params -->
-        <param name="UW_NOISE"       value="10.0"   />
-        <param name="UV_NOISE"       value="10.0"   />
-        <param name="DEBUG_STEPS"    value="0"      />
-        <param name="MAX_ITER"       value="5"      />
-        <param name="dXmax"          value="0.2"    />
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.04357"/>
@@ -54,20 +43,12 @@
         <param name="ds_size"        value="0.1"    />
         <param name="lidar_ds_rate"  value="1"      />
         <param name="lidar_weight"   value="5.0"    />
-        
-        <!-- Pose prior factor -->
-        <param name="ppSigmaR"       value="-1.0"   />
-        <param name="ppSigmaP"       value="-1.0"   />
-        
+
         <!-- Motion prior factors -->
         <param name="mpSigmaR"       value="1.0"    />
         <param name="mpSigmaP"       value="1.0"    />
-        <param name="DK"             value="2"      />
-        <param name="tshift"         value="0.025"  />
-
-        <!-- Smoothness factors -->
-        <param name="smSigmaR"       value="-10"    />
-        <param name="smSigmaP"       value="-10"    />
+        <!-- <param name="DK"             value="2"      /> -->
+        <!-- <param name="tshift"         value="0.025"  /> -->
 
         <!-- Loss function threshold -->
         <param name="ld_loss_thres"  value="1.0"    />

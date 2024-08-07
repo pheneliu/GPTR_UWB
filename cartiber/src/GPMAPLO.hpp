@@ -89,6 +89,7 @@ private:
     ros::Publisher trajPub;
     ros::Publisher swTrajPub;
     ros::Publisher assocCloudPub;
+    ros::Publisher deskewedCloudPub;
 
 public:
 
@@ -143,6 +144,7 @@ public:
         trajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gp_traj", LIDX), 1);
         swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
         assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+        deskewedCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_inW", LIDX), 1);
         
         // Create the solver
         mySolver = GNSolverPtr(new GNSolver(nh_ptr, LIDX));
@@ -283,7 +285,7 @@ public:
         }
     }
 
-    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef, bool publish_full_traj=false)
+    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef, CloudXYZIPtr &cloudUndiInW, bool publish_full_traj=false)
     {
         if (publish_full_traj)
         {
@@ -321,6 +323,9 @@ public:
         // static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
         if (assoc_cloud->size() != 0)
             Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
+
+        // Publish the deskewed pointCloud
+        Util::publishCloud(deskewedCloudPub, *cloudUndiInW, ros::Time::now(), "world");
     }
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
@@ -484,7 +489,7 @@ public:
                 }
 
                 // Visualize the result on the sliding window
-                Visualize(tmin, tmax, swCloudCoef);
+                Visualize(tmin, tmax, swCloudCoef, swCloudSegUndiInW.back());
 
                 tt_aftop.Toc();
 
