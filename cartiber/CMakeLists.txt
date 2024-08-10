@@ -3,7 +3,7 @@ project(cartiber)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors -g")
+set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 
 ## Find catkin macros and libraries

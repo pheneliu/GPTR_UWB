@@ -1,6 +1,9 @@
 #pragma once
 
 #include <iostream>
+#include <fstream>
+#include <filesystem>
+
 #include <algorithm>    // Include this header for std::max
 #include <Eigen/Dense>
 
@@ -1267,6 +1270,51 @@ public:
         this->A = other.A;
 
         return *this;
+    }
+
+    bool saveTrajectory(string log_dir, int lidx, vector<double> ts)
+    {
+        string log_ = log_dir + "/gptraj_" + std::to_string(lidx) + ".csv";
+        std::ofstream logfile;
+        logfile.open(log_); // Open the file for writing
+        logfile.close(); // Open the file for writing
+        logfile.open(log_); // Open the file for writing
+        logfile.precision(std::numeric_limits<double>::digits10 + 1);
+
+        // if (logfile.is_open())
+        // {
+        //     std::cerr << "Unable to open file " << log_ << endl;
+        //     return false;
+        // }
+
+        logfile << "Dt: " << dt << ", Order: " << 3 << ", Knots: " << getNumKnots() << ", MinTime: " << t0 << ", MaxTime: " << getMaxTime() << endl;
+
+        for(int kidx = 0; kidx < getNumKnots(); kidx++)
+        {
+            logfile << kidx << ", "
+                    << getKnotSO3(kidx).unit_quaternion().x() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().y() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().z() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().w() << ", "
+                    << getKnotOmg(kidx).x() << ", "
+                    << getKnotOmg(kidx).y() << ", "
+                    << getKnotOmg(kidx).z() << ", "
+                    << getKnotAlp(kidx).x() << ", "
+                    << getKnotAlp(kidx).y() << ", "
+                    << getKnotAlp(kidx).z() << ", "
+                    << getKnotPos(kidx).x() << ", "
+                    << getKnotPos(kidx).y() << ", "
+                    << getKnotPos(kidx).z() << ", "
+                    << getKnotVel(kidx).x() << ", "
+                    << getKnotVel(kidx).y() << ", "
+                    << getKnotVel(kidx).z() << ", "
+                    << getKnotAcc(kidx).x() << ", "
+                    << getKnotAcc(kidx).y() << ", "
+                    << getKnotAcc(kidx).z() << endl;
+        }
+
+        logfile.close();
+        return true;
     }
 };
 // Define the shared pointer

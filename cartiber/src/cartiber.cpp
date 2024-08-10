@@ -90,6 +90,8 @@ int max_inner_iter = 2;
 
 vector<myTf<double>> T_B_Li_gndtr;
 
+string log_dir = "/home/tmn/logs";
+
 // Mutex for the node handle
 mutex nh_mtx;
 
@@ -319,6 +321,9 @@ int main(int argc, char **argv)
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
 
+    // Location to save the logs
+    nh_ptr->getParam("log_dir", log_dir);
+
     // Determine the number of lidar
     int Nlidar = pc_topics.size();
 
@@ -492,9 +497,11 @@ int main(int argc, char **argv)
     }
 
     // Extract the ground truth and publish
+    vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
     for(auto &cloud : gndtrCloud)
         cloud = CloudPosePtr(new CloudPose());
+    
     // Add points to gndtr
     for(auto &msg : gndtr)
     {
@@ -518,6 +525,9 @@ int main(int argc, char **argv)
             pose.qz = tf.transform.rotation.z;
             pose.qw = tf.transform.rotation.w;
             gndtrCloud[lidar_id]->push_back(pose);
+            
+            // Save the time stamps
+            gndtr_ts[lidar_id].push_back(pose.t);
         }
     }
 
@@ -689,6 +699,17 @@ int main(int argc, char **argv)
 
         // Reset the marginalization factor
         gpmlc->Reset();
+    }
+
+    // Create directories if they do not exist
+    std::filesystem::create_directories(log_dir);
+
+    // Save the trajectory and estimation result
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
+        printf("Exporting trajectory logs to %s.\n", log_dir.c_str());
+        gpmaplo[lidx]->GetTraj()->saveTrajectory(log_dir, lidx, gndtr_ts[lidx]);
     }
 
     // Create the pose sampling publisher
