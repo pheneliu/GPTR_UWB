@@ -1033,6 +1033,11 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
 
 }
 
+SE3d GPMLC::GetExtrinsics()
+{
+    return SE3d(R_Lx_Ly, P_Lx_Ly);
+}
+
 void GPMLC::Reset()
 {
     margInfo.reset();

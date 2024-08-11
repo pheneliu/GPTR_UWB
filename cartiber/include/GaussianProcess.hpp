@@ -1277,15 +1277,7 @@ public:
         string log_ = log_dir + "/gptraj_" + std::to_string(lidx) + ".csv";
         std::ofstream logfile;
         logfile.open(log_); // Open the file for writing
-        logfile.close(); // Open the file for writing
-        logfile.open(log_); // Open the file for writing
         logfile.precision(std::numeric_limits<double>::digits10 + 1);
-
-        // if (logfile.is_open())
-        // {
-        //     std::cerr << "Unable to open file " << log_ << endl;
-        //     return false;
-        // }
 
         logfile << "Dt: " << dt << ", Order: " << 3 << ", Knots: " << getNumKnots() << ", MinTime: " << t0 << ", MaxTime: " << getMaxTime() << endl;
 

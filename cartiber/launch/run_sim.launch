@@ -62,7 +62,7 @@
         <param name="fix_kidxmax"    value="0"      />
 
         <!-- Log dir -->
-        <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/cartiber/log/exp_sim"/>
+        <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/cartiber/log/gp/exp_sim"/>
 
     </node>
 

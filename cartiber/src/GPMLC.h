@@ -457,6 +457,8 @@ public:
                   bool do_marginalization,
                   myTf<double> &T_B_Li_gndtr);
 
+    SE3d GetExtrinsics();
+
     void Reset();  
 };
 

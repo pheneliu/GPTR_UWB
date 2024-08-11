@@ -560,6 +560,7 @@ int main(int argc, char **argv)
     // Create the estimation module
     GPMLCPtr gpmlc(new GPMLC(nh_ptr));
     vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
+    vector<vector<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
 
     // Do optimization with inter-trajectory factors
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
@@ -589,7 +590,7 @@ int main(int argc, char **argv)
                     trajs[lidx]->extendOneKnot();
             }
             
-            // Deskew, Associate, Estimate, repeat three times
+            // Deskew, Associate, Estimate, repeat max_inner_iter times
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
                 // Create buffers for lidar coefficients
@@ -638,6 +639,22 @@ int main(int argc, char **argv)
 
                 // Optimize
                 gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter < max_inner_iter - 1, T_B_Li_gndtr[1]);
+
+                if (inner_iter == max_inner_iter - 1)
+                {
+                    SE3d se3 = gpmlc->GetExtrinsics();
+                    geometry_msgs::PoseStamped pose;
+                    pose.header.stamp = ros::Time(tmax);
+                    pose.header.frame_id = "lidar_0";
+                    pose.pose.position.x = se3.translation().x();
+                    pose.pose.position.y = se3.translation().y();
+                    pose.pose.position.z = se3.translation().z();
+                    pose.pose.orientation.x = se3.so3().unit_quaternion().x();
+                    pose.pose.orientation.y = se3.so3().unit_quaternion().y();
+                    pose.pose.orientation.z = se3.so3().unit_quaternion().z();
+                    pose.pose.orientation.w = se3.so3().unit_quaternion().w();
+                    extrinsic_poses[1].push_back(pose);
+                }
 
                 // Visualize the result on each trajectory
                 {
@@ -711,6 +728,25 @@ int main(int argc, char **argv)
         printf("Exporting trajectory logs to %s.\n", log_dir.c_str());
         gpmaplo[lidx]->GetTraj()->saveTrajectory(log_dir, lidx, gndtr_ts[lidx]);
     }
+
+    // Log the extrinsics
+    string xts_log = log_dir + "/extrinsics_" + std::to_string(1) + ".csv";
+    std::ofstream xts_logfile;
+    xts_logfile.open(xts_log); // Open the file for writing
+    xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
+    xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
+    for(auto &pose : extrinsic_poses[1])
+    {
+        xts_logfile << pose.header.stamp.toSec() << ","
+                    << pose.pose.position.x << ","
+                    << pose.pose.position.y << ","
+                    << pose.pose.position.z << ","
+                    << pose.pose.orientation.x << ","
+                    << pose.pose.orientation.y << ","
+                    << pose.pose.orientation.z << ","
+                    << pose.pose.orientation.w << "," << endl;
+    }
+    xts_logfile.close();
 
     // Create the pose sampling publisher
     vector<ros::Publisher> poseSamplePub(Nlidar);
