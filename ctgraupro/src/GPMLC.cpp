@@ -383,12 +383,6 @@ void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &
             for (int col = 0; col < matrix_tp.cols(); ++col)
                 if (std::find(idxToRemove_.begin(), idxToRemove_.end(), col) == idxToRemove_.end())
                 {
-// yolos("matrix: %d, %d. matrix_tp: %d %d. result %d %d. idxToRemove: %d. idxToRemove_: %d. idxToKeep: %d. currentCol: %d. %d.\n",
-//        matrix.rows(), matrix.cols(),
-//        matrix_tp.rows(), matrix_tp.cols(),
-//        result.rows(), result.cols(),
-//        idxToRemove.size(), idxToRemove_.size(), idxToKeep,
-//        currentCol, col);
                     result.col(currentCol) = matrix_tp.col(col);
                     currentCol++;
                 }

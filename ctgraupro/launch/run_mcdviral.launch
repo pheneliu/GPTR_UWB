@@ -4,7 +4,7 @@
 
     <arg name="autorun" default="false" />
 
-    <node required="true" pkg="cartiber" type="cartiber" name="cartiber" output="screen"
+    <node required="true" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
         launch-prefix="bash -c 'sleep 3; $0 $@' ">
         <param name="lidar_bag_file" value="/media/tmn/mySataSSD1/DATASETS/MCDVIRAL/PublishedSequencesUnzipped/ntu_day_02/ntu_day_02_mid70.bag" />
         <param name="priormap_file"  value="/media/tmn/mySataSSD1/DATASETS/MCDVIRAL/PriorMap/NTUCampus/nkcamp_prior_lowres/GlobalFullMap.pcd" />
@@ -24,6 +24,6 @@
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-        args="-d $(find cartiber)/launch/cartiber.rviz" />
+        args="-d $(find ctgaupro)/launch/ctgaupro.rviz" />
 
 </launch>

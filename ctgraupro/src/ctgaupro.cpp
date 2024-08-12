@@ -276,7 +276,7 @@ void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "cartiber");
+    ros::init(argc, argv, "ctgaupro");
     ros::NodeHandle nh("~");
     nh_ptr = boost::make_shared<ros::NodeHandle>(nh);
     

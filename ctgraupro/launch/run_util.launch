@@ -5,7 +5,7 @@
     <arg name="bag_file" value="/media/tmn/mySataSSD1/DATASETS/UTIL_DATASETS/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
 
     <!-- Launch the uwb imu fusion node -->
-    <node pkg="cartiber" type="cartiber_gpui" name="cartiber_gpui" output="screen">
+    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="screen">
         
         <param name="auto_exit"  value="1"/>
 
