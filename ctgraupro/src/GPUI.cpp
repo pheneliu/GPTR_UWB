@@ -70,6 +70,30 @@ Matrix<Scalar, RowSize, ColSize> load_dlm(const std::string &path, string dlm, i
     return Map<const Matrix<Scalar, RowSize, ColSize, RowMajor>>(values.data(), rows, values.size() / rows);
 }
 
+std::map<uint16_t, Eigen::Vector3d> getAnchorListFromUTIL(const std::string& anchor_path)
+{
+    std::map<uint16_t, Eigen::Vector3d> anchor_list;
+    std::string line;
+    std::ifstream infile;
+    infile.open(anchor_path);
+    if (!infile) {
+        std::cerr << "Unable to open file: " << anchor_path << std::endl;
+        exit(1);
+    }
+    while (std::getline(infile, line)) {
+        std::istringstream iss(line);
+        char comma, tmp, tmp2;
+        int anchor_id;
+        double x, y, z;
+        iss >> tmp >> tmp >> anchor_id >> tmp >> tmp2 >> comma >> x >> comma >> y >> comma >> z;
+        if (tmp2 == 'p') {
+            anchor_list[anchor_id] = Eigen::Vector3d(x, y, z);
+        }
+    }
+    infile.close();
+    return anchor_list;
+}
+
 typedef sensor_msgs::Imu  ImuMsg    ;
 typedef ImuMsg::ConstPtr  ImuMsgPtr ;
 typedef cf_msgs::Tdoa     TdoaMsg   ;
@@ -197,6 +221,8 @@ void imuCb(const ImuMsgPtr &msg)
     // printf(KMAG "Receive imu\n" RESET);
 }
 
+ros::Publisher knot_pub;
+
 void processData()
 {
     UwbImuBuf swUIBuf;
@@ -228,12 +254,25 @@ void processData()
             traj->extendOneKnot();
 
         // Step 3: Optimization
-        // ...
+        TicToc tt_solve;
+
+        tt_solve.Toc();
 
         // Step 4: Report, visualize
         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
                 UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size());
+
+        pcl::PointCloud<pcl::PointXYZ> est_knots;
+        for (int i = 0; i < traj->getNumKnots(); i++) {   
+            Eigen::Vector3d knot_pos = traj->getKnotPose(i).translation();
+            est_knots.points.push_back(pcl::PointXYZ(knot_pos.x(), knot_pos.y(), knot_pos.z()));
+        }
+        sensor_msgs::PointCloud2 knot_msg;
+        pcl::toROSMsg(est_knots, knot_msg);
+        knot_msg.header.stamp = ros::Time::now();
+        knot_msg.header.frame_id = "map";        
+        knot_pub.publish(knot_msg);
 
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
@@ -265,19 +304,21 @@ int main(int argc, char **argv)
     // Find the path to anchor position
     string anchor_pose_path;
     nh_ptr->getParam("anchor_pose_path", anchor_pose_path);
+    
     // Load the anchor pose 
-    MatrixXd anc_pose_ = load_dlm(anchor_pose_path, ",", 1, 0);
-    for(int ridx = 0; ridx < anc_pose_.rows(); ridx++)
-    {
-        Vector4d Q_; Q_ << anc_pose_.block<1, 4>(ridx, 3).transpose();
-        Quaternd Q(Q_.w(), Q_.x(), Q_.y(), Q_.z());
-        Vector3d P = anc_pose_.block<1, 3>(ridx, 0).transpose();
-        anc_pose.push_back(SE3d(Q, P));
+    std::map<uint16_t, Eigen::Vector3d> anc_pose_ = getAnchorListFromUTIL(anchor_pose_path);
+    // MatrixXd anc_pose_ = load_dlm(anchor_pose_path, ",", 1, 0);
+    // for(int ridx = 0; ridx < anc_pose_.rows(); ridx++)
+    // {
+    //     Vector4d Q_; Q_ << anc_pose_.block<1, 4>(ridx, 3).transpose();
+    //     Quaternd Q(Q_.w(), Q_.x(), Q_.y(), Q_.z());
+    //     Vector3d P = anc_pose_.block<1, 3>(ridx, 0).transpose();
+    //     anc_pose.push_back(SE3d(Q, P));
 
-        myTf tf(anc_pose.back());
-        printf("Anchor: %2d. Pos: %6.3f, %6.3f, %6.3f. Rot: %4.0f, %4.0f, %4.0f.\n",
-                ridx, P.x(), P.y(), P.z(), tf.yaw(), tf.pitch(), tf.roll());
-    }
+    //     myTf tf(anc_pose.back());
+    //     printf("Anchor: %2d. Pos: %6.3f, %6.3f, %6.3f. Rot: %4.0f, %4.0f, %4.0f.\n",
+    //             ridx, P.x(), P.y(), P.z(), tf.yaw(), tf.pitch(), tf.roll());
+    // }
 
     // Topics to subscribe to
     string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
@@ -291,6 +332,9 @@ int main(int argc, char **argv)
     tdoaSub = nh_ptr->subscribe(tdoa_topic, 10, tdoaCb);
     tofSub  = nh_ptr->subscribe(tof_topic,  10, tofCb);
     imuSub  = nh_ptr->subscribe(imu_topic,  10, imuCb);
+
+    // Publish estimates
+    knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
 
     // while(ros::ok())
     //     this_thread::sleep_for(chrono::milliseconds(100));
@@ -314,7 +358,11 @@ int main(int argc, char **argv)
 
         double t0 = UIBuf.minTime();
         traj->setStartTime(t0);
-        traj->setKnot(0, GPState(t0));
+
+        // Set initial pose
+        SE3d initial_pose;
+        initial_pose.translation() = Eigen::Vector3d(1.25, 0.0, 0.07);
+        traj->setKnot(0, GPState(t0, initial_pose));
         break;
     }
     printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
