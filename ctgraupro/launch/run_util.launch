@@ -5,7 +5,7 @@
     <arg name="bag_file" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
 
     <!-- Launch the uwb imu fusion node -->
-    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="screen">
+    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="log">
         
         <param name="auto_exit"  value="1"/>
 
@@ -19,6 +19,7 @@
         <param name="tdoa_topic" value="/tdoa_data"/>
         <param name="tof_topic"  value="/tof_data" />
         <param name="imu_topic"  value="/imu_data" />
+        <param name="gt_topic"   value="/pose_data" />
         <param name="fuse_tdoa"  value="1"/>
         <param name="fuse_tof"   value="1"/>
         <param name="fuse_imu"   value="1"/>

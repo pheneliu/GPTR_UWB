@@ -107,15 +107,20 @@ public:
 
         // Residual
         Eigen::Map<Matrix<double, 1, 1>> residual(residuals);
-        residual[0] = w*((Xt.P - pos_anchor_i).norm() - (Xt.P - pos_anchor_j).norm() - tdoa);
-
+        Eigen::Vector3d diff_i = Xt.P - pos_anchor_i;
+        Eigen::Vector3d diff_j = Xt.P - pos_anchor_j;        
+        residual[0] = w*(diff_j.norm() - diff_i.norm() - tdoa);
+        // std::cout << "Xt.P: " << Xt.P.transpose() << " pos_anchor_i: " << pos_anchor_i.transpose() << " pos_anchor_j: "
+                //   << pos_anchor_j.transpose() << " tdoa: " << tdoa << " residual[0]: " << residual[0] << std::endl;
         /* #endregion Calculate the pose at sampling time -----------------------------------------------------------*/
 
         if (!jacobians)
             return true;
 
-        Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
-        Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
+        // Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
+        // Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
+        Matrix<double, 1, 3> Dr_DRt  = Matrix<double, 1, 3>::Zero();
+        Matrix<double, 1, 3> Dr_DPt  = (diff_j.normalized() - diff_i.normalized()).transpose();        
 
         size_t idx;
 
@@ -226,7 +231,7 @@ public:
             Dr_DAb.setZero();
             Dr_DAb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
         }
-        
+
         return true;
     }
 

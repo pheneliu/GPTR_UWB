@@ -11,6 +11,8 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include "sensor_msgs/PointCloud2.h"
+#include "nav_msgs/Odometry.h"
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "livox_ros_driver/CustomMsg.h"
 
 // Add ikdtree
@@ -119,7 +121,7 @@ GaussianProcessPtr traj;
 
 bool fuse_tdoa = true;
 bool fuse_tof  = false;
-bool fuse_imu  = true;
+bool fuse_imu  = false;
 
 struct UwbImuBuf
 {
@@ -208,10 +210,13 @@ struct UwbImuBuf
     }
 };
 UwbImuBuf UIBuf;
+vector<Eigen::Vector3d> gtBuf;
+ros::Publisher gt_pub;
 
 ros::Subscriber tdoaSub;
 ros::Subscriber tofSub ;
 ros::Subscriber imuSub ;
+ros::Subscriber gtSub  ;
 
 void tdoaCb(const TdoaMsgPtr &msg)
 {
@@ -232,6 +237,28 @@ void imuCb(const ImuMsgPtr &msg)
     lock_guard<mutex> lg(UIBuf.imuBuf_mtx);
     UIBuf.imuBuf.push_back(msg);
     // printf(KMAG "Receive imu\n" RESET);
+}
+
+void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
+{
+    Eigen::Quaterniond q(gt_msg->pose.pose.orientation.w, gt_msg->pose.pose.orientation.x,
+                            gt_msg->pose.pose.orientation.y, gt_msg->pose.pose.orientation.z);
+    Eigen::Vector3d pos(gt_msg->pose.pose.position.x, gt_msg->pose.pose.position.y, gt_msg->pose.pose.position.z);
+    gtBuf.push_back(pos);    
+
+    nav_msgs::Odometry odom_msg;
+    odom_msg.header.stamp = ros::Time::now();
+    odom_msg.header.frame_id = "map";
+
+    odom_msg.pose.pose.position.x = pos[0];
+    odom_msg.pose.pose.position.y = pos[1];
+    odom_msg.pose.pose.position.z = pos[2];
+
+    odom_msg.pose.pose.orientation.w = q.w();
+    odom_msg.pose.pose.orientation.x = q.x();
+    odom_msg.pose.pose.orientation.y = q.y();
+    odom_msg.pose.pose.orientation.z = q.z();
+    gt_pub.publish(odom_msg);        
 }
 
 ros::Publisher knot_pub;
@@ -270,8 +297,11 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
         TicToc tt_solve;
         GPMUIPtr gpmui(new GPMUI(nh_ptr));
         int outer_iter = 1;
-        double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
-        double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
+        std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << std::endl;
+        // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
+        // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
+        double tmin = traj->getMinTime();     // Start time of the sliding window
+        double tmax = traj->getMaxTime();      // End time of the sliding window              
         double tmid = tmin + traj->getDt();     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, false);
@@ -343,6 +373,7 @@ int main(int argc, char **argv)
     string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
     string tof_topic;  nh_ptr->getParam("tof_topic", tof_topic);
     string imu_topic;  nh_ptr->getParam("imu_topic", imu_topic);
+    string gt_topic;   nh_ptr->getParam("gt_topic", gt_topic);
     fuse_tdoa = Util::GetBoolParam(nh_ptr, "fuse_tdoa", fuse_tdoa);
     fuse_tof  = Util::GetBoolParam(nh_ptr, "fuse_tof" , fuse_tof );
     fuse_imu  = Util::GetBoolParam(nh_ptr, "fuse_imu" , fuse_imu );
@@ -351,9 +382,11 @@ int main(int argc, char **argv)
     tdoaSub = nh_ptr->subscribe(tdoa_topic, 10, tdoaCb);
     tofSub  = nh_ptr->subscribe(tof_topic,  10, tofCb);
     imuSub  = nh_ptr->subscribe(imu_topic,  10, imuCb);
+    gtSub   = nh_ptr->subscribe(gt_topic,   10, gtCb);
 
     // Publish estimates
     knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
+    gt_pub   = nh_ptr->advertise<nav_msgs::Odometry>("/ground_truth", 10);
 
     // while(ros::ok())
     //     this_thread::sleep_for(chrono::milliseconds(100));

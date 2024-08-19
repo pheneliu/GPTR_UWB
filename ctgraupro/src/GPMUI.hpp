@@ -259,8 +259,11 @@ public:
                 // Skip if lidar coef is not assigned
                 // if (coef.t < 0)
                     // continue;
-                if (!traj->TimeInInterval(tdoa.t, 1e-6))
+                if (!traj->TimeInInterval(tdoa.t, 1e-6)) {
+                    std::cout << "warn: !traj->TimeInInterval(tdoa.t, 1e-6)" << std::endl;
                     continue;
+                }
+                    
                 // skip++;
                 // if (skip % lidar_ds_rate != 0)
                 //     continue;
@@ -269,12 +272,13 @@ public:
                 int    u  = us.first;
                 double s  = us.second;
 
-                if (traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax)
+                if (traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax) {
+                    std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax" << std::endl;
                     continue;
+                }
 
                 vector<double *> factor_param_blocks;
                 factorMeta.coupled_params.push_back(vector<ParamInfo>());
-
                 // Add the parameter blocks for rotation
                 for (int kidx = u; kidx < u + 2; kidx++)
                 {
@@ -328,8 +332,10 @@ public:
 
         // Set up the ceres problem
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-        options.num_threads = MAX_THREADS;
+        options.num_threads = 1;
         options.max_num_iterations = 50;
+        options.check_gradients = false;
+        options.gradient_check_relative_precision = 1e-6;
 
         // Documenting the parameter blocks
         paramInfoMap.clear();
@@ -398,7 +404,7 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddMP2KFactors(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
+            // AddMP2KFactors(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
@@ -416,8 +422,8 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        if (margInfo != NULL)
-            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        // if (margInfo != NULL)
+        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
 
         tt_build.Toc();
 
@@ -430,6 +436,8 @@ public:
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
         ceres::Solve(options, &problem, &summary);
+
+        std::cout << summary.FullReport() << std::endl;
 
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_final, problem);
