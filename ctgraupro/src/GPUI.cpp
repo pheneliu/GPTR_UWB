@@ -308,7 +308,7 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1);      // End time of the sliding window              
         double tmid = tmin + traj->getDt();     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, true, w_tdoa);
+        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
         tt_solve.Toc();
 
         // Step 4: Report, visualize

@@ -5,7 +5,7 @@
     <arg name="bag_file" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
 
     <!-- Launch the uwb imu fusion node -->
-    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="log">
+    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="log"> <!--launch-prefix="xterm -e gdb -ex run -args"-->
         
         <param name="auto_exit"  value="1"/>
 
