@@ -211,7 +211,10 @@ struct UwbImuBuf
 };
 UwbImuBuf UIBuf;
 vector<Eigen::Vector3d> gtBuf;
+nav_msgs::Path est_path;
+
 ros::Publisher gt_pub;
+ros::Publisher est_pub;
 
 ros::Subscriber tdoaSub;
 ros::Subscriber tofSub ;
@@ -323,6 +326,19 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
         knot_msg.header.frame_id = "map";        
         knot_pub.publish(knot_msg);
 
+        Eigen::Vector3d est_pos = traj->pose(swUIBuf.tdoa_data.front().t).translation();
+        geometry_msgs::PoseStamped traj_msg;
+        traj_msg.header.stamp = ros::Time::now();
+        traj_msg.pose.position.x = est_pos.x();
+        traj_msg.pose.position.y = est_pos.y();
+        traj_msg.pose.position.z = est_pos.z();
+        traj_msg.pose.orientation.w = 1;
+        traj_msg.pose.orientation.x = 0;
+        traj_msg.pose.orientation.y = 0;
+        traj_msg.pose.orientation.z = 0;
+        est_path.poses.push_back(traj_msg);
+        est_pub.publish(est_path);
+
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {
@@ -387,6 +403,9 @@ int main(int argc, char **argv)
     // Publish estimates
     knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
     gt_pub   = nh_ptr->advertise<nav_msgs::Odometry>("/ground_truth", 10);
+    est_pub  = nh_ptr->advertise<nav_msgs::Path>("/estimated_trajectory", 10);
+
+    est_path.header.frame_id = "map";
 
     // while(ros::ok())
     //     this_thread::sleep_for(chrono::milliseconds(100));

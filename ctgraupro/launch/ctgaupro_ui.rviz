@@ -7,8 +7,9 @@ Panels:
         - /Global Options1
         - /Status1
         - /PointCloud21
-        - /Odometry1
-        - /Odometry1/Shape1
+        - /ground_truth1
+        - /ground_truth1/Shape1
+        - /estimated_trajectory1
       Splitter Ratio: 0.5
     Tree Height: 549
   - Class: rviz/Selection
@@ -100,8 +101,8 @@ Visualization Manager:
           Value: true
         Value: true
       Enabled: true
-      Keep: 100
-      Name: Odometry
+      Keep: 5
+      Name: ground_truth
       Position Tolerance: 0.10000000149011612
       Queue Size: 10
       Shape:
@@ -115,6 +116,30 @@ Visualization Manager:
         Shaft Radius: 0.05000000074505806
         Value: Axes
       Topic: /ground_truth
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 238; 238; 236
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.05000000074505806
+      Name: estimated_trajectory
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /estimated_trajectory
       Unreliable: false
       Value: true
   Enabled: true
@@ -161,9 +186,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.46539831161499023
+      Pitch: 0.4553983211517334
       Target Frame: <Fixed Frame>
-      Yaw: 0.7353978157043457
+      Yaw: 0.2853981554508209
     Saved: ~
 Window Geometry:
   Displays:
@@ -182,4 +207,4 @@ Window Geometry:
     collapsed: true
   Width: 1200
   X: 819
-  Y: 153
+  Y: 42
