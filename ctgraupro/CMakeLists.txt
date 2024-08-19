@@ -164,7 +164,7 @@ target_compile_options(${PROJECT_NAME}_test PRIVATE ${OpenMP_CXX_FLAGS} "-isyste
 target_link_libraries(${PROJECT_NAME}_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
 # UWB fusion
-add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp)
+add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})

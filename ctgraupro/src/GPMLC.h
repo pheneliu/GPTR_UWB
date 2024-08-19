@@ -401,6 +401,8 @@ private:
     SO3d R_Lx_Ly;
     Vec3 P_Lx_Ly;
 
+protected:
+
     bool fix_kidxmin = false;
     bool fix_kidxmax = false;
 

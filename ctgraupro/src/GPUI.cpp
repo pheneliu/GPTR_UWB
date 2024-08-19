@@ -131,6 +131,8 @@ struct UwbImuBuf
     mutex tofBuf_mtx;
     mutex imuBuf_mtx;
 
+    vector<TDOAData> tdoa_data;
+
     double minTime()
     {
         double tmin = std::numeric_limits<double>::infinity();
@@ -176,6 +178,16 @@ struct UwbImuBuf
         if (fuse_tdoa) transferDataOneBuf(tdoaBuf, other.tdoaBuf, other.tdoaBuf_mtx, tmax);
         if (fuse_tof ) transferDataOneBuf(tofBuf,  other.tofBuf,  other.tofBuf_mtx,  tmax);
         if (fuse_imu ) transferDataOneBuf(imuBuf,  other.imuBuf,  other.imuBuf_mtx,  tmax);
+        transferTDOAData();
+    }
+
+    void transferTDOAData()
+    {
+        tdoa_data.clear();
+        for (const auto& data : tdoaBuf) {
+            TDOAData tdoa(data->header.stamp.toSec(), data->idA, data->idB, data->data);
+            tdoa_data.push_back(tdoa);
+        }
     }
 
     template<typename T>
@@ -224,7 +236,7 @@ void imuCb(const ImuMsgPtr &msg)
 
 ros::Publisher knot_pub;
 
-void processData()
+void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> anchor_list)
 {
     UwbImuBuf swUIBuf;
 
@@ -257,7 +269,12 @@ void processData()
         // Step 3: Optimization
         TicToc tt_solve;
         GPMUIPtr gpmui(new GPMUI(nh_ptr));
-        // gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter < max_inner_iter - 1, T_B_Li_gndtr[1]);
+        int outer_iter = 1;
+        double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
+        double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
+        double tmid = tmin + traj->getDt();     // Next start time of the sliding window,
+                                               // also determines the marginalization time limit          
+        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, false);
         tt_solve.Toc();
 
         // Step 4: Report, visualize
@@ -370,11 +387,11 @@ int main(int argc, char **argv)
     printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    thread pdthread(processData);
+    thread pdthread(processData, traj, anc_pose_);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);
     spinner.spin();
-
+    pdthread.join();
     return 0;
 }
