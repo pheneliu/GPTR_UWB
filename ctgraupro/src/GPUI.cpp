@@ -25,6 +25,7 @@
 // Custom built utilities
 #include "utility.h"
 #include "GaussianProcess.hpp"
+#include "GPMUI.hpp"
 
 // Topics
 #include "cf_msgs/Tdoa.h"
@@ -255,7 +256,8 @@ void processData()
 
         // Step 3: Optimization
         TicToc tt_solve;
-
+        GPMUIPtr gpmui(new GPMUI(nh_ptr));
+        // gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter < max_inner_iter - 1, T_B_Li_gndtr[1]);
         tt_solve.Toc();
 
         // Step 4: Report, visualize
