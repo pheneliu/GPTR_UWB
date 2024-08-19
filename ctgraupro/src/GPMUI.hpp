@@ -86,7 +86,7 @@ public:
         // Add the GP factors based on knot difference
         for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
         {
-            if (traj->getKnotTime(kidx + 1) <= tmin || traj->getKnotTime(kidx) >= tmax)
+            if (traj->getKnotTime(kidx + 1) < tmin || traj->getKnotTime(kidx) > tmax)
                 continue;
 
             vector<double *> factor_param_blocks;
@@ -303,90 +303,87 @@ public:
     {
         for (auto &tdoa : tdoaData)
         {
-            // for (auto &coef : Coef)
-            // {
-                // Skip if lidar coef is not assigned
-                // if (coef.t < 0)
-                    // continue;
-                if (!traj->TimeInInterval(tdoa.t, 1e-6)) {
-                    std::cout << "warn: !traj->TimeInInterval(tdoa.t, 1e-6)" << std::endl;
-                    continue;
-                }
-                    
-                // skip++;
-                // if (skip % lidar_ds_rate != 0)
-                //     continue;
+            if (!traj->TimeInInterval(tdoa.t, 1e-6)) {
+                std::cout << "warn: !traj->TimeInInterval(tdoa.t, 1e-6)" << std::endl;
+                continue;
+            }
                 
-                auto   us = traj->computeTimeIndex(tdoa.t);
-                int    u  = us.first;
-                double s  = us.second;
+            // skip++;
+            // if (skip % lidar_ds_rate != 0)
+            //     continue;
+            
+            auto   us = traj->computeTimeIndex(tdoa.t);
+            int    u  = us.first;
+            double s  = us.second;
 
-                if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
-                    std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax tdoa.t: "
-                              << tdoa.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
-                              << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
-                              << " tmin: " << tmin << " tmax: " << tmax << std::endl;
-                    continue;
-                }
+            if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+                std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax tdoa.t: "
+                          << tdoa.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
+                          << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
+                          << " tmin: " << tmin << " tmax: " << tmax << std::endl;
+                continue;
+            }
 
-                vector<double *> factor_param_blocks;
-                factorMeta.coupled_params.push_back(vector<ParamInfo>());
-                // Add the parameter blocks for rotation
-                for (int kidx = u; kidx < u + 2; kidx++)
-                {
-                    factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
-                    factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
-                    factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
-                    factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
-                    factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
-                    factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            // Add the parameter blocks for rotation
+            for (int kidx = u; kidx < u + 2; kidx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
 
-                    // Record the param info
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
-                }
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
+            }
 
-                Eigen::Vector3d pos_an_A = pos_anchors[tdoa.idA];
-                Eigen::Vector3d pos_an_B = pos_anchors[tdoa.idB];
-                
-                double tdoa_loss_thres = -1.0;
-                ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
-                ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
-                auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
+            Eigen::Vector3d pos_an_A = pos_anchors[tdoa.idA];
+            Eigen::Vector3d pos_an_B = pos_anchors[tdoa.idB];
+            
+            double tdoa_loss_thres = -1.0;
+            ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
+            ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
+            auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
 
-                // Record the residual block
-                factorMeta.res.push_back(res);
+            // Record the residual block
+            factorMeta.res.push_back(res);
 
-                // Record the knot indices
-                // factorMeta.kidx.push_back({u, u + 1});
+            // Record the knot indices
+            // factorMeta.kidx.push_back({u, u + 1});
 
-                // Record the time stamp of the factor
-                factorMeta.stamp.push_back(tdoa.t);
-            // }
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(tdoa.t);
         }
     }
 
     void Marginalize(ceres::Problem &problem, GaussianProcessPtr &traj,
                             double tmin, double tmax, double tmid,
                             map<double*, ParamInfo> &paramInfoMap,
-                            FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaPrior)
+                            FactorMeta &factorMetaMp2k, FactorMeta &factorMetaTDOA, FactorMeta &factorMetaPrior)
     {
-
+        std::cout << "Marginalize" << std::endl;
         // Deskew, Transform and Associate
         auto FindRemovedFactors = [&tmid](FactorMeta &factorMeta, FactorMeta &factorMetaRemoved, FactorMeta &factorMetaRetained) -> void
         {
+            std::cout << "factorMeta.res.size(): " << factorMeta.res.size() << std::endl;
             for(int ridx = 0; ridx < factorMeta.res.size(); ridx++)
             {
+                std::cout << "4444444444444444" << std::endl;
                 ceres::ResidualBlockId &res = factorMeta.res[ridx];
                 // int KC = factorMeta.kidx[ridx].size();
-                bool removed = factorMeta.stamp[ridx] <= tmid;
-
+                bool removed = factorMeta.stamp[ridx] < tmid;
+                std::cout << "factorMeta.stamp[ridx]: " << factorMeta.stamp[ridx] << " tmid: " << tmid << std::endl;
                 if (removed)
                 {
+                    std::cout << "removed " << std::endl;
                     // factorMetaRemoved.knots_coupled = factorMeta.res[ridx].knots_coupled;
                     factorMetaRemoved.res.push_back(res);
                     factorMetaRemoved.coupled_params.push_back(factorMeta.coupled_params[ridx]);
@@ -402,22 +399,24 @@ public:
                 }
                 else
                 {
+                    std::cout << "!removed " << std::endl;
                     factorMetaRetained.res.push_back(res);
                     factorMetaRetained.coupled_params.push_back(factorMeta.coupled_params[ridx]);
                     factorMetaRetained.stamp.push_back(factorMeta.stamp[ridx]);
                 }
             }
+            // std::cout << "555555555555555" << std::endl;
         };
-
+        // std::cout << "222222222222" << std::endl;
         // Find the MP2k factors that will be removed
         FactorMeta factorMetaMp2kRemoved, factorMetaMp2kRetained;
         FindRemovedFactors(factorMetaMp2k, factorMetaMp2kRemoved, factorMetaMp2kRetained);
-        // printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
+        printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
 
-        // Find the lidar factors that will be removed
-        FactorMeta factorMetaLidarRemoved, factorMetaLidarRetained;
-        FindRemovedFactors(factorMetaLidar, factorMetaLidarRemoved, factorMetaLidarRetained);
-        // printf("factorMetaLidar: %d. Removed: %d\n", factorMetaLidar.size(), factorMetaLidarRemoved.size());
+        // Find the TDOA factors that will be removed
+        FactorMeta factorMetaTDOARemoved, factorMetaTDOARetained;
+        FindRemovedFactors(factorMetaTDOA, factorMetaTDOARemoved, factorMetaTDOARetained);
+        printf("factorMetaTDOA: %d. Removed: %d\n", factorMetaTDOA.size(), factorMetaTDOARemoved.size());
 
         // Find the extrinsic factors that will be removed
         // FactorMeta factorMetaGpxRemoved, factorMetaGpxRetained;
@@ -426,26 +425,38 @@ public:
 
         FactorMeta factorMetaPriorRemoved, factorMetaPriorRetained;
         FindRemovedFactors(factorMetaPrior, factorMetaPriorRemoved, factorMetaPriorRetained);
-
+        // std::cout << "6666666666666666" << std::endl;
         FactorMeta factorMetaRemoved;
         FactorMeta factorMetaRetained;
-
-        factorMetaRemoved = factorMetaMp2kRemoved + factorMetaLidarRemoved + factorMetaPriorRemoved;
-        factorMetaRetained = factorMetaMp2kRetained + factorMetaLidarRetained + factorMetaPriorRetained;
-        // printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
-
+        // std::cout << "777777777777777" << std::endl;
+        factorMetaRemoved = factorMetaMp2kRemoved + factorMetaTDOARemoved + factorMetaPriorRemoved;
+        // std::cout << "88888888888888888888" << std::endl;
+        if (factorMetaPriorRetained.res.empty()) {
+            std::cout << "factorMetaPriorRetained.res.empty()" << std::endl;
+            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained;
+            // std::cout << "999999999999999999" << std::endl;
+        } else {
+          std::cout << "!factorMetaPriorRetained.res.empty()" << std::endl;
+            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
+        }
+        
+        // factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
+        printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
+        // std::cout << "1.1.1.1.1.1" << std::endl;
         // Find the set of params belonging to removed factors
         map<double*, ParamInfo> removed_params;
         for(auto &cpset : factorMetaRemoved.coupled_params)
             for(auto &cp : cpset)
                 removed_params[cp.address] = paramInfoMap[cp.address];
-
+        // std::cout << "2.2.2.2.2.2." << std::endl;
         // Find the set of params belonging to the retained factors
         map<double*, ParamInfo> retained_params;
         for(auto &cpset : factorMetaRetained.coupled_params)
             for(auto &cp : cpset)
                 retained_params[cp.address] = paramInfoMap[cp.address];
-
+                
+        printf("removed_params: %d. retained_params %d.\n", removed_params.size(), retained_params.size());
+        // std::cout << "3.3.3.3.3.3." << std::endl;
         // Find the intersection of the two sets, which will be the kept parameters
         vector<ParamInfo> marg_params;
         vector<ParamInfo> kept_params;
@@ -457,59 +468,61 @@ public:
             else
                 marg_params.push_back(param.second);
         }
-
+        printf("kept_params: %d. marg_params %d.\n", kept_params.size(), marg_params.size());
+        // std::cout << "4.4.4.4.4." << std::endl;
         auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
         {
-            bool abpidx = a.pidx < b.pidx;
-
-            if (a.tidx == -1 && b.tidx != -1)
-            {
-                ROS_ASSERT(abpidx == false);
-                return false;
-            }
-
-            if (a.tidx != -1 && b.tidx == -1)
-            {
-                ROS_ASSERT(abpidx == true);
-                return true;
-            }
+            // bool abpidx = a.pidx < b.pidx;
+            // ROS_ASSERT(a.tidx == b.tidx);
             
-            if ((a.tidx != -1 && b.tidx != -1) && (a.tidx < b.tidx))
-            {
-                ROS_ASSERT(abpidx == true);
-                return true;
-            }
+            // if (a.tidx == -1 && b.tidx != -1)
+            // {
+            //     // ROS_ASSERT(abpidx == false);
+            //     return true;
+            // }
+
+            // if (a.tidx != -1 && b.tidx == -1)
+            // {
+            //     // ROS_ASSERT(abpidx == true);
+            //     return false;
+            // }
             
-            if ((a.tidx != -1 && b.tidx != -1) && (a.tidx > b.tidx))
-            {
-                ROS_ASSERT(abpidx == false);
-                return false;
-            }
+            // if ((a.tidx != -1 && b.tidx != -1) && (a.tidx < b.tidx))
+            // {
+            //     ROS_ASSERT(abpidx == true);
+            //     return true;
+            // }
+            
+            // if ((a.tidx != -1 && b.tidx != -1) && (a.tidx > b.tidx))
+            // {
+            //     ROS_ASSERT(abpidx == false);
+            //     return false;
+            // }
 
             // Including the situation that two knots are 01
-            if (a.tidx == b.tidx)
+            // if (a.tidx == b.tidx)
             {
                 if (a.kidx == -1 && b.kidx != -1)
                 {
-                    ROS_ASSERT(abpidx == false);
+                    // ROS_ASSERT(abpidx == false);
                     return false;
                 }
 
                 if (a.kidx != -1 && b.kidx == -1)
                 {
-                    ROS_ASSERT(abpidx == true);
+                    // ROS_ASSERT(abpidx == true);
                     return true;
                 }
 
                 if ((a.kidx != -1 && b.kidx != -1) && (a.kidx < b.kidx))
                 {
-                    ROS_ASSERT(abpidx == true);
+                    // ROS_ASSERT(abpidx == true);
                     return true;
                 }
 
                 if ((a.kidx != -1 && b.kidx != -1) && (a.kidx > b.kidx))
                 {
-                    ROS_ASSERT(abpidx == false);
+                    // ROS_ASSERT(abpidx == false);
                     return false;
                 }
 
@@ -517,29 +530,29 @@ public:
                 {
                     if (a.sidx == -1 && b.sidx != -1)
                     {
-                        ROS_ASSERT(abpidx == false);
+                        // ROS_ASSERT(abpidx == false);
                         return false;
                     }
 
                     if (a.sidx != -1 && b.sidx == -1)
                     {
-                        ROS_ASSERT(abpidx == true);
+                        // ROS_ASSERT(abpidx == true);
                         return true;
                     }
 
                     if ((a.sidx != -1 && b.sidx != -1) && (a.sidx < b.sidx))
                     {
-                        ROS_ASSERT(abpidx == true);
+                        // ROS_ASSERT(abpidx == true);
                         return true;
                     }
                     
                     if ((a.sidx != -1 && b.sidx != -1) && (a.sidx > b.sidx))
                     {
-                        ROS_ASSERT(abpidx == false);
+                        // ROS_ASSERT(abpidx == false);
                         return false;
                     }
 
-                    ROS_ASSERT(abpidx == false);
+                    // ROS_ASSERT(abpidx == false);
                     return false;    
                 }
             }
@@ -547,29 +560,29 @@ public:
 
         std::sort(marg_params.begin(), marg_params.end(), compareParam);
         std::sort(kept_params.begin(), kept_params.end(), compareParam);
-
+        // std::cout << "5.5.5.5." << std::endl;
         int marg_count = 0;
         for(auto &param : marg_params)
         {
             marg_count++;
-            // printf(KMAG
-            //        "Marg param %3d. Addr: %9x. Type: %2d. Role: %2d. "
-            //        "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
-            //        RESET,
-            //        marg_count, param.address, param.type, param.role,
-            //        param.pidx, param.tidx, param.kidx, param.sidx);
+            printf(KMAG
+                   "Marg param %3d. Addr: %9x. Type: %2d. Role: %2d. "
+                   "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
+                   RESET,
+                   marg_count, param.address, param.type, param.role,
+                   param.pidx, param.tidx, param.kidx, param.sidx);
         }
 
         int kept_count = 0;
         for(auto &param : kept_params)
         {
             kept_count++;
-            // printf(KCYN
-            //        "Kept param %3d. Addr: %9x. Type: %2d. Role: %2d. "
-            //        "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
-            //        RESET,
-            //        marg_count, param.address, param.type, param.role,
-            //        param.pidx, param.tidx, param.kidx, param.sidx);
+            printf(KCYN
+                   "Kept param %3d. Addr: %9x. Type: %2d. Role: %2d. "
+                   "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
+                   RESET,
+                   marg_count, param.address, param.type, param.role,
+                   param.pidx, param.tidx, param.kidx, param.sidx);
         }
 
         ROS_ASSERT(kept_count != 0);
@@ -583,7 +596,7 @@ public:
                 prev_idx = param.pidx;
             }
         }
-
+        std::cout << "6.6.6.6." << std::endl;
         // Make all parameter block variables
         std::vector<double*> parameter_blocks;
         problem.GetParameterBlocks(&parameter_blocks);
@@ -608,14 +621,14 @@ public:
         // Find the jacobians of factors that will be removed
         ceres::Problem::EvaluateOptions e_option;
         e_option.residual_blocks = factorMetaRemoved.res;
-
+        std::cout << "7.7.7.7." << std::endl;
         double marg_cost;
         vector<double> residual_;
         ceres::CRSMatrix Jacobian_;
         problem.Evaluate(e_option, &marg_cost, &residual_, NULL, &Jacobian_);
         VectorXd residual = Eigen::Map<VectorXd>(residual_.data(), residual_.size());
         MatrixXd Jacobian = GetJacobian(Jacobian_);
-
+        std::cout << "8.8.8.8." << std::endl;
         // Extract all collumns corresponding to the marginalized states
         int MARG_SIZE = 0; for(auto &param : marg_params) MARG_SIZE += param.delta_size;
         int KEPT_SIZE = 0; for(auto &param : kept_params) KEPT_SIZE += param.delta_size;
@@ -625,9 +638,11 @@ public:
         auto CopyCol = [](string msg, MatrixXd &Jtarg, MatrixXd &Jsrc, ParamInfo param, int BASE_TARGET) -> void
         {
             int XBASE = param.pidx*param.delta_size;
+            std::cout << "XBASE: " << XBASE << " param.delta_size: " << param.delta_size << " Jtarg.cols(): " << Jtarg.cols()
+                      << " Jsrc.cols(): " << Jsrc.cols() << " BASE_TARGET: " << BASE_TARGET << std::endl;
             for (int c = 0; c < param.delta_size; c++)
             {
-                // printf("%d. %d. %d. %d. %d\n", Jtarg.cols(), Jsrc.cols(), BASE_TARGET, XBASE, c);
+                printf("%d. %d. %d. %d. %d\n", Jtarg.cols(), Jsrc.cols(), BASE_TARGET, XBASE, c);
 
                 // Copy the column from source to target
                 Jtarg.col(BASE_TARGET + c) << Jsrc.col(XBASE + c);
@@ -636,19 +651,22 @@ public:
                 Jsrc.col(XBASE + c).setZero();
             }
         };
-
+        std::cout << "9.9.9.9." << std::endl;
         int MARG_BASE = 0;
         int KEPT_BASE = MARG_SIZE;
 
         int TARGET_BASE = 0;
 
         // Copy the Jacobians of marginalized states
+        std::cout << "aaaaaaaaaaaaaaaaaa" << std::endl;
         for(int idx = 0; idx < marg_params.size(); idx++)
         {
+            std::cout << "idx: " << idx << std::endl;
             CopyCol(string("marg"), Jmk, Jacobian, marg_params[idx], TARGET_BASE);
             TARGET_BASE += marg_params[idx].delta_size;
         }
 
+        std::cout << "bbbbbbbbbbbbbbbb" << std::endl;
         ROS_ASSERT(TARGET_BASE == KEPT_BASE);
 
         // Copy the Jacobians of kept states
@@ -657,7 +675,7 @@ public:
             CopyCol(string("kept"), Jmk, Jacobian, kept_params[idx], TARGET_BASE);
             TARGET_BASE += kept_params[idx].delta_size;
         }
-
+        std::cout << "1/1/1/1/ kept_params:" << kept_params.size() << " marg_params: " << marg_params.size() << std::endl;
         // // Copy the Jacobians of the extrinsic states
         // Jmkx.rightCols(XTRS_SIZE) = Jacobian.rightCols(XTRS_SIZE);
         // Jacobian.rightCols(XTRS_SIZE).setZero();
@@ -668,7 +686,9 @@ public:
         SMd J = Jmk.sparseView(); J.makeCompressed();
         SMd H = J.transpose()*J;
         SMd b = J.transpose()*r;
-
+        std::cout << "J: " << J << std::endl;
+        std::cout << "H: " << H << std::endl;
+        std::cout << "b: " << b << std::endl;
         // // Divide the Hessian into corner blocks
         // int MARG_SIZE = RMVD_SIZE;
         // int KEEP_SIZE = KEPT_SIZE + XTRS_SIZE;
@@ -680,7 +700,7 @@ public:
 
         SMd bm = b.block(0, 0, MARG_SIZE, 1);
         SMd bk = b.block(MARG_SIZE, 0, KEPT_SIZE, 1);
-
+        std::cout << "MARG_SIZE: " << MARG_SIZE << " KEPT_SIZE: " << KEPT_SIZE << std::endl;
         // Create the Schur Complement
         MatrixXd Hmminv = Hmm.toDense().inverse();
         MatrixXd HkmHmminv = Hkm*Hmminv;
@@ -690,13 +710,13 @@ public:
         MatrixXd Jkeep; VectorXd rkeep;
         margInfo->HbToJr(Hkeep, bkeep, Jkeep, rkeep);
 
-        // printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
-        //        "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
-        //        "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
-        //         Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
-        //         Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
-        //         Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
-        //         0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
+        printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
+               "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
+               "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
+                Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
+                Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
+                Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
+                0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
 
         // // Show the marginalization matrices
         // cout << "Jkeep\n" << Hkeep << endl;
@@ -709,10 +729,12 @@ public:
             ParamInfo &param = param_.second;
             
             int tidx = param.tidx;
+            // assert(tidx == -1);
             int kidx = param.kidx;
             int sidx = param.sidx;
 
-            if(param.tidx != -1 && param.kidx != -1)
+            // if(param.tidx != -1 && param.kidx != -1)
+            if(param.kidx != -1)
             {   
                 MatrixXd Jparam = Jacobian.block(0, param.pidx*param.delta_size, Jacobian.rows(), param.delta_size);
                 if(Jparam.cwiseAbs().maxCoeff() != 0)
@@ -736,7 +758,7 @@ public:
             ROS_ASSERT(wierdRes.find(res) == wierdRes.end());
         // printf("Wierd res: %d. No overlap with mp2k\n");
 
-        for(auto &res : factorMetaLidarRemoved.res)
+        for(auto &res : factorMetaTDOARemoved.res)
             ROS_ASSERT(wierdRes.find(res) == wierdRes.end());
         // printf("Wierd res: %d. No overlap with lidar\n");
 
@@ -749,8 +771,9 @@ public:
         // printf("Wierd res: %d. No overlap with Gpx\n", wierdRes.size());
 
         // Save the marginalization factors and states
-        if (margInfo == nullptr)
+        if (margInfo == nullptr) {
             margInfo = MarginalizationInfoPtr(new MarginalizationInfo());
+        }
 
         // Copy the marginalization matrices
         margInfo->Hkeep = Hkeep;
@@ -793,7 +816,7 @@ public:
         {
             // Add the parameter blocks for rotation
               AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
-              // AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
+              AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
             // Add the extrinsic params
             // problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
             // problem.AddParameterBlock(P_Lx_Ly.data(), 3);
@@ -869,13 +892,16 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        if (margInfo != NULL)
+        if (margInfo != NULL) {
+          std::cout << "riorFactor(problem, traj, factorMetaPrio: " << std::endl;
             AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        }
+            
 
         tt_build.Toc();
 
         TicToc tt_slv;
-
+        std::cout << "before optimization" << std::endl;
         // Find the initial cost
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_init, problem);
@@ -890,7 +916,7 @@ public:
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_final, problem);
         // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
-
+        std::cout << "before marginalization" << std::endl;
         // Determine the factors to remove
         if (do_marginalization)
             Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);

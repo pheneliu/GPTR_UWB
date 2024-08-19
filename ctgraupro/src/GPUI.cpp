@@ -267,7 +267,7 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
 
 ros::Publisher knot_pub;
 
-void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> anchor_list)
+void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list)
 {
     UwbImuBuf swUIBuf;
 
@@ -299,22 +299,22 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
 
         // Step 3: Optimization
         TicToc tt_solve;
-        GPMUIPtr gpmui(new GPMUI(nh_ptr));
+        
         int outer_iter = 1;
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << std::endl;
         // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
         // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE);     // Start time of the sliding window
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1);      // End time of the sliding window              
-        double tmid = tmin + traj->getDt();     // Next start time of the sliding window,
+        double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
         tt_solve.Toc();
 
         // Step 4: Report, visualize
-        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d\n",
+        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
-                UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size());
+                UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
 
         pcl::PointCloud<pcl::PointXYZ> est_knots;
         for (int i = 0; i < traj->getNumKnots(); i++) {   
@@ -418,6 +418,7 @@ int main(int argc, char **argv)
 
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
+    GPMUIPtr gpmui(new GPMUI(nh_ptr));
 
     // Wait to get the initial time
     while(ros::ok())
@@ -441,7 +442,7 @@ int main(int argc, char **argv)
     printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    thread pdthread(processData, traj, anc_pose_);
+    thread pdthread(processData, traj, gpmui, anc_pose_);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);
