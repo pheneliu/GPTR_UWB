@@ -43,13 +43,12 @@ public:
     ~GPTDOAFactor() {};
 
     // Constructor
-    GPTDOAFactor(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, 
-    // double w_,
+    GPTDOAFactor(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, double w_,
                          GPMixerPtr gpm_, double s_)
     :   tdoa        (tdoa_            ),
         pos_anchor_i(pos_anchor_i_    ),
         pos_anchor_j(pos_anchor_j_    ),
-        w           (1               ),
+        w           (w_               ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
         gpm         (gpm_             )
@@ -245,7 +244,7 @@ private:
     Vector3d pos_anchor_j;
 
     // Weight
-    double w = 0.1;
+    double w = 10;
 
     // Gaussian process params
     

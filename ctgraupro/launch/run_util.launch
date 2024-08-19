@@ -26,7 +26,8 @@
 
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="1"/> <!-- How many knots to slide -->
-        <param name="WINDOW_SIZE" value="4"/> <!-- How many knot length does the sliding window -->
+        <param name="WINDOW_SIZE" value="8"/> <!-- How many knot length does the sliding window -->
+        <param name="w_tdoa" value="0.1"/> <!-- Coefficients for TDOA residuals -->
 
     </node>
 

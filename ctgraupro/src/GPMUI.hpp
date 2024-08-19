@@ -2,6 +2,7 @@
 
 #include "GPMLC.h"
 #include "factor/GPTDOAFactor.h"
+#include "factor/GPMotionPriorTwoKnotsFactorUI.h"
 
 class GPMUI : public GPMLC
 {
@@ -74,6 +75,54 @@ public:
                 // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
                 // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
             }
+        }
+    }    
+
+    void AddMP2KFactorsUI(
+            ceres::Problem &problem, GaussianProcessPtr &traj,
+            map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
+            double tmin, double tmax)
+    {
+        // Add the GP factors based on knot difference
+        for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
+        {
+            if (traj->getKnotTime(kidx + 1) <= tmin || traj->getKnotTime(kidx) >= tmax)
+                continue;
+
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            
+            // Add the parameter blocks
+            for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
+
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+            }
+
+            // Create the factors
+            double mp_loss_thres = -1;
+            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
+            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+            
+            // Record the residual block
+            factorMeta.res.push_back(res_block);
+            
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(traj->getKnotTime(kidx+1));
         }
     }    
 
@@ -250,7 +299,7 @@ public:
         ceres::Problem &problem, GaussianProcessPtr &traj,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
-        double tmin, double tmax)
+        double tmin, double tmax, double w_tdoa)
     {
         for (auto &tdoa : tdoaData)
         {
@@ -272,8 +321,11 @@ public:
                 int    u  = us.first;
                 double s  = us.second;
 
-                if (traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax) {
-                    std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax" << std::endl;
+                if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+                    std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax tdoa.t: "
+                              << tdoa.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
+                              << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
+                              << " tmin: " << tmin << " tmax: " << tmax << std::endl;
                     continue;
                 }
 
@@ -303,7 +355,7 @@ public:
                 
                 double tdoa_loss_thres = -1.0;
                 ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
-                ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, traj->getGPMixerPtr(), s);
+                ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
                 auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
 
                 // Record the residual block
@@ -321,7 +373,7 @@ public:
     void Evaluate(int iter, GaussianProcessPtr &traj,
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
-                  bool do_marginalization)
+                  bool do_marginalization, double w_tdoa)
     {
         TicToc tt_build;
 
@@ -335,7 +387,7 @@ public:
         options.num_threads = 1;
         options.max_num_iterations = 50;
         options.check_gradients = false;
-        options.gradient_check_relative_precision = 1e-6;
+        options.gradient_check_relative_precision = 0.02;
 
         // Documenting the parameter blocks
         paramInfoMap.clear();
@@ -404,13 +456,13 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            // AddMP2KFactors(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
+            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax);
+            AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;
@@ -422,8 +474,8 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        // if (margInfo != NULL)
-        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        if (margInfo != NULL)
+            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
 
         tt_build.Toc();
 

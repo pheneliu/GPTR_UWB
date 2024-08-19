@@ -116,6 +116,7 @@ Matrix3d gpQc;
 bool auto_exit;
 int  WINDOW_SIZE = 4;
 int  SLIDE_SIZE  = 2;
+double w_tdoa = 0.1;
 
 GaussianProcessPtr traj;
 
@@ -303,11 +304,11 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << std::endl;
         // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
         // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
-        double tmin = traj->getMinTime();     // Start time of the sliding window
-        double tmax = traj->getMaxTime();      // End time of the sliding window              
+        double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE);     // Start time of the sliding window
+        double tmax = traj->getKnotTime(traj->getNumKnots() - 1);      // End time of the sliding window              
         double tmid = tmin + traj->getDt();     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, false);
+        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, true, w_tdoa);
         tt_solve.Toc();
 
         // Step 4: Report, visualize
@@ -342,7 +343,7 @@ void processData(GaussianProcessPtr traj, std::map<uint16_t, Eigen::Vector3d> an
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {
-            double removeTime = traj->getKnotTime(traj->getNumKnots() - SLIDE_SIZE);
+            double removeTime = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE + SLIDE_SIZE);
             swUIBuf.slideForward(removeTime);
         }
     }
@@ -413,6 +414,7 @@ int main(int argc, char **argv)
     // Time to check the buffers and perform optimization
     nh_ptr->getParam("WINDOW_SIZE", WINDOW_SIZE);
     nh_ptr->getParam("SLIDE_SIZE", SLIDE_SIZE);
+    nh_ptr->getParam("w_tdoa", w_tdoa);
 
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
