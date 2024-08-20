@@ -276,6 +276,8 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
     {
         // Step 0: Check if there is data that can be admitted to the sw buffer
         double newMaxTime = traj->getMaxTime() + SLIDE_SIZE*gpDt;
+        // std::cout << "newMaxTime: " << newMaxTime << " SLIDE_SIZE: " << SLIDE_SIZE << " gpDt: " << gpDt 
+                    // << " UIBuf.maxTime(): " << UIBuf.maxTime() << std::endl;
         ros::Time timeout = ros::Time::now();
         if(UIBuf.maxTime() < newMaxTime)
         {
@@ -294,14 +296,17 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         swUIBuf.transferData(UIBuf, newMaxTime);
 
         // Step 2: Extend the trajectory
-        while(traj->getMaxTime() < newMaxTime)
+        while(traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
+            // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
             traj->extendOneKnot();
+            // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
+        }
 
         // Step 3: Optimization
         TicToc tt_solve;
         
         int outer_iter = 1;
-        std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << std::endl;
+        
         // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
         // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE);     // Start time of the sliding window
@@ -310,7 +315,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
         tt_solve.Toc();
-
+        std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         // Step 4: Report, visualize
         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
@@ -344,6 +349,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {
             double removeTime = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE + SLIDE_SIZE);
+            std::cout << "removeTime: " << removeTime << std::endl;
             swUIBuf.slideForward(removeTime);
         }
     }

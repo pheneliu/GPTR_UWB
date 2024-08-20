@@ -136,8 +136,8 @@ public:
         {
             ParamInfo &param = margInfo->keptParamInfo[idx];
             bool state_found = (paramInfoMap.find(param.address) != paramInfoMap.end());
-            // printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
-            //         param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
+            printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
+                    param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
             
             if (!state_found)
             {
@@ -154,7 +154,7 @@ public:
 
             // Add the involved parameters blocks
             auto res_block = problem.AddResidualBlock(margFactor, NULL, margInfo->getAllParamBlocks());
-
+            std::cout << "margInfo->getAllParamBlocks() size: " << margInfo->getAllParamBlocks().size() << std::endl;
             // Save the residual block
             factorMeta.res.push_back(res_block);
 
@@ -376,7 +376,6 @@ public:
             std::cout << "factorMeta.res.size(): " << factorMeta.res.size() << std::endl;
             for(int ridx = 0; ridx < factorMeta.res.size(); ridx++)
             {
-                std::cout << "4444444444444444" << std::endl;
                 ceres::ResidualBlockId &res = factorMeta.res[ridx];
                 // int KC = factorMeta.kidx[ridx].size();
                 bool removed = factorMeta.stamp[ridx] < tmid;
@@ -405,9 +404,7 @@ public:
                     factorMetaRetained.stamp.push_back(factorMeta.stamp[ridx]);
                 }
             }
-            // std::cout << "555555555555555" << std::endl;
         };
-        // std::cout << "222222222222" << std::endl;
         // Find the MP2k factors that will be removed
         FactorMeta factorMetaMp2kRemoved, factorMetaMp2kRetained;
         FindRemovedFactors(factorMetaMp2k, factorMetaMp2kRemoved, factorMetaMp2kRetained);
@@ -425,16 +422,14 @@ public:
 
         FactorMeta factorMetaPriorRemoved, factorMetaPriorRetained;
         FindRemovedFactors(factorMetaPrior, factorMetaPriorRemoved, factorMetaPriorRetained);
-        // std::cout << "6666666666666666" << std::endl;
+
         FactorMeta factorMetaRemoved;
         FactorMeta factorMetaRetained;
-        // std::cout << "777777777777777" << std::endl;
+
         factorMetaRemoved = factorMetaMp2kRemoved + factorMetaTDOARemoved + factorMetaPriorRemoved;
-        // std::cout << "88888888888888888888" << std::endl;
         if (factorMetaPriorRetained.res.empty()) {
             std::cout << "factorMetaPriorRetained.res.empty()" << std::endl;
             factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained;
-            // std::cout << "999999999999999999" << std::endl;
         } else {
           std::cout << "!factorMetaPriorRetained.res.empty()" << std::endl;
             factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
@@ -442,13 +437,13 @@ public:
         
         // factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
         printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
-        // std::cout << "1.1.1.1.1.1" << std::endl;
+
         // Find the set of params belonging to removed factors
         map<double*, ParamInfo> removed_params;
         for(auto &cpset : factorMetaRemoved.coupled_params)
             for(auto &cp : cpset)
                 removed_params[cp.address] = paramInfoMap[cp.address];
-        // std::cout << "2.2.2.2.2.2." << std::endl;
+
         // Find the set of params belonging to the retained factors
         map<double*, ParamInfo> retained_params;
         for(auto &cpset : factorMetaRetained.coupled_params)
@@ -456,7 +451,7 @@ public:
                 retained_params[cp.address] = paramInfoMap[cp.address];
                 
         printf("removed_params: %d. retained_params %d.\n", removed_params.size(), retained_params.size());
-        // std::cout << "3.3.3.3.3.3." << std::endl;
+
         // Find the intersection of the two sets, which will be the kept parameters
         vector<ParamInfo> marg_params;
         vector<ParamInfo> kept_params;
@@ -469,7 +464,7 @@ public:
                 marg_params.push_back(param.second);
         }
         printf("kept_params: %d. marg_params %d.\n", kept_params.size(), marg_params.size());
-        // std::cout << "4.4.4.4.4." << std::endl;
+
         auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
         {
             // bool abpidx = a.pidx < b.pidx;
@@ -596,7 +591,6 @@ public:
                 prev_idx = param.pidx;
             }
         }
-        std::cout << "6.6.6.6." << std::endl;
         // Make all parameter block variables
         std::vector<double*> parameter_blocks;
         problem.GetParameterBlocks(&parameter_blocks);
@@ -621,14 +615,12 @@ public:
         // Find the jacobians of factors that will be removed
         ceres::Problem::EvaluateOptions e_option;
         e_option.residual_blocks = factorMetaRemoved.res;
-        std::cout << "7.7.7.7." << std::endl;
         double marg_cost;
         vector<double> residual_;
         ceres::CRSMatrix Jacobian_;
         problem.Evaluate(e_option, &marg_cost, &residual_, NULL, &Jacobian_);
         VectorXd residual = Eigen::Map<VectorXd>(residual_.data(), residual_.size());
         MatrixXd Jacobian = GetJacobian(Jacobian_);
-        std::cout << "8.8.8.8." << std::endl;
         // Extract all collumns corresponding to the marginalized states
         int MARG_SIZE = 0; for(auto &param : marg_params) MARG_SIZE += param.delta_size;
         int KEPT_SIZE = 0; for(auto &param : kept_params) KEPT_SIZE += param.delta_size;
@@ -651,14 +643,12 @@ public:
                 Jsrc.col(XBASE + c).setZero();
             }
         };
-        std::cout << "9.9.9.9." << std::endl;
         int MARG_BASE = 0;
         int KEPT_BASE = MARG_SIZE;
 
         int TARGET_BASE = 0;
 
         // Copy the Jacobians of marginalized states
-        std::cout << "aaaaaaaaaaaaaaaaaa" << std::endl;
         for(int idx = 0; idx < marg_params.size(); idx++)
         {
             std::cout << "idx: " << idx << std::endl;
@@ -666,7 +656,6 @@ public:
             TARGET_BASE += marg_params[idx].delta_size;
         }
 
-        std::cout << "bbbbbbbbbbbbbbbb" << std::endl;
         ROS_ASSERT(TARGET_BASE == KEPT_BASE);
 
         // Copy the Jacobians of kept states
@@ -675,7 +664,7 @@ public:
             CopyCol(string("kept"), Jmk, Jacobian, kept_params[idx], TARGET_BASE);
             TARGET_BASE += kept_params[idx].delta_size;
         }
-        std::cout << "1/1/1/1/ kept_params:" << kept_params.size() << " marg_params: " << marg_params.size() << std::endl;
+        std::cout << "kept_params:" << kept_params.size() << " marg_params: " << marg_params.size() << std::endl;
         // // Copy the Jacobians of the extrinsic states
         // Jmkx.rightCols(XTRS_SIZE) = Jacobian.rightCols(XTRS_SIZE);
         // Jacobian.rightCols(XTRS_SIZE).setZero();

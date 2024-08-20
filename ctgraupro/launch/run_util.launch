@@ -22,7 +22,7 @@
         <param name="gt_topic"   value="/pose_data" />
         <param name="fuse_tdoa"  value="1"/>
         <param name="fuse_tof"   value="1"/>
-        <param name="fuse_imu"   value="1"/>
+        <param name="fuse_imu"   value="0"/>
 
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="1"/> <!-- How many knots to slide -->
