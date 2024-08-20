@@ -276,8 +276,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
     {
         // Step 0: Check if there is data that can be admitted to the sw buffer
         double newMaxTime = traj->getMaxTime() + SLIDE_SIZE*gpDt;
-        // std::cout << "newMaxTime: " << newMaxTime << " SLIDE_SIZE: " << SLIDE_SIZE << " gpDt: " << gpDt 
-                    // << " UIBuf.maxTime(): " << UIBuf.maxTime() << std::endl;
+
         ros::Time timeout = ros::Time::now();
         if(UIBuf.maxTime() < newMaxTime)
         {
@@ -297,9 +296,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
 
         // Step 2: Extend the trajectory
         if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
-            // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
             traj->extendOneKnot();
-            // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
         }
 
         // Step 3: Optimization
