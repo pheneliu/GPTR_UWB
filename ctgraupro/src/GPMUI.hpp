@@ -86,11 +86,16 @@ public:
         // Add the GP factors based on knot difference
         for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
         {
-            if (traj->getKnotTime(kidx + 1) < tmin || traj->getKnotTime(kidx) > tmax)
+            // if ((traj->getKnotTime(kidx + 1) < tmin && (tmin - traj->getKnotTime(kidx + 1)) > 1e-3) 
+            //         || (traj->getKnotTime(kidx + 1) > tmax && (traj->getKnotTime(kidx + 1) - tmax > 1e-3)))
+            if (traj->getKnotTime(kidx + 1) < tmin 
+                    || traj->getKnotTime(kidx) > tmax) {            
                 continue;
+            }
 
             vector<double *> factor_param_blocks;
             factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            std::cout << " size " << factorMeta.coupled_params.back().size() << std::endl;
             
             // Add the parameter blocks
             for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
@@ -109,8 +114,10 @@ public:
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+                std::cout << "kidx_: " << kidx_ << " size " << factorMeta.coupled_params.back().size() << std::endl;
             }
-
+            std::cout << "kidx: " << kidx << " size " << factorMeta.coupled_params.size() << std::endl;
+            
             // Create the factors
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
@@ -124,6 +131,7 @@ public:
             // Record the time stamp of the factor
             factorMeta.stamp.push_back(traj->getKnotTime(kidx+1));
         }
+        std::cout << "factorMeta.res.size() " << factorMeta.res.size() << std::endl;
     }    
 
     void AddPriorFactor(ceres::Problem &problem, GaussianProcessPtr &traj, FactorMeta &factorMeta, double tmin, double tmax)
@@ -403,13 +411,21 @@ public:
                     factorMetaRetained.coupled_params.push_back(factorMeta.coupled_params[ridx]);
                     factorMetaRetained.stamp.push_back(factorMeta.stamp[ridx]);
                 }
+                for (int i = 0; i < factorMeta.coupled_params[ridx].size(); i++) {
+                    std::cout << "i:  " << i << " ridx: " << ridx << std::endl;
+                    assert(factorMeta.coupled_params[ridx].at(i).pidx >= 0);
+                }
+                
             }
         };
         // Find the MP2k factors that will be removed
+        std::cout << "factorMetaMp2k 1111111111111111111111111111111111" << std::endl;
         FactorMeta factorMetaMp2kRemoved, factorMetaMp2kRetained;
         FindRemovedFactors(factorMetaMp2k, factorMetaMp2kRemoved, factorMetaMp2kRetained);
+        assert(factorMetaMp2k.res.size() == 7);
         printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
 
+        std::cout << "factorMetaTDOA 22222222222222222222222222222222222" << std::endl;
         // Find the TDOA factors that will be removed
         FactorMeta factorMetaTDOARemoved, factorMetaTDOARetained;
         FindRemovedFactors(factorMetaTDOA, factorMetaTDOARemoved, factorMetaTDOARetained);
@@ -462,6 +478,7 @@ public:
                 kept_params.push_back(param.second);
             else
                 marg_params.push_back(param.second);
+            assert(param.second.pidx >= 0);
         }
         printf("kept_params: %d. marg_params %d.\n", kept_params.size(), marg_params.size());
 
@@ -905,10 +922,12 @@ public:
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_final, problem);
         // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
-        std::cout << "before marginalization" << std::endl;
+        
         // Determine the factors to remove
-        if (do_marginalization)
+        if (do_marginalization) {
+            std::cout << "before marginalization" << std::endl;
             Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
+        }
 
         tt_slv.Toc();
 

@@ -122,7 +122,7 @@ GaussianProcessPtr traj;
 
 bool fuse_tdoa = true;
 bool fuse_tof  = false;
-bool fuse_imu  = false;
+bool fuse_imu  = true;
 
 struct UwbImuBuf
 {
@@ -296,7 +296,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         swUIBuf.transferData(UIBuf, newMaxTime);
 
         // Step 2: Extend the trajectory
-        while(traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
+        if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
             // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
             traj->extendOneKnot();
             // std::cout << "traj->getMaxTime() - newMaxTime: " << traj->getMaxTime() - newMaxTime << std::endl;
@@ -309,8 +309,8 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         
         // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
         // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
-        double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE);     // Start time of the sliding window
-        double tmax = traj->getKnotTime(traj->getNumKnots() - 1);      // End time of the sliding window              
+        double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE) + 1e-3;     // Start time of the sliding window
+        double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
