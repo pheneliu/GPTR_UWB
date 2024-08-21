@@ -365,6 +365,71 @@ public:
         }
     }
 
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        const vector<IMUData> &imuData, 
+        double tmin, double tmax, double w_imu)
+    {
+        for (auto &imu : imuData)
+        {
+            if (!traj->TimeInInterval(imu.t, 1e-6)) {
+                std::cout << "warn: !traj->TimeInInterval(imu.t, 1e-6)" << std::endl;
+                continue;
+            }
+                
+            // skip++;
+            // if (skip % lidar_ds_rate != 0)
+            //     continue;
+            
+            auto   us = traj->computeTimeIndex(imu.t);
+            int    u  = us.first;
+            double s  = us.second;
+
+            if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+                std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax imu.t: "
+                          << imu.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
+                          << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
+                          << " tmin: " << tmin << " tmax: " << tmax << std::endl;
+                continue;
+            }
+
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            // Add the parameter blocks for rotation
+            for (int kidx = u; kidx < u + 2; kidx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
+            }
+            
+            double imu_loss_thres = -1.0;
+            ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
+            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, w_imu, traj->getGPMixerPtr(), s);
+            auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
+
+            // Record the residual block
+            factorMeta.res.push_back(res);
+
+            // Record the knot indices
+            // factorMeta.kidx.push_back({u, u + 1});
+
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(imu.t);
+        }
+    }
+
     void Marginalize(ceres::Problem &problem, GaussianProcessPtr &traj,
                             double tmin, double tmax, double tmid,
                             map<double*, ParamInfo> &paramInfoMap,
@@ -776,8 +841,9 @@ public:
 
     void Evaluate(int iter, GaussianProcessPtr &traj,
                   double tmin, double tmax, double tmid,
-                  const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
-                  bool do_marginalization, double w_tdoa)
+                  const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
+                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
+                  bool do_marginalization, double w_tdoa, double w_imu)
     {
         TicToc tt_build;
 
@@ -864,6 +930,8 @@ public:
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
             AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
+            FactorMeta factorMetaIMU;
+            AddIMUFactors(problem, traj, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;

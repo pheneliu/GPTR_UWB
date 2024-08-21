@@ -124,6 +124,9 @@ bool fuse_tdoa = true;
 bool fuse_tof  = false;
 bool fuse_imu  = true;
 
+bool acc_ratio = true;
+bool gyro_ratio = true;
+
 struct UwbImuBuf
 {
     deque<TdoaMsgPtr> tdoaBuf;
@@ -135,6 +138,7 @@ struct UwbImuBuf
     mutex imuBuf_mtx;
 
     vector<TDOAData> tdoa_data;
+    vector<IMUData> imu_data;
 
     double minTime()
     {
@@ -182,6 +186,9 @@ struct UwbImuBuf
         if (fuse_tof ) transferDataOneBuf(tofBuf,  other.tofBuf,  other.tofBuf_mtx,  tmax);
         if (fuse_imu ) transferDataOneBuf(imuBuf,  other.imuBuf,  other.imuBuf_mtx,  tmax);
         transferTDOAData();
+        if (fuse_imu ) {
+            transferIMUData();
+        }
     }
 
     void transferTDOAData()
@@ -190,6 +197,19 @@ struct UwbImuBuf
         for (const auto& data : tdoaBuf) {
             TDOAData tdoa(data->header.stamp.toSec(), data->idA, data->idB, data->data);
             tdoa_data.push_back(tdoa);
+        }
+    }
+
+    void transferIMUData()
+    {
+        imu_data.clear();
+        for (const auto& data : imuBuf) {
+            Eigen::Vector3d acc(data->linear_acceleration.x, data->linear_acceleration.y, data->linear_acceleration.z);
+            if (acc_ratio) acc *= 9.81;
+            Eigen::Vector3d gyro(data->angular_velocity.x, data->angular_velocity.y, data->angular_velocity.z);
+            if (gyro_unit) gyro *= M_PI / 180.0;            
+            IMUData imu(data->header.stamp.toSec(), acc, gyro);
+            imu_data.push_back(imu);
         }
     }
 
@@ -210,6 +230,7 @@ struct UwbImuBuf
         if (fuse_imu ) slideForwardOneBuf(imuBuf,  tremove);
     }
 };
+
 UwbImuBuf UIBuf;
 vector<Eigen::Vector3d> gtBuf;
 nav_msgs::Path est_path;
@@ -310,7 +331,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
+        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         // Step 4: Report, visualize
