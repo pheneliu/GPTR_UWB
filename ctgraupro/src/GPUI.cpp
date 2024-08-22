@@ -237,8 +237,10 @@ struct UwbImuBuf
 UwbImuBuf UIBuf;
 vector<Eigen::Vector3d> gtBuf;
 nav_msgs::Path est_path;
+nav_msgs::Path gt_path;
 
 ros::Publisher gt_pub;
+ros::Publisher gt_path_pub;
 ros::Publisher est_pub;
 ros::Publisher odom_pub;
 
@@ -291,7 +293,19 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
     odom_msg.pose.pose.orientation.x = q.x();
     odom_msg.pose.pose.orientation.y = q.y();
     odom_msg.pose.pose.orientation.z = q.z();
-    gt_pub.publish(odom_msg);        
+    gt_pub.publish(odom_msg);  
+
+    geometry_msgs::PoseStamped traj_msg;
+    traj_msg.header.stamp = ros::Time::now();
+    traj_msg.pose.position.x = pos.x();
+    traj_msg.pose.position.y = pos.y();
+    traj_msg.pose.position.z = pos.z();
+    traj_msg.pose.orientation.w = q.w();
+    traj_msg.pose.orientation.x = q.x();
+    traj_msg.pose.orientation.y = q.y();
+    traj_msg.pose.orientation.z = q.z();
+    gt_path.poses.push_back(traj_msg);
+    gt_path_pub.publish(gt_path);          
 }
 
 ros::Publisher knot_pub;
@@ -460,10 +474,12 @@ int main(int argc, char **argv)
     // Publish estimates
     knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
     gt_pub   = nh_ptr->advertise<nav_msgs::Odometry>("/ground_truth", 10);
+    gt_path_pub = nh_ptr->advertise<nav_msgs::Path>("/ground_truth_path", 10);
     est_pub  = nh_ptr->advertise<nav_msgs::Path>("/estimated_trajectory", 10);
     odom_pub = nh_ptr->advertise<nav_msgs::Odometry>("/estimated_pose", 10);
 
     est_path.header.frame_id = "map";
+    gt_path.header.frame_id = "map";
 
     // while(ros::ok())
     //     this_thread::sleep_for(chrono::milliseconds(100));

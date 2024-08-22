@@ -12,6 +12,7 @@ Panels:
         - /estimated_trajectory1
         - /Odometry1
         - /Odometry1/Shape1
+        - /Path1
       Splitter Ratio: 0.5
     Tree Height: 799
   - Class: rviz/Selection
@@ -103,7 +104,7 @@ Visualization Manager:
           Value: true
         Value: true
       Enabled: true
-      Keep: 5
+      Keep: 1
       Name: ground_truth
       Position Tolerance: 0.10000000149011612
       Queue Size: 10
@@ -120,7 +121,7 @@ Visualization Manager:
       Topic: /ground_truth
       Unreliable: false
       Value: true
-    - Alpha: 1
+    - Alpha: 0.6000000238418579
       Buffer Length: 1
       Class: rviz/Path
       Color: 238; 238; 236
@@ -179,6 +180,30 @@ Visualization Manager:
       Topic: /estimated_pose
       Unreliable: false
       Value: true
+    - Alpha: 0.4000000059604645
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 204; 0; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /ground_truth_path
+      Unreliable: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
@@ -207,7 +232,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 11.008857727050781
+      Distance: 8.443105697631836
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -223,9 +248,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4553983211517334
+      Pitch: 0.1503983736038208
       Target Frame: <Fixed Frame>
-      Yaw: 0.2853981554508209
+      Yaw: 6.038582801818848
     Saved: ~
 Window Geometry:
   Displays:
