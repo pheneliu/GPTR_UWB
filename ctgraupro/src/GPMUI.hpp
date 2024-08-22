@@ -941,7 +941,7 @@ public:
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
         options.num_threads = 8;
         options.max_num_iterations = 50;
-        options.check_gradients = false;
+        options.check_gradients = true;
         options.gradient_check_relative_precision = 0.02;
 
         // Vector3d XBIG(sfBig.back().back());
@@ -1022,7 +1022,7 @@ public:
         AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa, if_autodiff);
         // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
-        // AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu, if_autodiff);
+        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu, if_autodiff);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;

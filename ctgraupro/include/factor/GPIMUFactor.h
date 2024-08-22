@@ -113,7 +113,8 @@ public:
         Eigen::Map<Matrix<double, 12, 1>> residual(residuals);      
         Eigen::Vector3d g(0, 0, 9.81);
 
-        residual.block<3, 1>(0, 0) = w*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
+        // residual.block<3, 1>(0, 0) = w*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
+        residual.block<3, 1>(0, 0) = w*((Xt.A + g) - acc + biasA);
         residual.block<3, 1>(3, 0) = w*(Xt.O - gyro + biasW);
         residual.block<3, 1>(6, 0) = w*(biasW - gyro_bias);
         residual.block<3, 1>(9, 0) = w*(biasA - acc_bias);
@@ -121,9 +122,10 @@ public:
         if (!jacobians)
             return true;
 
-        Matrix3d Dr_DRt  = Xt.R.matrix().transpose() * SO3d::hat(Xt.A);
-        Matrix3d Dr_DPt  = Xt.R.matrix().transpose();
-        // Matrix3d Dr_DBa  = Matrix3d::Identity();
+        // Matrix3d Dr_DRt  = Xt.R.matrix().transpose() * SO3d::hat(Xt.A);
+        Matrix3d Dr_DRt  = Matrix3d::Zero();
+        // Matrix3d Dr_DPt  = Xt.R.matrix().transpose();
+        Matrix3d Dr_DPt  = Matrix3d::Identity();
 
         // Matrix3d Dr_DBg  = Matrix3d::Identity();
         Matrix3d Dr_DOt  = Matrix3d::Identity();    
@@ -140,6 +142,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
             Dr_DRa.setZero();
             Dr_DRa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
+            Dr_DRa.block<3, 3>(3, 0) = 2*w*Dr_DOt*DXt_DXa[Oidx][Ridx];
         }
 
         // Jacobian on Oa
@@ -149,6 +152,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
             Dr_DOa.setZero();
             Dr_DOa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+            Dr_DOa.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXa[Oidx][Oidx];
         }
 
         // Jacobian on Sa
@@ -158,6 +162,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSa(jacobians[idx]);
             Dr_DSa.setZero();
             Dr_DSa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
+            Dr_DSa.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXa[Oidx][Sidx];
         }
 
         // Jacobian on Pa
@@ -166,7 +171,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPa(jacobians[idx]);
             Dr_DPa.setZero();
-            Dr_DPa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Pidx];
+            Dr_DPa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Aidx][Pidx];
         }
 
         // Jacobian on Va
@@ -175,7 +180,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVa(jacobians[idx]);
             Dr_DVa.setZero();
-            Dr_DVa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Vidx];
+            Dr_DVa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Aidx][Vidx];
         }
 
         // Jacobian on Aa
@@ -184,7 +189,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAa(jacobians[idx]);
             Dr_DAa.setZero();
-            Dr_DAa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Aidx];
+            Dr_DAa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Aidx][Aidx];
         }
 
         // Jacobian on Rb
@@ -194,6 +199,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
             Dr_DRb.setZero();
             Dr_DRb.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
+            Dr_DRb.block<3, 3>(3, 0) = 2*w*Dr_DOt*DXt_DXb[Oidx][Ridx];
         }
 
         // Jacobian on Ob
@@ -203,6 +209,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
             Dr_DOb.setZero();
             Dr_DOb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
+            Dr_DOb.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXb[Oidx][Oidx];
         }
 
         // Jacobian on Sb
@@ -212,6 +219,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
             Dr_DSb.setZero();
             Dr_DSb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
+            Dr_DSb.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXb[Oidx][Sidx];
         }
 
         // Jacobian on Pb
@@ -220,7 +228,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPb(jacobians[idx]);
             Dr_DPb.setZero();
-            Dr_DPb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Pidx];
+            Dr_DPb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Aidx][Pidx];
         }
 
         // Jacobian on Vb
@@ -229,7 +237,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVb(jacobians[idx]);
             Dr_DVb.setZero();
-            Dr_DVb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Vidx];
+            Dr_DVb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Aidx][Vidx];
         }
 
         // Jacobian on Ab
@@ -238,7 +246,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAb(jacobians[idx]);
             Dr_DAb.setZero();
-            Dr_DAb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
+            Dr_DAb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Aidx][Aidx];
         }
 
         idx = 12;
