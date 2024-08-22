@@ -118,6 +118,8 @@ int  WINDOW_SIZE = 4;
 int  SLIDE_SIZE  = 2;
 double w_tdoa = 0.1;
 double w_imu = 1;
+double tdoa_loss_thres = -1;
+double mp_loss_thres = -1;
 
 GaussianProcessPtr traj;
 
@@ -338,7 +340,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
-                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu, if_autodiff);
+                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu, tdoa_loss_thres, mp_loss_thres, if_autodiff);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         std::cout << "bg: " << bg.transpose() << " ba: " << ba.transpose() << std::endl;
@@ -447,7 +449,10 @@ int main(int argc, char **argv)
     nh_ptr->getParam("WINDOW_SIZE", WINDOW_SIZE);
     nh_ptr->getParam("SLIDE_SIZE", SLIDE_SIZE);
     nh_ptr->getParam("w_tdoa", w_tdoa);
-
+    nh_ptr->getParam("w_imu", w_imu);
+    nh_ptr->getParam("tdoa_loss_thres", tdoa_loss_thres);
+    nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
     GPMUIPtr gpmui(new GPMUI(nh_ptr));

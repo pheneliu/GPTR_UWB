@@ -84,7 +84,7 @@ public:
     void AddMP2KFactorsUI(
             ceres::Problem &problem, GaussianProcessPtr &traj,
             map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
-            double tmin, double tmax)
+            double tmin, double tmax, double mp_loss_thres)
     {
         // Add the GP factors based on knot difference
         for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
@@ -117,7 +117,7 @@ public:
             }
             
             // Create the factors
-            double mp_loss_thres = -1;
+            // double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
             ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
@@ -304,7 +304,7 @@ public:
         // Vector3d &XBIG, Vector3d &XBIA,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag,
-        double tmin, double tmax, double w_tdoa, bool if_autodiff)
+        double tmin, double tmax, double w_tdoa, double tdoa_loss_thres, bool if_autodiff)
     {
         for (auto &tdoa : tdoaData)
         {
@@ -390,7 +390,7 @@ public:
                     factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
                     factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);             
                 }
-                double tdoa_loss_thres = -1.0;
+                // double tdoa_loss_thres = -1.0;
                 ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
                 ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, P_I_tag, w_tdoa, traj->getGPMixerPtr(), s);
                 auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
@@ -928,7 +928,7 @@ public:
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
-                  bool do_marginalization, double w_tdoa, double w_imu, bool if_autodiff)
+                  bool do_marginalization, double w_tdoa, double w_imu, double tdoa_loss_thres, double mp_loss_thres, bool if_autodiff)
     {
         TicToc tt_build;
 
@@ -1013,13 +1013,13 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
+            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax, mp_loss_thres);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-        AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa, if_autodiff);
+        AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa, tdoa_loss_thres, if_autodiff);
         // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
         AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu, if_autodiff);
