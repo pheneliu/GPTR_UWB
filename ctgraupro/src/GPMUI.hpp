@@ -939,9 +939,9 @@ public:
 
         // Set up the ceres problem
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-        options.num_threads = 8;
+        options.num_threads = MAX_THREADS;
         options.max_num_iterations = 50;
-        options.check_gradients = true;
+        options.check_gradients = false;
         options.gradient_check_relative_precision = 0.02;
 
         // Vector3d XBIG(sfBig.back().back());
@@ -1013,7 +1013,7 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            // AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
+            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
@@ -1034,10 +1034,10 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        // if (margInfo != NULL) {
+        if (margInfo != NULL) {
 
-        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
-        // }
+            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        }
             
 
         tt_build.Toc();
@@ -1060,9 +1060,9 @@ public:
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
-        // if (do_marginalization) {
-        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
-        // }
+        if (do_marginalization) {
+            Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
+        }
 
         tt_slv.Toc();
 

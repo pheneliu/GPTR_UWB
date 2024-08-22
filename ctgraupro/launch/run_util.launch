@@ -33,7 +33,7 @@
 
     <!-- Play the bag file -->
     <node required="false" pkg="rosbag" type="play" name="rosbag_player"
-          args="--clock $(arg bag_file) -r 1.0 -s 0.0"
+          args="--clock $(arg bag_file) -r 0.5 -s 0.0"
           launch-prefix="bash -c 'sleep 1.0; $0 $@' "/>
 
     <!-- Visualize -->
