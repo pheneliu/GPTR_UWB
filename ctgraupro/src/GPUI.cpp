@@ -240,6 +240,7 @@ nav_msgs::Path est_path;
 
 ros::Publisher gt_pub;
 ros::Publisher est_pub;
+ros::Publisher odom_pub;
 
 ros::Subscriber tdoaSub;
 ros::Subscriber tofSub ;
@@ -360,7 +361,10 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         knot_msg.header.frame_id = "map";        
         knot_pub.publish(knot_msg);
 
-        Eigen::Vector3d est_pos = traj->pose(swUIBuf.tdoa_data.front().t).translation();
+        auto est_pose = traj->pose(swUIBuf.tdoa_data.front().t);
+        Eigen::Vector3d est_pos = est_pose.translation();
+        Eigen::Quaterniond est_ort = est_pose.unit_quaternion();
+
         geometry_msgs::PoseStamped traj_msg;
         traj_msg.header.stamp = ros::Time::now();
         traj_msg.pose.position.x = est_pos.x();
@@ -372,6 +376,24 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         traj_msg.pose.orientation.z = 0;
         est_path.poses.push_back(traj_msg);
         est_pub.publish(est_path);
+
+        nav_msgs::Odometry odom_msg;
+        odom_msg.header.stamp = ros::Time::now();
+        odom_msg.header.frame_id = "map";
+
+        est_pose = traj->pose(traj->getKnotTime(traj->getNumKnots() - 1));
+        est_pos = est_pose.translation();
+        est_ort = est_pose.unit_quaternion();
+
+        odom_msg.pose.pose.position.x = est_pos[0];
+        odom_msg.pose.pose.position.y = est_pos[1];
+        odom_msg.pose.pose.position.z = est_pos[2];
+
+        odom_msg.pose.pose.orientation.w = est_ort.w();
+        odom_msg.pose.pose.orientation.x = est_ort.x();
+        odom_msg.pose.pose.orientation.y = est_ort.y();
+        odom_msg.pose.pose.orientation.z = est_ort.z();
+        odom_pub.publish(odom_msg);             
 
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
@@ -439,6 +461,7 @@ int main(int argc, char **argv)
     knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
     gt_pub   = nh_ptr->advertise<nav_msgs::Odometry>("/ground_truth", 10);
     est_pub  = nh_ptr->advertise<nav_msgs::Path>("/estimated_trajectory", 10);
+    odom_pub = nh_ptr->advertise<nav_msgs::Odometry>("/estimated_pose", 10);
 
     est_path.header.frame_id = "map";
 
