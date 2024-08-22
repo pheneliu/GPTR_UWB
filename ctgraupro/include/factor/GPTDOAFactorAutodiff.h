@@ -43,11 +43,12 @@ public:
     ~GPTDOAFactorAutodiff() {};
 
     // Constructor
-    GPTDOAFactorAutodiff(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, double w_,
+    GPTDOAFactorAutodiff(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, const Vector3d &offset_, double w_,
                          GPMixerPtr gpm_, double s_)
     :   tdoa        (tdoa_            ),
         pos_anchor_i(pos_anchor_i_    ),
         pos_anchor_j(pos_anchor_j_    ),
+        offset      (offset_          ),
         w           (w_               ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
@@ -79,8 +80,9 @@ public:
 
         // Residual
         Eigen::Map<Matrix<T, 1, 1>> residual(residuals);
-        Eigen::Matrix<T, 3, 1> diff_i = Xt.P - pos_anchor_i;
-        Eigen::Matrix<T, 3, 1> diff_j = Xt.P - pos_anchor_j;        
+        Eigen::Matrix<T, 3, 1> p_tag_W = Xt.R.matrix() * offset + Xt.P;
+        Eigen::Matrix<T, 3, 1> diff_i = p_tag_W - pos_anchor_i;
+        Eigen::Matrix<T, 3, 1> diff_j = p_tag_W - pos_anchor_j;        
         residual[0] = w*(diff_j.norm() - diff_i.norm() - tdoa);
 
         return true;
@@ -94,6 +96,7 @@ private:
     // Anchor positions
     Vector3d pos_anchor_i;
     Vector3d pos_anchor_j;
+    const Vector3d offset;
 
     // Weight
     double w = 10;

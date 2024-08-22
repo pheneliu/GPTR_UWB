@@ -302,7 +302,7 @@ public:
         ceres::Problem &problem, GaussianProcessPtr &traj, 
         // Vector3d &XBIG, Vector3d &XBIA,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
-        const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
+        const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag,
         double tmin, double tmax, double w_tdoa)
     {
         for (auto &tdoa : tdoaData)
@@ -331,7 +331,7 @@ public:
             Eigen::Vector3d pos_an_A = pos_anchors[tdoa.idA];
             Eigen::Vector3d pos_an_B = pos_anchors[tdoa.idB];            
 
-            GPTDOAFactorAutodiff *GPTDOAFactor = new GPTDOAFactorAutodiff(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
+            GPTDOAFactorAutodiff *GPTDOAFactor = new GPTDOAFactorAutodiff(tdoa.data, pos_an_A, pos_an_B, P_I_tag, w_tdoa, traj->getGPMixerPtr(), s);
             auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPTDOAFactorAutodiff>(GPTDOAFactor);
             cost_function->SetNumResiduals(1);            
 
@@ -871,7 +871,7 @@ public:
     void Evaluate(int iter, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
-                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
+                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
                   bool do_marginalization, double w_tdoa, double w_imu)
     {
         TicToc tt_build;
@@ -963,7 +963,7 @@ public:
         FactorMeta factorMetaTDOA;
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-        AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
+        AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa);
         // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
         AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
