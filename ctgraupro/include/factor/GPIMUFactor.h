@@ -43,10 +43,12 @@ public:
     ~GPIMUFactor() {};
 
     // Constructor
-    GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, double w_,
+    GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, double w_,
                          GPMixerPtr gpm_, double s_)
     :   acc         (acc_             ),
         gyro        (gyro_            ),
+        acc_bias    (acc_bias_        ),
+        gyro_bias   (gyro_bias_       ),        
         w           (w_               ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
@@ -54,7 +56,7 @@ public:
 
     {
         // 6-element residual: 
-        set_num_residuals(6);
+        set_num_residuals(12);
 
         // Rotation of the first knot
         mutable_parameter_block_sizes()->push_back(4);
@@ -81,6 +83,9 @@ public:
         mutable_parameter_block_sizes()->push_back(3);
         // Acceleration of the second knot
         mutable_parameter_block_sizes()->push_back(3);
+
+        mutable_parameter_block_sizes()->push_back(3);
+        mutable_parameter_block_sizes()->push_back(3);
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -90,7 +95,8 @@ public:
         // Map parameters to the control point states
         GPState Xa(0);  gpm->MapParamToState(parameters, RaIdx, Xa);
         GPState Xb(Dt); gpm->MapParamToState(parameters, RbIdx, Xb);
-
+        Eigen::Vector3d biasW = Eigen::Map<Eigen::Vector3d const>(parameters[12]);        
+        Eigen::Vector3d biasA = Eigen::Map<Eigen::Vector3d const>(parameters[13]);    
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
@@ -104,22 +110,26 @@ public:
         gpm->ComputeXtAndJacobians(Xa, Xb, Xt, DXt_DXa, DXt_DXb, gammaa, gammab, gammat);
 
         // Residual
-        Eigen::Map<Matrix<double, 6, 1>> residual(residuals);      
-        Eigen::Vector3d ba = Eigen::Vector3d::Zero();
-        Eigen::Vector3d bg = Eigen::Vector3d::Zero();
-        residual.head<3>() = w*(Xt.Rt.transpose() * (Xt.At + g) - acc - ba);
-        residual.tail<3>() = w*(Xt.Ot - gyro - bg);
-        // std::cout << "Xt.P: " << Xt.P.transpose() << " pos_anchor_i: " << pos_anchor_i.transpose() << " pos_anchor_j: "
-                //   << pos_anchor_j.transpose() << " tdoa: " << tdoa << " residual[0]: " << residual[0] << std::endl;
-        /* #endregion Calculate the pose at sampling time -----------------------------------------------------------*/
+        Eigen::Map<Matrix<double, 12, 1>> residual(residuals);      
+        Eigen::Vector3d g(0, 0, 9.81);
+
+        residual.block<3, 1>(0, 0) = w*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
+        residual.block<3, 1>(3, 0) = w*(Xt.O - gyro + biasW);
+        residual.block<3, 1>(6, 0) = w*(biasW - gyro_bias);
+        residual.block<3, 1>(9, 0) = w*(biasA - acc_bias);
 
         if (!jacobians)
             return true;
 
-        // Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
-        // Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
-        Matrix<double, 3, 3> Dr_DRt  = Matrix<double, 1, 3>::Zero();
-        Matrix<double, 3, 3> Dr_DPt  = (diff_j.normalized() - diff_i.normalized()).transpose();        
+        Matrix3d Dr_DRt  = Xt.R.matrix().transpose() * SO3d::hat(Xt.A);
+        Matrix3d Dr_DPt  = Xt.R.matrix().transpose();
+        // Matrix3d Dr_DBa  = Matrix3d::Identity();
+
+        // Matrix3d Dr_DBg  = Matrix3d::Identity();
+        Matrix3d Dr_DOt  = Matrix3d::Identity();    
+
+        // Matrix3d Dr_DBg  = Matrix3d::Identity();
+        // Matrix3d Dr_DBa  = Matrix3d::Identity();
 
         size_t idx;
 
@@ -127,110 +137,127 @@ public:
         idx = RaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
             Dr_DRa.setZero();
-            Dr_DRa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
+            Dr_DRa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
         }
 
         // Jacobian on Oa
         idx = OaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
             Dr_DOa.setZero();
-            Dr_DOa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
+            Dr_DOa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
         }
 
         // Jacobian on Sa
         idx = SaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DSa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSa(jacobians[idx]);
             Dr_DSa.setZero();
-            Dr_DSa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
+            Dr_DSa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
         }
 
         // Jacobian on Pa
         idx = PaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DPa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPa(jacobians[idx]);
             Dr_DPa.setZero();
-            Dr_DPa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Pidx];
+            Dr_DPa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Pidx];
         }
 
         // Jacobian on Va
         idx = VaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DVa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVa(jacobians[idx]);
             Dr_DVa.setZero();
-            Dr_DVa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Vidx];
+            Dr_DVa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Vidx];
         }
 
         // Jacobian on Aa
         idx = AaIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DAa(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAa(jacobians[idx]);
             Dr_DAa.setZero();
-            Dr_DAa.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Aidx];
+            Dr_DAa.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXa[Pidx][Aidx];
         }
 
         // Jacobian on Rb
         idx = RbIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
             Dr_DRb.setZero();
-            Dr_DRb.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
+            Dr_DRb.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
         }
 
         // Jacobian on Ob
         idx = ObIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
             Dr_DOb.setZero();
-            Dr_DOb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
+            Dr_DOb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
         }
 
         // Jacobian on Sb
         idx = SbIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
             Dr_DSb.setZero();
-            Dr_DSb.block<1, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
+            Dr_DSb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
         }
 
         // Jacobian on Pb
         idx = PbIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DPb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPb(jacobians[idx]);
             Dr_DPb.setZero();
-            Dr_DPb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Pidx];
+            Dr_DPb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Pidx];
         }
 
         // Jacobian on Vb
         idx = VbIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DVb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVb(jacobians[idx]);
             Dr_DVb.setZero();
-            Dr_DVb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Vidx];
+            Dr_DVb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Vidx];
         }
 
         // Jacobian on Ab
         idx = AbIdx;
         if (jacobians[idx])
         {
-            Eigen::Map<Eigen::Matrix<double, 1, 3, Eigen::RowMajor>> Dr_DAb(jacobians[idx]);
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAb(jacobians[idx]);
             Dr_DAb.setZero();
-            Dr_DAb.block<1, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
+            Dr_DAb.block<3, 3>(0, 0) = w*Dr_DPt*DXt_DXb[Pidx][Aidx];
         }
 
+        idx = 12;
+        if (jacobians[idx])
+        {
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DBg(jacobians[idx]);
+            Dr_DBg.setZero();
+            Dr_DBg.block<3, 3>(3, 0) = w*Matrix3d::Identity();
+            Dr_DBg.block<3, 3>(6, 0) = w*Matrix3d::Identity();
+        }        
+
+        idx = 13;
+        if (jacobians[idx])
+        {
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DBa(jacobians[idx]);
+            Dr_DBa.setZero();
+            Dr_DBa.block<3, 3>(0, 0) = w*Matrix3d::Identity();
+            Dr_DBa.block<3, 3>(9, 0) = w*Matrix3d::Identity();
+        }        
         return true;
     }
 
@@ -239,6 +266,8 @@ private:
     // IMU measurements
     Vector3d acc;
     Vector3d gyro;
+    Vector3d acc_bias;
+    Vector3d gyro_bias;    
 
     // Weight
     double w = 10;

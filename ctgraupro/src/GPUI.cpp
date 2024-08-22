@@ -329,6 +329,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         TicToc tt_solve;
         
         int outer_iter = 1;
+        bool if_autodiff = false;
         
         // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
         // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
@@ -336,7 +337,8 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu);
+        gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
+                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu, if_autodiff);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         std::cout << "bg: " << bg.transpose() << " ba: " << ba.transpose() << std::endl;
