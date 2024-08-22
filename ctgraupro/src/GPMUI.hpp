@@ -2,6 +2,8 @@
 
 #include "GPMLC.h"
 #include "factor/GPTDOAFactor.h"
+#include "factor/GPTDOAFactorAutodiff.h"
+#include "factor/GPIMUFactorAutodiff.h"
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
 
 class GPMUI : public GPMLC
@@ -325,6 +327,13 @@ public:
                 continue;
             }
 
+            Eigen::Vector3d pos_an_A = pos_anchors[tdoa.idA];
+            Eigen::Vector3d pos_an_B = pos_anchors[tdoa.idB];            
+
+            GPTDOAFactorAutodiff *GPTDOAFactor = new GPTDOAFactorAutodiff(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
+            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPTDOAFactorAutodiff>(GPTDOAFactor);
+            cost_function->SetNumResiduals(1);            
+
             vector<double *> factor_param_blocks;
             factorMeta.coupled_params.push_back(vector<ParamInfo>());
             // Add the parameter blocks for rotation
@@ -344,14 +353,18 @@ public:
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
-            }
 
-            Eigen::Vector3d pos_an_A = pos_anchors[tdoa.idA];
-            Eigen::Vector3d pos_an_B = pos_anchors[tdoa.idB];
+                cost_function->AddParameterBlock(4);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);                
+            }
             
             double tdoa_loss_thres = -1.0;
             ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
-            ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
+            // ceres::CostFunction *cost_function = new GPTDOAFactor(tdoa.data, pos_an_A, pos_an_B, w_tdoa, traj->getGPMixerPtr(), s);
             auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
 
             // Record the residual block
@@ -376,10 +389,6 @@ public:
                 std::cout << "warn: !traj->TimeInInterval(imu.t, 1e-6)" << std::endl;
                 continue;
             }
-                
-            // skip++;
-            // if (skip % lidar_ds_rate != 0)
-            //     continue;
             
             auto   us = traj->computeTimeIndex(imu.t);
             int    u  = us.first;
@@ -392,6 +401,10 @@ public:
                           << " tmin: " << tmin << " tmax: " << tmax << std::endl;
                 continue;
             }
+
+            GPIMUFactorAutodiff *GPIMUFactor = new GPIMUFactorAutodiff(imu.acc, imu.gyro, w_imu, traj->getGPMixerPtr(), s);
+            auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPIMUFactorAutodiff>(GPIMUFactor);
+            cost_function->SetNumResiduals(6);                
 
             vector<double *> factor_param_blocks;
             factorMeta.coupled_params.push_back(vector<ParamInfo>());
@@ -412,11 +425,18 @@ public:
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
+
+                cost_function->AddParameterBlock(4);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);
+                cost_function->AddParameterBlock(3);                    
             }
             
             double imu_loss_thres = -1.0;
             ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
-            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, w_imu, traj->getGPMixerPtr(), s);
+            // ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, w_imu, traj->getGPMixerPtr(), s);
             auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
 
             // Record the residual block
@@ -854,10 +874,10 @@ public:
 
         // Set up the ceres problem
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-        options.num_threads = MAX_THREADS;
+        options.num_threads = 8;
         options.max_num_iterations = 50;
-        options.check_gradients = false;
-        options.gradient_check_relative_precision = 0.02;
+        // options.check_gradients = false;
+        // options.gradient_check_relative_precision = 0.02;
 
         // Documenting the parameter blocks
         paramInfoMap.clear();
@@ -923,15 +943,15 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
+            // AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
-            FactorMeta factorMetaIMU;
-            AddIMUFactors(problem, traj, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
+        AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
+        FactorMeta factorMetaIMU;
+        AddIMUFactors(problem, traj, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;
@@ -943,10 +963,10 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        if (margInfo != NULL) {
+        // if (margInfo != NULL) {
 
-            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
-        }
+        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        // }
             
 
         tt_build.Toc();
@@ -969,9 +989,9 @@ public:
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
-        if (do_marginalization) {
-            Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
-        }
+        // if (do_marginalization) {
+        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
+        // }
 
         tt_slv.Toc();
 

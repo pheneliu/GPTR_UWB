@@ -117,6 +117,7 @@ bool auto_exit;
 int  WINDOW_SIZE = 4;
 int  SLIDE_SIZE  = 2;
 double w_tdoa = 0.1;
+double w_imu = 1;
 
 GaussianProcessPtr traj;
 
@@ -125,7 +126,7 @@ bool fuse_tof  = false;
 bool fuse_imu  = true;
 
 bool acc_ratio = true;
-bool gyro_ratio = true;
+bool gyro_unit = true;
 
 struct UwbImuBuf
 {
@@ -331,7 +332,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa);
+        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         // Step 4: Report, visualize
