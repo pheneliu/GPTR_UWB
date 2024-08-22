@@ -29,7 +29,7 @@
         <param name="WINDOW_SIZE" value="8"/> <!-- How many knot length does the sliding window -->
         <param name="w_tdoa" value="10.0"/> <!-- Coefficients for TDOA residuals -->
         <param name="w_imu" value="0.1"/> <!-- Coefficients for IMU residuals -->
-        <param name="tdoa_loss_thres" value="1.0"/> <!-- Loss function for IMU residuals -->
+        <param name="tdoa_loss_thres" value="0.5"/> <!-- Loss function for IMU residuals -->
         <param name="mp_loss_thres" value="1.0"/> <!-- Loss function for motion prior residuals -->
 
     </node>

@@ -496,7 +496,9 @@ public:
                     factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);               
                 }
                 factor_param_blocks.push_back(XBIG.data());
-                factor_param_blocks.push_back(XBIA.data());              
+                factor_param_blocks.push_back(XBIA.data());  
+                factorMeta.coupled_params.back().push_back(paramInfoMap[XBIG.data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);                            
 
                 double imu_loss_thres = -1.0;
                 ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
@@ -960,7 +962,8 @@ public:
             // problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
             // problem.AddParameterBlock(P_Lx_Ly.data(), 3);
             // paramInfoMap.insert(make_pair(R_Lx_Ly.data(), ParamInfo(R_Lx_Ly.data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
-            // paramInfoMap.insert(make_pair(P_Lx_Ly.data(), ParamInfo(P_Lx_Ly.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+            paramInfoMap.insert(make_pair(XBIG.data(), ParamInfo(XBIG.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+            paramInfoMap.insert(make_pair(XBIA.data(), ParamInfo(XBIA.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
 
             // Sanity check
             for(auto &param_ : paramInfoMap)
