@@ -299,7 +299,8 @@ public:
     }    
 
     void AddTDOAFactors(
-        ceres::Problem &problem, GaussianProcessPtr &traj,
+        ceres::Problem &problem, GaussianProcessPtr &traj, 
+        // Vector3d &XBIG, Vector3d &XBIA,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
         double tmin, double tmax, double w_tdoa)
@@ -361,6 +362,10 @@ public:
                 cost_function->AddParameterBlock(3);
                 cost_function->AddParameterBlock(3);                
             }
+            // factor_param_blocks.push_back(XBIG.data());
+            // factor_param_blocks.push_back(XBIA.data());            
+            // cost_function->AddParameterBlock(3);
+            // cost_function->AddParameterBlock(3);             
             
             double tdoa_loss_thres = -1.0;
             ceres::LossFunction *tdoa_loss_function = tdoa_loss_thres == -1 ? NULL : new ceres::HuberLoss(tdoa_loss_thres);
@@ -378,7 +383,7 @@ public:
         }
     }
 
-    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj,
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<IMUData> &imuData, 
         double tmin, double tmax, double w_imu)
@@ -402,9 +407,9 @@ public:
                 continue;
             }
 
-            GPIMUFactorAutodiff *GPIMUFactor = new GPIMUFactorAutodiff(imu.acc, imu.gyro, w_imu, traj->getGPMixerPtr(), s);
+            GPIMUFactorAutodiff *GPIMUFactor = new GPIMUFactorAutodiff(imu.acc, imu.gyro, XBIA, XBIG, w_imu, traj->getGPMixerPtr(), s, traj->getNumKnots());
             auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPIMUFactorAutodiff>(GPIMUFactor);
-            cost_function->SetNumResiduals(6);                
+            cost_function->SetNumResiduals(12);                
 
             vector<double *> factor_param_blocks;
             factorMeta.coupled_params.push_back(vector<ParamInfo>());
@@ -433,6 +438,10 @@ public:
                 cost_function->AddParameterBlock(3);
                 cost_function->AddParameterBlock(3);                    
             }
+            factor_param_blocks.push_back(XBIG.data());
+            factor_param_blocks.push_back(XBIA.data());            
+            cost_function->AddParameterBlock(3);
+            cost_function->AddParameterBlock(3);                  
             
             double imu_loss_thres = -1.0;
             ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
@@ -859,7 +868,7 @@ public:
         }
     }    
 
-    void Evaluate(int iter, GaussianProcessPtr &traj,
+    void Evaluate(int iter, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors,
@@ -879,6 +888,9 @@ public:
         // options.check_gradients = false;
         // options.gradient_check_relative_precision = 0.02;
 
+        // Vector3d XBIG(sfBig.back().back());
+        // Vector3d XBIA(sfBia.back().back());        
+
         // Documenting the parameter blocks
         paramInfoMap.clear();
         // Add the parameter blocks
@@ -886,6 +898,8 @@ public:
             // Add the parameter blocks for rotation
               AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
               AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
+              problem.AddParameterBlock(XBIG.data(), 3);
+              problem.AddParameterBlock(XBIA.data(), 3);
             // Add the extrinsic params
             // problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
             // problem.AddParameterBlock(P_Lx_Ly.data(), 3);
@@ -950,8 +964,9 @@ public:
         double cost_tdoa_init = -1; double cost_tdoa_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
         AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
+        // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
-        AddIMUFactors(problem, traj, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
+        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;

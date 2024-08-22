@@ -244,6 +244,10 @@ ros::Subscriber tofSub ;
 ros::Subscriber imuSub ;
 ros::Subscriber gtSub  ;
 
+Eigen::Vector3d bg = Eigen::Vector3d::Zero();
+Eigen::Vector3d ba = Eigen::Vector3d::Zero();
+const Eigen::Vector3d P_I_tag = Eigen::Vector3d(-0.012, 0.001, 0.091);
+
 void tdoaCb(const TdoaMsgPtr &msg)
 {
     lock_guard<mutex> lg(UIBuf.tdoaBuf_mtx);
@@ -332,9 +336,10 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu);
+        gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, anchor_list, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, w_imu);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
+        std::cout << "bg: " << bg.transpose() << " ba: " << ba.transpose() << std::endl;
         // Step 4: Report, visualize
         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
