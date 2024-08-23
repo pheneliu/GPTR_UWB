@@ -205,14 +205,18 @@ struct UwbImuBuf
 
     void transferIMUData()
     {
+        int i = 0;
         imu_data.clear();
         for (const auto& data : imuBuf) {
-            Eigen::Vector3d acc(data->linear_acceleration.x, data->linear_acceleration.y, data->linear_acceleration.z);
-            if (acc_ratio) acc *= 9.81;
-            Eigen::Vector3d gyro(data->angular_velocity.x, data->angular_velocity.y, data->angular_velocity.z);
-            if (gyro_unit) gyro *= M_PI / 180.0;            
-            IMUData imu(data->header.stamp.toSec(), acc, gyro);
-            imu_data.push_back(imu);
+            if (i % 10 == 0) {
+                Eigen::Vector3d acc(data->linear_acceleration.x, data->linear_acceleration.y, data->linear_acceleration.z);
+                if (acc_ratio) acc *= 9.81;
+                Eigen::Vector3d gyro(data->angular_velocity.x, data->angular_velocity.y, data->angular_velocity.z);
+                if (gyro_unit) gyro *= M_PI / 180.0;            
+                IMUData imu(data->header.stamp.toSec(), acc, gyro);
+                imu_data.push_back(imu);
+            }
+            i++;
         }
     }
 

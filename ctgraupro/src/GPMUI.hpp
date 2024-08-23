@@ -943,7 +943,7 @@ public:
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
         options.num_threads = MAX_THREADS;
         options.max_num_iterations = 50;
-        options.check_gradients = false;
+        options.check_gradients = true;
         options.gradient_check_relative_precision = 0.02;
 
         // Vector3d XBIG(sfBig.back().back());

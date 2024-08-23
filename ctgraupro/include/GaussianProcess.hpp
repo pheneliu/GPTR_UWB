@@ -781,7 +781,8 @@ public:
         Mat3T JThetd0Oa = JThetd0Thead1*JThead1Oa;
         Mat3T JThetd0Ob = JThetd0Thebd1*JThebd1Ob + JThetd0Thebd2*JThebd2Ob;
         Mat3T JThetd0Sa = JThetd0Thead2*JThead2Sa;
-        Mat3T JThetd0Sb = JThetd0Thead2*JThebd2Sb;
+        // Mat3T JThetd0Sb = JThetd0Thead2*JThebd2Sb; // ???
+        Mat3T JThetd0Sb = JThetd0Thebd2*JThebd2Sb;
 
         Mat3T JThetd1Ra = JThetd1Thebd0*JThebd0Ra + JThetd1Thebd1*JThebd1Ra + JThetd1Thebd2*JThebd2Ra;
         Mat3T JThetd1Rb = JThetd1Thebd0*JThebd0Rb + JThetd1Thebd1*JThebd1Rb + JThetd1Thebd2*JThebd2Rb;
@@ -795,7 +796,8 @@ public:
         Mat3T JThetd2Oa = JThetd2Thead1*JThead1Oa;
         Mat3T JThetd2Ob = JThetd2Thebd1*JThebd1Ob + JThetd2Thebd2*JThebd2Ob;
         Mat3T JThetd2Sa = JThetd2Thead2*JThead2Sa;
-        Mat3T JThetd2Sb = JThetd2Thead2*JThebd2Sb;
+        // Mat3T JThetd2Sb = JThetd2Thead2*JThebd2Sb; // ???
+        Mat3T JThetd2Sb = JThetd2Thebd2*JThebd2Sb;
 
 
         // Jacobians from L3 to L2
