@@ -68,6 +68,6 @@
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-        args="-d $(find ctgaupro)/launch/ctgaupro.rviz" />
+        args="-d $(find ctgaupro)/launch/ctgaupro_lio.rviz" />
 
 </launch>
