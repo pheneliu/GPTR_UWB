@@ -406,6 +406,8 @@ protected:
     bool fix_kidxmin = false;
     bool fix_kidxmax = false;
 
+    int max_lidarcoefs = 4000;
+
     deque<int> kidx_marg;
     deque<int> kidx_keep;
 
@@ -434,6 +436,7 @@ public:
 
     void AddLidarFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
+        int ds_rate,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const deque<vector<LidarCoef>> &cloudCoef,
         double tmin, double tmax);

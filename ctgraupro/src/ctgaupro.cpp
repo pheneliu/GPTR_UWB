@@ -48,29 +48,30 @@ boost::shared_ptr<ros::NodeHandle> nh_ptr;
 // Get the dense prior map
 string priormap_file = "";
 
+// Dense prior map
+CloudXYZIPtr priormap(new CloudXYZI());
+
 // Get the lidar bag file
 string lidar_bag_file = "";
 
 // Number of clouds to work with
 int MAX_CLOUDS = -1;
 
+// Time to skip the estimation
+double SKIPPED_TIME = 0.0;
+
 // Get the lidar topics
-vector<string> pc_topics = {"/lidar_0/points"};
+vector<string> lidar_topic = {"/lidar_0/points"};
 
 // Get the lidar type
 vector<string> lidar_type = {"ouster"};
 
 // Get the prior map leaf size
 double pmap_leaf_size = 0.15;
+vector<double> cloud_ds;
 
 // Kdtree for priormap
 KdFLANNPtr kdTreeMap(new KdFLANN());
-
-// period to init cut off
-double timestartup = 3.0;
-
-// Spline order
-int SPLINE_N = 6;
 
 // Spline knot length
 double deltaT = 0.01;
@@ -82,8 +83,7 @@ int sw_shift = 5;
 ikdtreePtr ikdtPM;
 
 // Number of poses per knot in the extrinsic optimization
-int CLOUDS_SW = 2;
-int Nseg = 1;
+int SW_CLOUDNUM = 2;
 double t_shift = 0.0;
 int max_outer_iter = 3;
 int max_inner_iter = 2;
@@ -118,7 +118,6 @@ typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::P
 void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
                  const vector<vector<ros::Time>> &cloudstamp,
                  CloudXYZIPtr &priormap,
-                 double timestartup,
                  vector<double> timestart,
                  vector<double> xyzypr_W_L0,
                  vector<CloudXYZIPtr> &pc0,
@@ -126,6 +125,9 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
 {
     // Number of lidars
     int Nlidar = cloudstamp.size();
+
+    // Time period to merge initial clouds
+    double startup_merge_time = 3.0;
 
     ROS_ASSERT(pc0.size() == Nlidar);
     ROS_ASSERT(tf_W_Li0.size() == Nlidar);
@@ -139,7 +141,7 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
         for(int cidx = 0; cidx < Ncloud; cidx++)
         {
             // Check if pointcloud is later
-            if ((cloudstamp[lidx][cidx] - cloudstamp[lidx][0]).toSec() > timestartup)
+            if ((cloudstamp[lidx][cidx] - cloudstamp[lidx][0]).toSec() > startup_merge_time)
             {
                 timestart[lidx] = cloudstamp[lidx][cidx].toSec();
                 break;
@@ -156,7 +158,7 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
 
         // Downsample the pointcloud
         pc0[lidx] = uniformDownsample<PointXYZI>(pc0[lidx], pmap_leaf_size);
-        printf("P0 lidar %d, Points: %d -> %d\n", lidx, Norg, pc0[lidx]->size());
+        printf("Intial cloud of lidar %d, Points: %d -> %d\n", lidx, Norg, pc0[lidx]->size());
 
         // Find ICP alignment and refine
         CloudMatcher cm(0.1, 0.1);
@@ -166,21 +168,21 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
         Quaternd q_W_L0 = Util::YPR2Quat(xyzypr_W_L0[lidx*6 + 3], xyzypr_W_L0[lidx*6 + 4], xyzypr_W_L0[lidx*6 + 5]);
         myTf tf_W_L0(q_W_L0, p_W_L0);
 
-        // Find ICP pose
-        Matrix4f tfm_W_Li0;
-        double   icpFitness   = 0;
-        double   icpTime      = 0;
-        bool     icpconverged = cm.CheckICP(priormap, pc0[lidx], tf_W_L0.cast<float>().tfMat(), tfm_W_Li0, 0.2, 10, 1.0, icpFitness, icpTime);
+        // // Find ICP pose
+        // Matrix4f tfm_W_Li0;
+        // double   icpFitness   = 0;
+        // double   icpTime      = 0;
+        // bool     icpconverged = cm.CheckICP(priormap, pc0[lidx], tf_W_L0.cast<float>().tfMat(), tfm_W_Li0, 0.2, 10, 1.0, icpFitness, icpTime);
         
-        tf_W_L0 = myTf(tfm_W_Li0);
-        printf("Lidar %d initial pose. %s. Time: %f. Fn: %f. XYZ: %f, %f, %f. YPR: %f, %f, %f.\n",
-                lidx, icpconverged ? "Conv" : "Not Conv", icpTime, icpFitness,
-                tf_W_L0.pos.x(), tf_W_L0.pos.y(), tf_W_L0.pos.z(),
-                tf_W_L0.yaw(), tf_W_L0.pitch(), tf_W_L0.roll());
+        // tf_W_L0 = myTf(tfm_W_Li0);
+        // printf("Lidar %d initial pose. %s. Time: %f. Fn: %f. XYZ: %f, %f, %f. YPR: %f, %f, %f.\n",
+        //         lidx, icpconverged ? "Conv" : "Not Conv", icpTime, icpFitness,
+        //         tf_W_L0.pos.x(), tf_W_L0.pos.y(), tf_W_L0.pos.z(),
+        //         tf_W_L0.yaw(), tf_W_L0.pitch(), tf_W_L0.roll());
 
         // Find the refined pose
         IOAOptions ioaOpt;
-        ioaOpt.init_tf = myTf(tfm_W_Li0);
+        ioaOpt.init_tf = tf_W_L0;
         ioaOpt.max_iterations = 20;
         ioaOpt.show_report = true;
         ioaOpt.text = myprintf("T_W_L(%d,0)_refined_%d", lidx, 10);
@@ -192,13 +194,7 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
 
         // Save the result to external buffer
         tf_W_Li0[lidx] = ioaSum.final_tf;
-        
-        // Transform pointcloud to world frame
-        // pcl::transformPointCloud(*pc0[lidx], *pc0[lidx], ioaSum.final_tf.cast<float>().tfMat());
     }
-
-    // // Return the result
-    // return T_W_Li0;
 }
 
 void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
@@ -245,29 +241,38 @@ void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPt
     }
 }
 
-void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
+void VisualizeGndtr(vector<CloudPosePtr> &gndtrCloud)
 {
     // Number of lidars
     int Nlidar = gndtrCloud.size();
     
     // Create the publisher
-    ros::Publisher pmpub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/priormap_viz", 10);
+    // ros::Publisher pmpub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/priormap_viz", 1);
     ros::Publisher gndtrPub[Nlidar];
     for(int idx = 0; idx < Nlidar; idx++)
         gndtrPub[idx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gndtr", idx), 10);
 
-    // Publish gndtr every 1s
-    ros::Rate rate(1);
+    // Publish gndtr every x seconds
+    ros::Rate rate(10);
     while(ros::ok())
     {
         ros::Time currTime = ros::Time::now();
 
-        // Publish the prior map for visualization
-        Util::publishCloud(pmpub, *priormap, currTime, "world");
+        // // Publish the prior map for visualization
+        // Util::publishCloud(pmpub, *priormap, currTime, "world");
 
         // Publish the grountruth
         for(int lidx = 0; lidx < Nlidar; lidx++)
+        {
+            if(gndtrCloud[lidx]->size() == 0)
+            {
+                // printf(KYEL "GND pose is empty\n" RESET);
+                continue;
+            }
+
+            // printf("Publish GND pose cloud of %d points\n", gndtrCloud[lidx]->size());
             Util::publishCloud(gndtrPub[lidx], *gndtrCloud[lidx], ros::Time::now(), "world");
+        }
 
         // Sleep
         rate.sleep();
@@ -276,6 +281,7 @@ void VisualizeGndtr(CloudXYZIPtr &priormap, vector<CloudPosePtr> &gndtrCloud)
 
 int main(int argc, char **argv)
 {
+    // Initalize ros nodes
     ros::init(argc, argv, "ctgaupro");
     ros::NodeHandle nh("~");
     nh_ptr = boost::make_shared<ros::NodeHandle>(nh);
@@ -283,40 +289,34 @@ int main(int argc, char **argv)
     // Supress the pcl warning
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
-    printf("Lidar calibration started.\n");
+    printf(KGRN "Multi-Lidar Coupled Motion Estimation Started.\n" RESET);
 
-    // Spline order
+/* #region Read input data --------------------------------------------------------------------------------------*/
+
+    // Knot length
     nh_ptr->getParam("deltaT", deltaT);
-
-    printf("SPLINE order %d with knot length: %f\n", SPLINE_N, deltaT);
+    printf("Gaussian process with knot length: %f\n", deltaT);
 
     // Get the user define parameters
     nh_ptr->getParam("priormap_file", priormap_file);
     nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
     nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
-    nh_ptr->getParam("pc_topics", pc_topics);
+    nh_ptr->getParam("lidar_topic", lidar_topic);
     nh_ptr->getParam("lidar_type", lidar_type);
-    
-    double SKIPPED_TIME = 0.0;
     nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
 
-    printf("Get bag at %s and prior map at %s\n", lidar_bag_file.c_str(), priormap_file.c_str());
-    printf("MAX_CLOUDS: %d\n", MAX_CLOUDS);
+    // Determine the number of lidar
+    int Nlidar = lidar_topic.size();
 
-    printf("Lidar topics: \n");
-    for(auto topic : pc_topics)
-        cout << topic << endl;
-    
-    printf("Lidar type: \n");
-    for(auto type : lidar_type)
-        cout << type << endl;
-
-    // Get the leaf size
+    // Get the leaf size for prior map
     nh_ptr->getParam("pmap_leaf_size", pmap_leaf_size);
 
+    // Get the leaf size for lidar pointclouds
+    cloud_ds = vector<double>(Nlidar, 0.1);
+    nh_ptr->getParam("cloud_ds", cloud_ds);
+
     // Find the settings for cross trajectory optimmization
-    nh_ptr->getParam("CLOUDS_SW", CLOUDS_SW);
-    nh_ptr->getParam("Nseg", Nseg);
+    nh_ptr->getParam("SW_CLOUDNUM", SW_CLOUDNUM);
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
@@ -324,8 +324,12 @@ int main(int argc, char **argv)
     // Location to save the logs
     nh_ptr->getParam("log_dir", log_dir);
 
-    // Determine the number of lidar
-    int Nlidar = pc_topics.size();
+    // Some notifications
+    printf("Get bag at %s and prior map at %s.\n", lidar_bag_file.c_str(), priormap_file.c_str());
+    printf("Lidar info: \n");
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        printf("Type: %s.\t\t. Topic %s\n", lidar_topic[lidx].c_str(), lidar_type[lidx].c_str());
+    printf("Maximum number of clouds: %d\n", MAX_CLOUDS);
 
     // Get the initial position of the lidars
     vector<double> xyzypr_W_L0(Nlidar*6, 0.0);
@@ -380,27 +384,26 @@ int main(int argc, char **argv)
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
 
+/* #endregion Read input data -----------------------------------------------------------------------------------*/
+
     // Load the priormap
-    CloudXYZIPtr priormap(new CloudXYZI()); pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
+    pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
     priormap = uniformDownsample<PointXYZI>(priormap, pmap_leaf_size);
     // Create the kd tree
     printf("Building the prior map");
     kdTreeMap->setInputCloud(priormap);
 
-    // Make the ikd-tree
-    // ikdtPM = ikdtreePtr(new ikdtree(0.5, 0.6, pmap_leaf_size));
-
     // Converting the topic to index
     map<string, int> pctopicidx;
-    for(int idx = 0; idx < pc_topics.size(); idx++)
-        pctopicidx[pc_topics[idx]] = idx;
+    for(int idx = 0; idx < lidar_topic.size(); idx++)
+        pctopicidx[lidar_topic[idx]] = idx;
 
     // Storage of the pointclouds
-    vector<vector<CloudXYZITPtr>> clouds(pc_topics.size());
-    vector<vector<ros::Time>> cloudstamp(pc_topics.size());
+    vector<vector<CloudXYZITPtr>> clouds(lidar_topic.size());
+    vector<vector<ros::Time>> cloudstamp(lidar_topic.size());
     vector<tf2_msgs::TFMessage> gndtr;
     
-    vector<string> queried_topics = pc_topics;
+    vector<string> queried_topics = lidar_topic;
     queried_topics.push_back("/tf");
 
     // Load the bag file
@@ -483,7 +486,7 @@ int main(int argc, char **argv)
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,
-                    clouds[lidx].size(), clouds[lidx].back()->size(), Npoint, pc_topics[lidx].c_str());
+                    clouds[lidx].size(), clouds[lidx].back()->size(), Npoint, lidar_topic[lidx].c_str());
             cout << endl;
 
             // Confirm the time correctness
@@ -500,9 +503,12 @@ int main(int argc, char **argv)
     vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
     for(auto &cloud : gndtrCloud)
+    {
         cloud = CloudPosePtr(new CloudPose());
+        cloud->clear();
+    }
     
-    // Add points to gndtr
+    // Add points to gndtrgndtrCloud
     for(auto &msg : gndtr)
     {
         for (auto &tf : msg.transforms)
@@ -530,9 +536,11 @@ int main(int argc, char **argv)
             gndtr_ts[lidar_id].push_back(pose.t);
         }
     }
+    for(auto &cloud : gndtrCloud)
+        printf("GNDTR cloud size: %d point(s)\n");
 
     // Create thread for visualizing groundtruth
-    thread vizGtr = thread(VisualizeGndtr, std::ref(priormap), std::ref(gndtrCloud));
+    thread vizGtr = thread(VisualizeGndtr, std::ref(gndtrCloud));
 
     // Initial coordinates of the lidar
     vector<myTf<double>> tf_W_Li0(Nlidar);
@@ -540,8 +548,7 @@ int main(int argc, char **argv)
 
     // Initialize the pose
     vector<double> timestart(Nlidar);
-    getInitPose(clouds, cloudstamp, priormap, timestartup, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
-
+    getInitPose(clouds, cloudstamp, priormap, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
 
     // Split the pointcloud by time.
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
@@ -565,18 +572,18 @@ int main(int argc, char **argv)
     // Do optimization with inter-trajectory factors
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
-        int CLOUDS_SW_HALF = int(CLOUDS_SW/2);
-        for(int cidx = outer_iter; cidx < cloudsx[0].size() - CLOUDS_SW_HALF; cidx+= int(CLOUDS_SW_HALF))
+        int SW_CLOUDNUM_HALF = int(SW_CLOUDNUM/2);
+        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDNUM_HALF; cidx+= int(SW_CLOUDNUM_HALF))
         {
-            if (cloudsx[0][cidx]->points.front().t < SKIPPED_TIME)
+            if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
                 continue;
 
             int SW_BEG = cidx;
-            int SW_END = min(cidx + CLOUDS_SW, int(cloudsx[0].size())-1);
-            int SW_MID = min(cidx + CLOUDS_SW_HALF, int(cloudsx[0].size())-1);
+            int SW_END = min(cidx + SW_CLOUDNUM, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + SW_CLOUDNUM_HALF, int(cloudsx[0].size())-1);
 
             // The effective length of the sliding window by the number of point clouds
-            int CLOUDS_SW_EFF = SW_END - SW_BEG;
+            int SW_CLOUDNUM_EFF = SW_END - SW_BEG;
 
             double tmin = cloudsx[0][SW_BEG]->points.front().t;     // Start time of the sliding window
             double tmax = cloudsx[0][SW_END]->points.back().t;      // End time of the sliding window
@@ -594,16 +601,16 @@ int main(int argc, char **argv)
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
                 // Create buffers for lidar coefficients
-                vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(CLOUDS_SW_EFF));
+                vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(SW_CLOUDNUM_EFF));
 
-                deque<CloudXYZITPtr> swCloud0(CLOUDS_SW_EFF);
-                deque<CloudXYZIPtr> swCloudUndi0(CLOUDS_SW_EFF);
-                deque<CloudXYZIPtr> swCloudUndiInW0(CLOUDS_SW_EFF);
+                deque<CloudXYZITPtr> swCloud0(SW_CLOUDNUM_EFF);
+                deque<CloudXYZIPtr> swCloudUndi0(SW_CLOUDNUM_EFF);
+                deque<CloudXYZIPtr> swCloudUndiInW0(SW_CLOUDNUM_EFF);
                 deque<vector<LidarCoef>> &swCloudCoef0 = swCloudCoef[0];
 
-                deque<CloudXYZITPtr> swCloudi(CLOUDS_SW_EFF);
-                deque<CloudXYZIPtr> swCloudUndii(CLOUDS_SW_EFF);
-                deque<CloudXYZIPtr> swCloudUndiInWi(CLOUDS_SW_EFF);
+                deque<CloudXYZITPtr> swCloudi(SW_CLOUDNUM_EFF);
+                deque<CloudXYZIPtr> swCloudUndii(SW_CLOUDNUM_EFF);
+                deque<CloudXYZIPtr> swCloudUndiInWi(SW_CLOUDNUM_EFF);
                 deque<vector<LidarCoef>> &swCloudCoefi = swCloudCoef[1];
 
                 // Deskew, Transform and Associate
@@ -630,8 +637,8 @@ int main(int argc, char **argv)
                 {
                     int swIdx = idx - SW_BEG;
 
-                    swCloud0[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[0][idx], 0.1);
-                    swCloudi[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[1][idx], 0.1);
+                    swCloud0[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[0][idx], cloud_ds[0]);
+                    swCloudi[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[1][idx], cloud_ds[1]);
 
                     ProcessCloud(gpmaplo[0], swCloud0[swIdx], swCloudUndi0[swIdx], swCloudUndiInW0[swIdx], swCloudCoef0[swIdx]);
                     ProcessCloud(gpmaplo[1], swCloudi[swIdx], swCloudUndii[swIdx], swCloudUndiInWi[swIdx], swCloudCoefi[swIdx]);
@@ -718,6 +725,8 @@ int main(int argc, char **argv)
         gpmlc->Reset();
     }
 
+/* #region Save the result --------------------------------------------------------------------------------------*/
+
     // Create directories if they do not exist
     std::filesystem::create_directories(log_dir);
 
@@ -748,7 +757,10 @@ int main(int argc, char **argv)
     }
     xts_logfile.close();
 
-    // Create the pose sampling publisher
+/* #endregion Save the result -----------------------------------------------------------------------------------*/
+
+/* #region Create the pose sampling publisher -------------------------------------------------------------------*/
+
     vector<ros::Publisher> poseSamplePub(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
@@ -757,4 +769,7 @@ int main(int argc, char **argv)
     ros::Rate rate(0.2);
     while(ros::ok())
         rate.sleep();
+
+/* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
+
 }

@@ -7,26 +7,25 @@
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
 
-        <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/priormap.pcd" />
+        <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled.pcd" />
 
-        <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/cloud_avia_mid_no_offset.bag" /> -->
-        <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/cloud_avia_mid.bag" />
+        <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
         
-        <param name="MAX_CLOUDS"     value="300"/>
-        <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
+        <param name="MAX_CLOUDS"     value="600"/>
+        <param name="SKIPPED_TIME"   value="0.0"/>  <!-- Time to skip MAP Opt-->
         
-        <param name="lidar_topic"    value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
-        <param name="lidar_type"     value="['livox', 'livox']" type="yaml" />
-        <param name="xyzypr_W_L0"    value="[ 0, 0, 0.7,  045, 45, 0,
-                                              0, 0, 0.5, -135, 00, 0 ]" type="yaml"/>
+        <param name="lidar_topic"    value="['/os_cloud_node/points', '/livox/lidar']" type="yaml" />
+        <param name="lidar_type"     value="['ouster', 'livox']" type="yaml" />
+        <param name="xyzypr_W_L0"    value="[ 62.03, 119.61, 7.69, -134, 3, 1,
+                                              62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
         <!-- Groundtruth for evaluation-->
         <param name="xtrns_gndtr"    value="[ 0, 0, 0, 0, 0, 0,
-                                             -0.1767767, 0, -0.53033009, 180, 45, 0 ]" type="yaml"/>
+                                              0, 0, 0, 0, 0, 0 ]" type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size" value="0.15"   />
-        <param name="cloud_ds"       value="0.1"   />
-  
+        <param name="cloud_ds"       value="[0.4, 0.1]"   />
+        
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.04357"/>
         <param name="WINDOW_SIZE"    value="5"      />
@@ -53,10 +52,11 @@
 
         <!-- Extrinsic estimation -->
         <param name="CLOUDS_XW"      value="20"     />
+        <param name="max_lidarcoefs" value="4000"/>
         <param name="Nsample"        value="1000"   />
         <param name="t_shift"        value="0.02"   />
-        <param name="max_outer_iter" value="3"      />
-        <param name="max_inner_iter" value="2"      />
+        <param name="max_outer_iter" value="2"      />
+        <param name="max_inner_iter" value="3"      />
         <param name="max_debug"      value="-1"     />
         <param name="fix_kidxmin"    value="0"      />
         <param name="fix_kidxmax"    value="0"      />
@@ -68,6 +68,6 @@
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-        args="-d $(find ctgaupro)/launch/ctgaupro_lio.rviz" />
+          args="-d $(find ctgaupro)/launch/ctgaupro_lio_mcdviral.rviz" />
 
 </launch>

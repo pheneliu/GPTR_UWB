@@ -9,6 +9,7 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_)
 {
     fix_kidxmin = Util::GetBoolParam(nh, "fix_kidxmin", false);
     fix_kidxmax = Util::GetBoolParam(nh, "fix_kidxmax", false);
+    nh->getParam("max_lidarcoefs", max_lidarcoefs);
 };
 
 // Add parameters
@@ -123,6 +124,7 @@ void GPMLC::AddMP2KFactors(
 // Add lidar factors
 void GPMLC::AddLidarFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
+        int ds_rate,
         map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
         const deque<vector<LidarCoef>> &cloudCoef,
         double tmin, double tmax)
@@ -136,10 +138,11 @@ void GPMLC::AddLidarFactors(
                 continue;
             if (!traj->TimeInInterval(coef.t, 1e-6))
                 continue;
-            // skip++;
-            // if (skip % lidar_ds_rate != 0)
-            //     continue;
-            
+
+            static int skip = 0; skip++;
+            if (skip % ds_rate != 0)
+                continue;
+
             auto   us = traj->computeTimeIndex(coef.t);
             int    u  = us.first;
             double s  = us.second;
@@ -946,6 +949,18 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
         }
     }
 
+    vector<int> lidar_factor_ds(trajs.size(), 0);
+    vector<int> total_lidar_factors(trajs.size(), 0);
+    for(int tidx = 0; tidx < trajs.size(); tidx++)
+        for(int cidx = 0; cidx < cloudCoef[tidx].size(); cidx++)
+            total_lidar_factors[tidx] += cloudCoef[tidx][cidx].size();
+
+    for(int tidx = 0; tidx < trajs.size(); tidx++)
+    {
+        lidar_factor_ds[tidx] = max(int(std::ceil(total_lidar_factors[tidx] / max_lidarcoefs)), 1);
+        // printf("lidar_factor_ds[%d]: %d\n", tidx, lidar_factor_ds[tidx]);
+    }
+
     // Add the motion prior factor
     FactorMeta factorMetaMp2k;
     double cost_mp2k_init = -1, cost_mp2k_final = -1;
@@ -956,7 +971,7 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     FactorMeta factorMetaLidar;
     double cost_lidar_init = -1; double cost_lidar_final = -1;
     for(int tidx = 0; tidx < trajs.size(); tidx++)
-        AddLidarFactors(problem, trajs[tidx], paramInfoMap, factorMetaLidar, cloudCoef[tidx], tmin, tmax);
+        AddLidarFactors(problem, trajs[tidx], lidar_factor_ds[tidx], paramInfoMap, factorMetaLidar, cloudCoef[tidx], tmin, tmax);
 
     // Add the extrinsics factors
     FactorMeta factorMetaGpx;
