@@ -66,6 +66,9 @@ vector<string> lidar_topic = {"/lidar_0/points"};
 // Get the lidar type
 vector<string> lidar_type = {"ouster"};
 
+// Get the lidar stamp time (start /  end)
+vector<string> stamp_time = {"start"};
+
 // Get the prior map leaf size
 double pmap_leaf_size = 0.15;
 vector<double> cloud_ds;
@@ -306,6 +309,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
     nh_ptr->getParam("lidar_topic", lidar_topic);
     nh_ptr->getParam("lidar_type", lidar_type);
+    nh_ptr->getParam("stamp_time", stamp_time);
     nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
 
     // Determine the number of lidar
@@ -442,30 +446,32 @@ int main(int argc, char **argv)
             CloudOusterPtr cloud_raw(new CloudOuster());
             pcl::fromROSMsg(*pcMsgOuster, *cloud_raw);
 
+            // Find the time stamp
+            double sweeptime = (cloud_raw->points.back().t - cloud_raw->points.front().t)/1e9;
+            double timebase = stamp_time[lidx] == "start" ? pcMsgOuster->header.stamp.toSec() : pcMsgOuster->header.stamp.toSec() - sweeptime;
+            stamp = ros::Time(timebase);
+
             NpointRaw = cloud_raw->size();
 
             // Downsample the pointcloud
             CloudOusterPtr cloud_raw_ds = uniformDownsample<PointOuster>(cloud_raw, cloud_ds[lidx]);
 
-            cloud->resize(cloud_raw_ds->size()+2);
-            stamp = pcMsgOuster->header.stamp;
-
-            auto copyPoint = [](PointOuster &pi, PointXYZIT &po, double toffset) -> void
+            auto copyPoint = [](PointOuster &pi, PointXYZIT &po, double timebase) -> void
             {
                 po.x = pi.x;
                 po.y = pi.y;
                 po.z = pi.z;
-                po.t = toffset + pi.t/1.0e9;
+                po.t = timebase + pi.t/1.0e9;
                 po.intensity = pi.intensity;
             };
 
-            double toffset = pcMsgOuster->header.stamp.toSec();
+            cloud->resize(cloud_raw_ds->size()+2);
             #pragma omp parallel for num_threads(MAX_THREADS)
             for(int pidx = 0; pidx < cloud_raw_ds->size(); pidx++)
-                copyPoint(cloud_raw_ds->points[pidx], cloud->points[pidx + 1], toffset);
+                copyPoint(cloud_raw_ds->points[pidx], cloud->points[pidx + 1], timebase);
 
-            copyPoint(cloud_raw->points.front(), cloud->points.front(), toffset);
-            copyPoint(cloud_raw->points.back(), cloud->points.back(), toffset);
+            copyPoint(cloud_raw->points.front(), cloud->points.front(), timebase);
+            copyPoint(cloud_raw->points.back(), cloud->points.back(), timebase);
 
             NpointDS = cloud->size();
 
@@ -473,24 +479,26 @@ int main(int argc, char **argv)
         else if (pcMsgLivox != nullptr && lidar_type[lidx] == "livox")
         {
             NpointRaw = pcMsgLivox->point_num;
+            
+            // Find the time stamp
+            double sweeptime = (pcMsgLivox->points.back().offset_time - pcMsgLivox->points.front().offset_time)/1e9;
+            double timebase = stamp_time[lidx] == "start" ? pcMsgLivox->header.stamp.toSec() : pcMsgLivox->header.stamp.toSec() - sweeptime;
+            stamp = ros::Time(timebase);
 
-            CloudXYZITPtr cloud_temp(new CloudXYZIT());
-            cloud_temp->resize(pcMsgLivox->point_num);
-            stamp = pcMsgLivox->header.stamp;
-            double toffset = pcMsgLivox->header.stamp.toSec();
-
-            auto copyPoint = [](const livox_ros_driver::CustomPoint &pi, PointXYZIT &po, double toffset) -> void
+            auto copyPoint = [](const livox_ros_driver::CustomPoint &pi, PointXYZIT &po, double timebase) -> void
             {
                 po.x = pi.x;
                 po.y = pi.y;
                 po.z = pi.z;
-                po.t = toffset + pi.offset_time/1.0e9;
+                po.t = timebase + pi.offset_time/1.0e9;
                 po.intensity = pi.reflectivity/255.0*1000;
             };
 
+            CloudXYZITPtr cloud_temp(new CloudXYZIT());
+            cloud_temp->resize(pcMsgLivox->point_num);
             #pragma omp parallel for num_threads(MAX_THREADS)
             for(int pidx = 0; pidx < pcMsgLivox->point_num; pidx++)
-                copyPoint(pcMsgLivox->points[pidx], cloud_temp->points[pidx], toffset);
+                copyPoint(pcMsgLivox->points[pidx], cloud_temp->points[pidx], timebase);
 
             // Downsample
             CloudXYZITPtr cloud_temp_ds = uniformDownsample<PointXYZIT>(cloud_temp, cloud_ds[lidx]);

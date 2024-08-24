@@ -7,15 +7,21 @@
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
 
+        <!-- Location of the prior map -->
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled_cropped.pcd" />
 
+        <!-- Location of bag file -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
         
-        <param name="MAX_CLOUDS"     value="600"/>
-        <param name="SKIPPED_TIME"   value="12.5"/>  <!-- Time to skip MAP Opt-->
+        <!-- Total number of clouds loaded -->
+        <param name="MAX_CLOUDS"     value="600" />
+         <!-- Time since first pointcloud to skip MAP Opt-->
+        <param name="SKIPPED_TIME"   value="12.5"/>
         
         <param name="lidar_topic"    value="['/os_cloud_node/points', '/livox/lidar']" type="yaml" />
         <param name="lidar_type"     value="['ouster', 'livox']" type="yaml" />
+        <param name="stamp_time"     value="['end', 'start']" type="yaml" />
+        <!-- Initial pose of each lidars-->
         <param name="xyzypr_W_L0"    value="[ 62.03, 119.61, 7.69, -134, 3, 1,
                                               62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
         <!-- Groundtruth for evaluation-->

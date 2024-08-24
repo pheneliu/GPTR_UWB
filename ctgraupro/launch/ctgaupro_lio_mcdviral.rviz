@@ -5,10 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Lidar01
         - /Lidar01/GPCtrlPoints1
         - /Lidar01/Odom01/Shape1
-        - /Lidar11
         - /Lidar11/PosePrior11
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
@@ -616,7 +614,7 @@ Visualization Manager:
       Marker Topic: /ctgaupro/extr_marker
       Name: Marker
       Namespaces:
-        lines: true
+        {}
       Queue Size: 1
       Value: true
   Enabled: true
