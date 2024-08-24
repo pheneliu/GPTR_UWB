@@ -247,7 +247,7 @@ void VisualizeGndtr(vector<CloudPosePtr> &gndtrCloud)
     int Nlidar = gndtrCloud.size();
     
     // Create the publisher
-    // ros::Publisher pmpub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/priormap_viz", 1);
+    ros::Publisher pmpub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/priormap_viz", 1);
     ros::Publisher gndtrPub[Nlidar];
     for(int idx = 0; idx < Nlidar; idx++)
         gndtrPub[idx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gndtr", idx), 10);
@@ -258,8 +258,11 @@ void VisualizeGndtr(vector<CloudPosePtr> &gndtrCloud)
     {
         ros::Time currTime = ros::Time::now();
 
-        // // Publish the prior map for visualization
-        // Util::publishCloud(pmpub, *priormap, currTime, "world");
+        // Publish the prior map for visualization
+        static int count = 0;
+        count++;
+        if (count < 5)
+            Util::publishCloud(pmpub, *priormap, currTime, "world");
 
         // Publish the grountruth
         for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -328,7 +331,7 @@ int main(int argc, char **argv)
     printf("Get bag at %s and prior map at %s.\n", lidar_bag_file.c_str(), priormap_file.c_str());
     printf("Lidar info: \n");
     for(int lidx = 0; lidx < Nlidar; lidx++)
-        printf("Type: %s.\t\t. Topic %s\n", lidar_topic[lidx].c_str(), lidar_type[lidx].c_str());
+        printf("Type: %s.\tDs: %f. Topic %s.\n", lidar_type[lidx].c_str(), cloud_ds[lidx], lidar_topic[lidx].c_str());
     printf("Maximum number of clouds: %d\n", MAX_CLOUDS);
 
     // Get the initial position of the lidars
@@ -423,7 +426,8 @@ int main(int argc, char **argv)
 
         string topic = m.getTopic();
         int lidx = pctopicidx.find(topic) == pctopicidx.end() ? -1 : pctopicidx[topic];
-        int Npoint = 0;
+        int NpointRaw = 0;
+        int NpointDS = 0;
 
         // Copy the ground truth
         if (gndtrMsg != nullptr && topic == "/tf")
@@ -435,46 +439,73 @@ int main(int argc, char **argv)
 
         if (pcMsgOuster != nullptr && lidar_type[lidx] == "ouster")
         {
-            Npoint = pcMsgOuster->width*pcMsgOuster->height;
-
-            cloud->resize(Npoint);
-            stamp = pcMsgOuster->header.stamp;
-
             CloudOusterPtr cloud_raw(new CloudOuster());
             pcl::fromROSMsg(*pcMsgOuster, *cloud_raw);
 
-            #pragma omp parallel for num_threads(MAX_THREADS)
-            for(int pidx = 0; pidx < Npoint; pidx++)
+            NpointRaw = cloud_raw->size();
+
+            // Downsample the pointcloud
+            CloudOusterPtr cloud_raw_ds = uniformDownsample<PointOuster>(cloud_raw, cloud_ds[lidx]);
+
+            cloud->resize(cloud_raw_ds->size()+2);
+            stamp = pcMsgOuster->header.stamp;
+
+            auto copyPoint = [](PointOuster &pi, PointXYZIT &po, double toffset) -> void
             {
-                double pt0 = pcMsgOuster->header.stamp.toSec();
-                PointOuster &pi = cloud_raw->points[pidx];
-                PointXYZIT &po = cloud->points[pidx];
                 po.x = pi.x;
                 po.y = pi.y;
                 po.z = pi.z;
+                po.t = toffset + pi.t/1.0e9;
                 po.intensity = pi.intensity;
-                po.t = pt0 + pi.t/1.0e9;
-            }
+            };
+
+            double toffset = pcMsgOuster->header.stamp.toSec();
+            #pragma omp parallel for num_threads(MAX_THREADS)
+            for(int pidx = 0; pidx < cloud_raw_ds->size(); pidx++)
+                copyPoint(cloud_raw_ds->points[pidx], cloud->points[pidx + 1], toffset);
+
+            copyPoint(cloud_raw->points.front(), cloud->points.front(), toffset);
+            copyPoint(cloud_raw->points.back(), cloud->points.back(), toffset);
+
+            NpointDS = cloud->size();
+
         }
         else if (pcMsgLivox != nullptr && lidar_type[lidx] == "livox")
         {
-            Npoint = pcMsgLivox->point_num;
+            NpointRaw = pcMsgLivox->point_num;
 
-            cloud->resize(Npoint);
+            CloudXYZITPtr cloud_temp(new CloudXYZIT());
+            cloud_temp->resize(pcMsgLivox->point_num);
             stamp = pcMsgLivox->header.stamp;
+            double toffset = pcMsgLivox->header.stamp.toSec();
 
-            #pragma omp parallel for num_threads(MAX_THREADS)
-            for(int pidx = 0; pidx < Npoint; pidx++)
+            auto copyPoint = [](const livox_ros_driver::CustomPoint &pi, PointXYZIT &po, double toffset) -> void
             {
-                double pt0 = pcMsgLivox->header.stamp.toSec();
-                const livox_ros_driver::CustomPoint &pi = pcMsgLivox->points[pidx];
-                PointXYZIT &po = cloud->points[pidx];
                 po.x = pi.x;
                 po.y = pi.y;
                 po.z = pi.z;
+                po.t = toffset + pi.offset_time/1.0e9;
                 po.intensity = pi.reflectivity/255.0*1000;
-                po.t = pt0 + pi.offset_time/1.0e9;
-            }
+            };
+
+            #pragma omp parallel for num_threads(MAX_THREADS)
+            for(int pidx = 0; pidx < pcMsgLivox->point_num; pidx++)
+                copyPoint(pcMsgLivox->points[pidx], cloud_temp->points[pidx], toffset);
+
+            // Downsample
+            CloudXYZITPtr cloud_temp_ds = uniformDownsample<PointXYZIT>(cloud_temp, cloud_ds[lidx]);
+            
+            // Copy data to final container
+            cloud->resize(cloud_temp_ds->size()+2);
+
+            #pragma omp parallel for num_threads(MAX_THREADS)
+                for(int pidx = 0; pidx < cloud_temp_ds->size(); pidx++)
+                    cloud->points[pidx + 1] = cloud_temp_ds->points[pidx];
+
+            cloud->points.front() = cloud_temp->points.front();
+            cloud->points.back() = cloud_temp->points.back();
+
+            NpointDS = cloud->size();
         }
 
         if (cloud->size() != 0)
@@ -486,7 +517,7 @@ int main(int argc, char **argv)
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,
-                    clouds[lidx].size(), clouds[lidx].back()->size(), Npoint, lidar_topic[lidx].c_str());
+                    clouds[lidx].size(), NpointRaw, NpointDS, lidar_topic[lidx].c_str());
             cout << endl;
 
             // Confirm the time correctness
@@ -508,7 +539,7 @@ int main(int argc, char **argv)
         cloud->clear();
     }
     
-    // Add points to gndtrgndtrCloud
+    // Add points to gndtr Cloud
     for(auto &msg : gndtr)
     {
         for (auto &tf : msg.transforms)
@@ -645,7 +676,7 @@ int main(int argc, char **argv)
                 }
 
                 // Optimize
-                gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter < max_inner_iter - 1, T_B_Li_gndtr[1]);
+                gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
 
                 if (inner_iter == max_inner_iter - 1)
                 {
