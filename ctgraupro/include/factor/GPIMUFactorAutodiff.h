@@ -43,13 +43,16 @@ public:
     ~GPIMUFactorAutodiff() {};
 
     // Constructor
-    GPIMUFactorAutodiff(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, double w_,
-                         GPMixerPtr gpm_, double s_, int n_knots_)
+    GPIMUFactorAutodiff(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, 
+                        double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_, int n_knots_)
     :   acc         (acc_             ),
         gyro        (gyro_            ),
         acc_bias    (acc_bias_        ),
         gyro_bias   (gyro_bias_       ),
-        w           (w_               ),
+        wGyro       (wGyro_           ),
+        wAcce       (wAcce_           ),
+        wBiasGyro   (wBiasGyro_       ),
+        wBiasAcce   (wBiasAcce_       ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
         gpm         (gpm_             ),
@@ -85,10 +88,10 @@ public:
         // Eigen::Matrix<T, 3, 1> bg = Eigen::Matrix<T, 3, 1>::Zero();
         Eigen::Vector3d g(0, 0, 9.81);
 
-        residual.template block<3, 1>(0, 0) = w*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
-        residual.template block<3, 1>(3, 0) = w*(Xt.O - gyro + biasW);
-        residual.template block<3, 1>(6, 0) = w*(biasW - gyro_bias);
-        residual.template block<3, 1>(9, 0) = w*(biasA - acc_bias);
+        residual.template block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
+        residual.template block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
+        residual.template block<3, 1>(6, 0) = wBiasGyro*(biasW - gyro_bias);
+        residual.template block<3, 1>(9, 0) = wBiasAcce*(biasA - acc_bias);
 
         return true;
     }
@@ -102,7 +105,10 @@ private:
     Vector3d gyro_bias;
 
     // Weight
-    double w = 10;
+    double wGyro;
+    double wAcce;
+    double wBiasGyro;
+    double wBiasAcce;
 
     // Gaussian process params
     

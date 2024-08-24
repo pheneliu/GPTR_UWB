@@ -6,6 +6,7 @@
 #include "factor/GPTDOAFactorAutodiff.h"
 #include "factor/GPIMUFactorAutodiff.h"
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
+#include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
 
 class GPMUI : public GPMLC
 {
@@ -59,32 +60,32 @@ public:
             paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
             paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
             
-            if (kidx == kidxmin && fix_kidxmin)
+            if (kidx == kidxmin && true) // kidx == kidxmin && fix_kidxmin
             {
                 problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-                // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-                // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+                problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
+                problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
                 problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-                // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-                // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
+                problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
+                problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
             }
 
-            if (kidx == kidxmax && fix_kidxmax)
-            {
-                problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
-                // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
-                // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
-                // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
-                // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
-            }
+            // if (kidx == kidxmax && fix_kidxmax)
+            // {
+            //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
+            //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
+            //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
+            //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
+            //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
+            // }
         }
     }    
 
     void AddMP2KFactorsUI(
             ceres::Problem &problem, GaussianProcessPtr &traj,
             map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
-            double tmin, double tmax, double mp_loss_thres)
+            double tmin, double tmax, double mp_loss_thres, bool if_autodiff)
     {
         // Add the GP factors based on knot difference
         for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
@@ -93,38 +94,83 @@ public:
                     || traj->getKnotTime(kidx) > tmax) {            
                 continue;
             }
+            if (if_autodiff) {
+                GPMotionPriorTwoKnotsFactorAutodiff *GPMPFactor = new GPMotionPriorTwoKnotsFactorAutodiff(traj->getGPMixerPtr());
+                auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorTwoKnotsFactorAutodiff>(GPMPFactor);
+                cost_function->SetNumResiduals(18);    
 
-            vector<double *> factor_param_blocks;
-            factorMeta.coupled_params.push_back(vector<ParamInfo>());
-            
-            // Add the parameter blocks
-            for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
-            {
-                factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
-                factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
-                factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
-                factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
-                factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
-                factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
+                vector<double *> factor_param_blocks;
+                factorMeta.coupled_params.push_back(vector<ParamInfo>());
+                
+                // Add the parameter blocks
+                for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
+                {
+                    factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
 
-                // Record the param info
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+                    // Record the param info
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+                
+                    cost_function->AddParameterBlock(4);
+                    cost_function->AddParameterBlock(3);
+                    cost_function->AddParameterBlock(3);
+                    cost_function->AddParameterBlock(3);
+                    cost_function->AddParameterBlock(3);
+                    cost_function->AddParameterBlock(3);                  
+                }
+                
+                // Create the factors
+                // double mp_loss_thres = -1;
+                // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+                ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+                // ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
+                auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+                
+                // Record the residual block
+                factorMeta.res.push_back(res_block);
+            } else {
+                vector<double *> factor_param_blocks;
+                factorMeta.coupled_params.push_back(vector<ParamInfo>());
+                
+                // Add the parameter blocks
+                for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
+                {
+                    factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
+                    factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
+
+                    // Record the param info
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
+                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+                }
+                
+                // Create the factors
+                // double mp_loss_thres = -1;
+                // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+                ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+                ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
+                auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+                
+                // Record the residual block
+                factorMeta.res.push_back(res_block);
             }
-            
-            // Create the factors
-            // double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            
-            // Record the residual block
-            factorMeta.res.push_back(res_block);
+
             
             // Record the time stamp of the factor
             factorMeta.stamp.push_back(traj->getKnotTime(kidx+1));
@@ -408,8 +454,8 @@ public:
 
     void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
-        const vector<IMUData> &imuData, 
-        double tmin, double tmax, double w_imu, bool if_autodiff)
+        const vector<IMUData> &imuData, double tmin, double tmax, 
+        double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, bool if_autodiff)
     {
         for (auto &imu : imuData)
         {
@@ -431,7 +477,7 @@ public:
             }
 
             if (if_autodiff) {
-                GPIMUFactorAutodiff *GPIMUFactor = new GPIMUFactorAutodiff(imu.acc, imu.gyro, XBIA, XBIG, w_imu, traj->getGPMixerPtr(), s, traj->getNumKnots());
+                GPIMUFactorAutodiff *GPIMUFactor = new GPIMUFactorAutodiff(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s, traj->getNumKnots());
                 auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPIMUFactorAutodiff>(GPIMUFactor);
                 cost_function->SetNumResiduals(12);                
 
@@ -502,7 +548,7 @@ public:
 
                 double imu_loss_thres = -1.0;
                 ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
-                ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, w_imu, traj->getGPMixerPtr(), s);
+                ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s);
                 auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
 
                 // Record the residual block
@@ -930,7 +976,7 @@ public:
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
-                  bool do_marginalization, double w_tdoa, double w_imu, double tdoa_loss_thres, double mp_loss_thres, bool if_autodiff)
+                  bool do_marginalization, double w_tdoa, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double tdoa_loss_thres, double mp_loss_thres, bool if_autodiff)
     {
         TicToc tt_build;
 
@@ -942,9 +988,13 @@ public:
         // Set up the ceres problem
         options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
         options.num_threads = MAX_THREADS;
-        options.max_num_iterations = 50;
-        options.check_gradients = true;
+        options.max_num_iterations = 100;
+        options.check_gradients = false;
         options.gradient_check_relative_precision = 0.02;
+
+        if (if_autodiff) {
+            options.check_gradients = false;
+        }
 
         // Vector3d XBIG(sfBig.back().back());
         // Vector3d XBIA(sfBia.back().back());        
@@ -955,7 +1005,7 @@ public:
         {
             // Add the parameter blocks for rotation
               AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
-              AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
+            //   AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
               problem.AddParameterBlock(XBIG.data(), 3);
               problem.AddParameterBlock(XBIA.data(), 3);
             // Add the extrinsic params
@@ -1016,7 +1066,7 @@ public:
         FactorMeta factorMetaMp2k;
         double cost_mp2k_init = -1, cost_mp2k_final = -1;
         // for(int tidx = 0; tidx < trajs.size(); tidx++)
-            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax, mp_loss_thres);
+            AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax, mp_loss_thres, if_autodiff);
 
         // Add the TDOA factors
         FactorMeta factorMetaTDOA;
@@ -1025,7 +1075,7 @@ public:
         AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa, tdoa_loss_thres, if_autodiff);
         // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
-        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, w_imu, if_autodiff);
+        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce, if_autodiff);
 
         // Add the extrinsics factors
         // FactorMeta factorMetaGpx;
@@ -1037,10 +1087,10 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        if (margInfo != NULL) {
+        // if (margInfo != NULL && !if_autodiff) {
 
-            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
-        }
+        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        // }
             
 
         tt_build.Toc();
@@ -1063,9 +1113,9 @@ public:
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
-        if (do_marginalization) {
-            Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
-        }
+        // if (do_marginalization && !if_autodiff) {
+        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
+        // }
 
         tt_slv.Toc();
 

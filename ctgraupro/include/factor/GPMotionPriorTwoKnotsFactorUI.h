@@ -47,8 +47,8 @@ public:
         Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getSigNu());
         
         // Find the square root info
-        // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
-        sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
+        sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
+        // sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -76,6 +76,7 @@ public:
 
         // Rotational residual
         Vec3 rRot = Theb - Dt*Xa.O - 0.5*Dtsq*Xa.S;
+        // Vec3 rRot = - 0.5*Dtsq*Xa.S;
 
         // Rotational rate residual
         Vec3 rRdot = Thedotb - Xa.O - Dt*Xa.S;
