@@ -105,6 +105,7 @@ public:
 
     GPState(double t_, const GPState<T> &other)
         : t(t_), R(other.R), O(other.O), S(other.S), P(other.P), V(other.V), A(other.A) {}
+    
     GPState &operator=(const GPState &Xother)
     {
         this->t = Xother.t;

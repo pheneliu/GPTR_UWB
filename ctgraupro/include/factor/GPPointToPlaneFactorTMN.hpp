@@ -1,14 +1,6 @@
-#pragma once
-
 #include <ceres/ceres.h>
-// #include "basalt/spline/ceres_spline_helper.h"
-// #include "basalt/utils/sophus_utils.hpp"
-#include "../utility.h"
 #include "GaussianProcess.hpp"
-
-using namespace Eigen;
-
-// Matrix defined for this factor's jacobian
+#include "utility.h"
 
 class GPPointToPlaneFactorTMN
 {

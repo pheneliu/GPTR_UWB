@@ -36,16 +36,14 @@
 #include <Eigen/Dense>
 #include <ceres/ceres.h>
 
-#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
-
 #include <pcl/registration/ndt.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 #include "utility.h"
 
 #include "PoseLocalParameterization.h"
-// #include "factor/PointToPlaneDisFactor.h"
 
 #ifndef CLOUDMATCHER_HPP
 #define CLOUDMATCHER_HPP

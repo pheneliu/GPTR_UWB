@@ -1,38 +1,8 @@
-/**
- * This file is part of splio.
- *
- * Copyright (C) 2020 Thien-Minh Nguyen <thienminh.nguyen at ntu dot edu dot
- * sg>, School of EEE Nanyang Technological Univertsity, Singapore
- *
- * For more information please see <https://britsknguyen.github.io>.
- * or <https://github.com/brytsknguyen/splio>.
- * If you use this code, please cite the respective publications as
- * listed on the above websites.
- *
- * splio is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * splio is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with splio.  If not, see <http://www.gnu.org/licenses/>.
- */
+#pragma once
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
-#include <iostream> 
-#include <ros/assert.h>
 #include <ceres/ceres.h>
-
-#include "../utility.h"
-#include <basalt/spline/ceres_spline_helper.h>
+#include "GaussianProcess.hpp"
+#include "utility.h"
 
 class GPMotionPriorTwoKnotsFactorAutodiff
 {
@@ -43,6 +13,19 @@ public:
     :   Dt          (gpm_->getDt()   ),
         gpm         (gpm_            )
     {
+        // // 6-element residual: (3x1 rotation, 3x1 position)
+        // set_num_residuals(STATE_DIM); // Angular diff, angular vel, angular acce, pos diff, vel diff, acc diff
+
+        // for(int j = 0; j < 2; j++)
+        // {
+        //     mutable_parameter_block_sizes()->push_back(4);
+        //     mutable_parameter_block_sizes()->push_back(3);
+        //     mutable_parameter_block_sizes()->push_back(3);
+        //     mutable_parameter_block_sizes()->push_back(3);
+        //     mutable_parameter_block_sizes()->push_back(3);
+        //     mutable_parameter_block_sizes()->push_back(3);
+        // }
+
         // Calculate the information matrix
         Matrix<double, STATE_DIM, STATE_DIM> Info;
         Info.setZero();
@@ -121,13 +104,6 @@ public:
 
 private:
 
-    const int Ridx = 0;
-    const int Oidx = 1;
-    const int Sidx = 2;
-    const int Pidx = 3;
-    const int Vidx = 4;
-    const int Aidx = 5;
-
     const int RaIdx = 0;
     const int OaIdx = 1;
     const int SaIdx = 2;
@@ -141,9 +117,6 @@ private:
     const int PbIdx = 9;
     const int VbIdx = 10;
     const int AbIdx = 11;
-
-    double wR;
-    double wP;
 
     // Square root information
     Matrix<double, STATE_DIM, STATE_DIM> sqrtW;

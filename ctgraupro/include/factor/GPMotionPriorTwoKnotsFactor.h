@@ -1,13 +1,8 @@
 #pragma once
 
 #include <ceres/ceres.h>
-#include "basalt/spline/ceres_spline_helper.h"
-#include "basalt/utils/sophus_utils.hpp"
 #include "GaussianProcess.hpp"
 #include "utility.h"
-
-using SO3d = Sophus::SO3<double>;
-using SE3d = Sophus::SE3<double>;
 
 class GPMotionPriorTwoKnotsFactor : public ceres::CostFunction
 {
@@ -17,7 +12,6 @@ public:
     :   Dt          (gpm_->getDt()   ),
         gpm         (gpm_            )
     {
-
         // 6-element residual: (3x1 rotation, 3x1 position)
         set_num_residuals(STATE_DIM); // Angular diff, angular vel, angular acce, pos diff, vel diff, acc diff
 
@@ -150,7 +144,6 @@ public:
                 Dr_DOa.setZero();
                 Dr_DOa.block<3, 3>(0, 0) = -DtI;
                 Dr_DOa.block<3, 3>(3, 0) = -Eye;
-                // Dr_DOa.block<3, 3>(6, 0) =  0;
                 Dr_DOa = sqrtW*Dr_DOa;
             }
 
@@ -184,7 +177,6 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, STATE_DIM, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
                 Dr_DOb.setZero();
-                // Dr_DOb.block<3, 3>(0, 0) = 0;
                 Dr_DOb.block<3, 3>(3, 0) = JrInvTheb;
                 Dr_DOb.block<3, 3>(6, 0) = DTheddotb_DOb;
                 Dr_DOb = sqrtW*Dr_DOb;
@@ -196,8 +188,6 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, STATE_DIM, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
                 Dr_DSb.setZero();
-                // Dr_DSb.block<3, 3>(0, 0) = 0;
-                // Dr_DSb.block<3, 3>(3, 0) = 0;
                 Dr_DSb.block<3, 3>(6, 0) = JrInvTheb;
                 Dr_DSb = sqrtW*Dr_DSb;
             }
@@ -237,8 +227,6 @@ public:
                 Dr_DAa.block<3, 3>(12, 0) = -DtI;
                 Dr_DAa.block<3, 3>(15, 0) = -Eye;
                 Dr_DAa = sqrtW*Dr_DAa;
-
-                // cout << "Dr_DAsa\n" << Dr_DAsa << endl;
             }
         }
 
@@ -251,8 +239,6 @@ public:
                 Dr_DPb.setZero();
                 Dr_DPb.block<3, 3>(9,  0) = Eye;
                 Dr_DPb = sqrtW*Dr_DPb;
-
-                // cout << "Dr_DPsb\n" << Dr_DPsb << endl;
             }
 
             idx = VbIdx;
@@ -262,8 +248,6 @@ public:
                 Dr_DVb.setZero();
                 Dr_DVb.block<3, 3>(12,  0) = Eye;
                 Dr_DVb = sqrtW*Dr_DVb;
-
-                // cout << "Dr_DPsb\n" << Dr_DVsb << endl;
             }
 
             idx = AbIdx;
@@ -273,8 +257,6 @@ public:
                 Dr_DAb.setZero();
                 Dr_DAb.block<3, 3>(15, 0) = Eye;
                 Dr_DAb = sqrtW*Dr_DAb;
-
-                // cout << "Dr_DAsb\n" << Dr_DAsb << endl;
             }
         }
 
@@ -282,13 +264,6 @@ public:
     }
 
 private:
-
-    // const int Ridx = 0;
-    // const int Oidx = 1;
-    // const int Sidx = 2;
-    // const int Pidx = 3;
-    // const int Vidx = 4;
-    // const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;
