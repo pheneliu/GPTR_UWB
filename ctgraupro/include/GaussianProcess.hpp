@@ -200,6 +200,16 @@ public:
         return result;
     }
 
+    void setSigGa(const Mat3 &m)
+    {
+        SigGa = m;
+    }
+
+    void setSigNu(const Mat3 &m)
+    {
+        SigNu = m;
+    }
+
     // Transition Matrix, PHI(tau, 0)
     MatrixXd Fbase(const double dtau, int N) const
     {
@@ -1213,6 +1223,16 @@ public:
             propagateCovariance();
     }
 
+    void setSigNu(const Matrix3d &m)
+    {
+        gpm->setSigNu(m);
+    }
+
+    void setSigGa(const Matrix3d &m)
+    {
+        gpm->setSigGa(m);
+    }
+
     void setKnot(int kidx, const GPState<double> &Xn)
     {
         R[kidx] = Xn.R;
@@ -1283,7 +1303,7 @@ public:
         logfile.precision(std::numeric_limits<double>::digits10 + 1);
 
         logfile << "Dt:" << dt << ";Order:" << 3 << ";Knots:" << getNumKnots() << ";MinTime:" << t0 << ";MaxTime:" << getMaxTime()
-                << ";SigNu:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
+                << ";SigGa:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
                              << getSigGa()(1, 0) << "," << getSigGa()(1, 1) << "," << getSigGa()(1, 2) << ","
                              << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2) << ","
                 << ";SigNu:" << getSigNu()(0, 0) << "," << getSigNu()(0, 1) << "," << getSigNu()(0, 2) << ","
