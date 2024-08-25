@@ -23,12 +23,16 @@
         <param name="fuse_tdoa"  value="1"/>
         <param name="fuse_tof"   value="1"/>
         <param name="fuse_imu"   value="1"/>
+        <param name="auto_diff"  value="0"/>
 
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="1"/> <!-- How many knots to slide -->
         <param name="WINDOW_SIZE" value="8"/> <!-- How many knot length does the sliding window -->
-        <param name="w_tdoa" value="10.0"/> <!-- Coefficients for TDOA residuals -->
-        <param name="w_imu" value="0.5"/> <!-- Coefficients for IMU residuals -->
+        <param name="w_tdoa" value="1.0"/> <!-- Coefficients for TDOA residuals -->
+        <param name="GYR_N" value="2.0"/> <!-- Coefficients for IMU residuals -->
+        <param name="GYR_W" value="1.0"/> <!-- Coefficients for IMU residuals -->
+        <param name="ACC_N" value="1.0"/> <!-- Coefficients for IMU residuals -->
+        <param name="ACC_W" value="1.0"/> <!-- Coefficients for IMU residuals -->
         <param name="tdoa_loss_thres" value="1.0"/> <!-- Loss function for IMU residuals -->
         <param name="mp_loss_thres" value="1.0"/> <!-- Loss function for motion prior residuals -->
 
@@ -36,7 +40,7 @@
 
     <!-- Play the bag file -->
     <node required="false" pkg="rosbag" type="play" name="rosbag_player"
-          args="--clock $(arg bag_file) -r 0.5 -s 0.0"
+          args="--clock $(arg bag_file) -r 1.0 -s 0.0"
           launch-prefix="bash -c 'sleep 1.0; $0 $@' "/>
 
     <!-- Visualize -->

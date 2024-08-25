@@ -43,13 +43,16 @@ public:
     ~GPIMUFactor() {};
 
     // Constructor
-    GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, double w_,
-                         GPMixerPtr gpm_, double s_)
+    GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, 
+                double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_)
     :   acc         (acc_             ),
         gyro        (gyro_            ),
         acc_bias    (acc_bias_        ),
         gyro_bias   (gyro_bias_       ),        
-        w           (w_               ),
+        wGyro       (wGyro_           ),
+        wAcce       (wAcce_           ),
+        wBiasGyro   (wBiasGyro_       ),
+        wBiasAcce   (wBiasAcce_       ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
         gpm         (gpm_             )
@@ -113,11 +116,11 @@ public:
         Eigen::Map<Matrix<double, 12, 1>> residual(residuals);      
         Eigen::Vector3d g(0, 0, 9.81);
 
-        residual.block<3, 1>(0, 0) = w*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
+        residual.block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
         // residual.block<3, 1>(0, 0) = w*((Xt.A + g) - acc + biasA);
-        residual.block<3, 1>(3, 0) = w*(Xt.O - gyro + biasW);
-        residual.block<3, 1>(6, 0) = w*(biasW - gyro_bias);
-        residual.block<3, 1>(9, 0) = w*(biasA - acc_bias);
+        residual.block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
+        residual.block<3, 1>(6, 0) = wBiasGyro*(biasW - gyro_bias);
+        residual.block<3, 1>(9, 0) = wBiasAcce*(biasA - acc_bias);
 
         if (!jacobians)
             return true;
@@ -142,8 +145,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
             Dr_DRa.setZero();
-            Dr_DRa.block<3, 3>(0, 0) = 2*w*Dr_DRt*DXt_DXa[Ridx][Ridx];
-            Dr_DRa.block<3, 3>(3, 0) = 2*w*Dr_DOt*DXt_DXa[Oidx][Ridx];
+            Dr_DRa.block<3, 3>(0, 0) = 2*wAcce*Dr_DRt*DXt_DXa[Ridx][Ridx];
+            Dr_DRa.block<3, 3>(3, 0) = 2*wGyro*Dr_DOt*DXt_DXa[Oidx][Ridx];
         }
 
         // Jacobian on Oa
@@ -152,8 +155,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOa(jacobians[idx]);
             Dr_DOa.setZero();
-            Dr_DOa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Oidx];
-            Dr_DOa.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXa[Oidx][Oidx];
+            Dr_DOa.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXa[Ridx][Oidx];
+            Dr_DOa.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXa[Oidx][Oidx];
         }
 
         // Jacobian on Sa
@@ -162,8 +165,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSa(jacobians[idx]);
             Dr_DSa.setZero();
-            Dr_DSa.block<3, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Sidx];
-            Dr_DSa.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXa[Oidx][Sidx];
+            Dr_DSa.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXa[Ridx][Sidx];
+            Dr_DSa.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXa[Oidx][Sidx];
         }
 
         // Jacobian on Pa
@@ -172,7 +175,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPa(jacobians[idx]);
             Dr_DPa.setZero();
-            Dr_DPa.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXa[Aidx][Pidx];
+            Dr_DPa.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXa[Aidx][Pidx];
         }
 
         // Jacobian on Va
@@ -181,7 +184,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVa(jacobians[idx]);
             Dr_DVa.setZero();
-            Dr_DVa.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXa[Aidx][Vidx];
+            Dr_DVa.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXa[Aidx][Vidx];
         }
 
         // Jacobian on Aa
@@ -190,7 +193,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAa(jacobians[idx]);
             Dr_DAa.setZero();
-            Dr_DAa.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXa[Aidx][Aidx];
+            Dr_DAa.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXa[Aidx][Aidx];
         }
 
         // Jacobian on Rb
@@ -199,8 +202,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
             Dr_DRb.setZero();
-            Dr_DRb.block<3, 3>(0, 0) = 2*w*Dr_DRt*DXt_DXb[Ridx][Ridx];
-            Dr_DRb.block<3, 3>(3, 0) = 2*w*Dr_DOt*DXt_DXb[Oidx][Ridx];
+            Dr_DRb.block<3, 3>(0, 0) = 2*wAcce*Dr_DRt*DXt_DXb[Ridx][Ridx];
+            Dr_DRb.block<3, 3>(3, 0) = 2*wGyro*Dr_DOt*DXt_DXb[Oidx][Ridx];
         }
 
         // Jacobian on Ob
@@ -209,8 +212,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
             Dr_DOb.setZero();
-            Dr_DOb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Oidx];
-            Dr_DOb.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXb[Oidx][Oidx];
+            Dr_DOb.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXb[Ridx][Oidx];
+            Dr_DOb.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXb[Oidx][Oidx];
         }
 
         // Jacobian on Sb
@@ -219,8 +222,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
             Dr_DSb.setZero();
-            Dr_DSb.block<3, 3>(0, 0) =  w*Dr_DRt*DXt_DXb[Ridx][Sidx];
-            Dr_DSb.block<3, 3>(3, 0) = w*Dr_DOt*DXt_DXb[Oidx][Sidx];
+            Dr_DSb.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXb[Ridx][Sidx];
+            Dr_DSb.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXb[Oidx][Sidx];
         }
 
         // Jacobian on Pb
@@ -229,7 +232,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DPb(jacobians[idx]);
             Dr_DPb.setZero();
-            Dr_DPb.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXb[Aidx][Pidx];
+            Dr_DPb.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXb[Aidx][Pidx];
         }
 
         // Jacobian on Vb
@@ -238,7 +241,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DVb(jacobians[idx]);
             Dr_DVb.setZero();
-            Dr_DVb.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXb[Aidx][Vidx];
+            Dr_DVb.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXb[Aidx][Vidx];
         }
 
         // Jacobian on Ab
@@ -247,7 +250,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DAb(jacobians[idx]);
             Dr_DAb.setZero();
-            Dr_DAb.block<3, 3>(0, 0) = w*Dr_DAt*DXt_DXb[Aidx][Aidx];
+            Dr_DAb.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXb[Aidx][Aidx];
         }
 
         idx = 12;
@@ -255,8 +258,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DBg(jacobians[idx]);
             Dr_DBg.setZero();
-            Dr_DBg.block<3, 3>(3, 0) = w*Matrix3d::Identity();
-            Dr_DBg.block<3, 3>(6, 0) = w*Matrix3d::Identity();
+            Dr_DBg.block<3, 3>(3, 0) = wGyro*Matrix3d::Identity();
+            Dr_DBg.block<3, 3>(6, 0) = wBiasGyro*Matrix3d::Identity();
         }        
 
         idx = 13;
@@ -264,8 +267,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_DBa(jacobians[idx]);
             Dr_DBa.setZero();
-            Dr_DBa.block<3, 3>(0, 0) = w*Matrix3d::Identity();
-            Dr_DBa.block<3, 3>(9, 0) = w*Matrix3d::Identity();
+            Dr_DBa.block<3, 3>(0, 0) = wAcce*Matrix3d::Identity();
+            Dr_DBa.block<3, 3>(9, 0) = wBiasAcce*Matrix3d::Identity();
         }        
         return true;
     }
@@ -279,7 +282,10 @@ private:
     Vector3d gyro_bias;    
 
     // Weight
-    double w = 10;
+    double wGyro;
+    double wAcce;
+    double wBiasGyro;
+    double wBiasAcce;
 
     // Gaussian process params
     
