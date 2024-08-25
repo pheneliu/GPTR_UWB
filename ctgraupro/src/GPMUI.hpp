@@ -1108,10 +1108,10 @@ public:
         // Add the prior factor
         FactorMeta factorMetaPrior;
         double cost_prior_init = -1; double cost_prior_final = -1;
-        // if (margInfo != NULL && !if_autodiff) {
+        if (margInfo != NULL && !if_autodiff) {
 
-        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
-        // }
+            AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
+        }
             
 
         tt_build.Toc();
@@ -1134,9 +1134,9 @@ public:
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
-        // if (do_marginalization && !if_autodiff) {
-        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaIMU, factorMetaPrior);
-        // }
+        if (do_marginalization && !if_autodiff) {
+            Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaIMU, factorMetaPrior);
+        }
 
         tt_slv.Toc();
 
