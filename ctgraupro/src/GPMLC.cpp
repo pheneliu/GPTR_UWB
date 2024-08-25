@@ -197,11 +197,8 @@ void GPMLC::AddGPExtrinsicFactors(
     GPMixerPtr gpmx = trajx->getGPMixerPtr();
     GPMixerPtr gpmy = trajy->getGPMixerPtr();
 
-    int Nseg = 1;
-    nh->getParam("Nseg", Nseg);
-
-    double t_shift;
-    nh->getParam("t_shift", t_shift);
+    int XTRZ_DENSITY = 1;
+    nh->getParam("XTRZ_DENSITY", XTRZ_DENSITY);
 
     for (int kidx = 0; kidx < trajx->getNumKnots() - 2; kidx++)
     {
@@ -217,10 +214,10 @@ void GPMLC::AddGPExtrinsicFactors(
             continue;
         }
 
-        for(int i = 0; i < Nseg; i++)
+        for(int i = 0; i < XTRZ_DENSITY; i++)
         {
             // Get the knot time
-            double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + t_shift;
+            double t = trajx->getKnotTime(kidx) + trajx->getDt()/(XTRZ_DENSITY+1)*(i+1);
 
             // Skip if time is outside the range of the other trajectory
             if (!trajy->TimeInInterval(t))
@@ -869,7 +866,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 }
 
 // Prototype
-void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
+void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
                      double tmin, double tmax, double tmid,
                      const vector<deque<vector<LidarCoef>>> &cloudCoef,
                      bool do_marginalization,
@@ -1019,17 +1016,17 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     debug_check++;
 
     static int optnum = -1;
-    if(optnum == -1 || do_marginalization)
+    // if(optnum == -1 || do_marginalization)
         optnum++;
 
     printf(KGRN
-           "GPX Opt #%4d / %2d: Iter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d. Debug: %d / %d\n"
+           "GPX Opt #%4d.%2d.%2d: CeresIter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d. Debug: %d / %d\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
-           optnum, iter,
+           optnum, inner_iter, outer_iter,
            summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_kidxmin, fix_kidxmax, debug_check, max_debug,
            factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,

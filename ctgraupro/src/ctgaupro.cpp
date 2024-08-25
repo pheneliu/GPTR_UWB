@@ -86,7 +86,8 @@ int sw_shift = 5;
 ikdtreePtr ikdtPM;
 
 // Number of poses per knot in the extrinsic optimization
-int SW_CLOUDNUM = 2;
+int SW_CLOUDNUM = 20;
+int SW_CLOUDSTEP = 2;
 double t_shift = 0.0;
 int max_outer_iter = 3;
 int max_inner_iter = 2;
@@ -118,11 +119,12 @@ typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::P
     return cloudout;
 }
 
-void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
+void getInitPose(int lidx,
+                 const vector<vector<CloudXYZITPtr>> &clouds,
                  const vector<vector<ros::Time>> &cloudstamp,
                  CloudXYZIPtr &priormap,
-                 vector<double> timestart,
-                 vector<double> xyzypr_W_L0,
+                 vector<double> &timestart,
+                 const vector<double> &xyzypr_W_L0,
                  vector<CloudXYZIPtr> &pc0,
                  vector<myTf<double>> &tf_W_Li0)
 {
@@ -135,9 +137,9 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     ROS_ASSERT(pc0.size() == Nlidar);
     ROS_ASSERT(tf_W_Li0.size() == Nlidar);
 
-    // Find the init pose of each lidar
-    for (int lidx = 0; lidx < Nlidar; lidx++)
-    {
+    // // Find the init pose of each lidar
+    // for (int lidx = 0; lidx < Nlidar; lidx++)
+    // {
         // Merge the pointclouds in the first few seconds
         pc0[lidx] = CloudXYZIPtr(new CloudXYZI());
         int Ncloud = cloudstamp[lidx].size();
@@ -197,7 +199,9 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
 
         // Save the result to external buffer
         tf_W_Li0[lidx] = ioaSum.final_tf;
-    }
+    // }
+
+    return;
 }
 
 void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
@@ -324,6 +328,7 @@ int main(int argc, char **argv)
 
     // Find the settings for cross trajectory optimmization
     nh_ptr->getParam("SW_CLOUDNUM", SW_CLOUDNUM);
+    nh_ptr->getParam("SW_CLOUDSTEP", SW_CLOUDSTEP);
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
@@ -363,24 +368,24 @@ int main(int argc, char **argv)
     }
 
     T_B_Li_gndtr.resize(Nlidar);
-    vector<double> xtrns_gndtr(Nlidar*6, 0.0);
-    if( nh_ptr->getParam("xtrns_gndtr", xtrns_gndtr) )
+    vector<double> xtrz_gndtr(Nlidar*6, 0.0);
+    if( nh_ptr->getParam("xtrz_gndtr", xtrz_gndtr) )
     {
-        if (xtrns_gndtr.size() < Nlidar*6)
+        if (xtrz_gndtr.size() < Nlidar*6)
         {
-            printf(KYEL "xtrns_gndtr missing values. Setting all to zeros \n" RESET);
-            xtrns_gndtr = vector<double>(Nlidar*6, 0.0);
+            printf(KYEL "xtrz_gndtr missing values. Setting all to zeros \n" RESET);
+            xtrz_gndtr = vector<double>(Nlidar*6, 0.0);
         }
         else
         {
-            printf("xtrns_gndtr found: \n");
+            printf("xtrz_gndtr found: \n");
             for(int i = 0; i < Nlidar; i++)
             {
-                T_B_Li_gndtr[i] = myTf(Util::YPR2Quat(xtrns_gndtr[i*6 + 3], xtrns_gndtr[i*6 + 4], xtrns_gndtr[i*6 + 5]),
-                                             Vector3d(xtrns_gndtr[i*6 + 0], xtrns_gndtr[i*6 + 1], xtrns_gndtr[i*6 + 2]));
+                T_B_Li_gndtr[i] = myTf(Util::YPR2Quat(xtrz_gndtr[i*6 + 3], xtrz_gndtr[i*6 + 4], xtrz_gndtr[i*6 + 5]),
+                                             Vector3d(xtrz_gndtr[i*6 + 0], xtrz_gndtr[i*6 + 1], xtrz_gndtr[i*6 + 2]));
 
                 for(int j = 0; j < 6; j++)
-                    printf("%f, ", xtrns_gndtr[i*6 + j]);
+                    printf("%f, ", xtrz_gndtr[i*6 + j]);
                 cout << endl;
             }
         }
@@ -587,8 +592,19 @@ int main(int argc, char **argv)
 
     // Initialize the pose
     vector<double> timestart(Nlidar);
-    getInitPose(clouds, cloudstamp, priormap, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
+    vector<thread> poseInitThread(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        poseInitThread[lidx] = thread(getInitPose, lidx, std::ref(clouds),
+                                      std::ref(cloudstamp),
+                                      std::ref(priormap),
+                                      std::ref(timestart),
+                                      std::ref(xyzypr_W_L0),
+                                      std::ref(pc0),
+                                      std::ref(tf_W_Li0));
 
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        poseInitThread[lidx].join();
+        
     // Split the pointcloud by time.
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
     for(int lidx = 1; lidx < Nlidar; lidx++)
@@ -611,15 +627,15 @@ int main(int argc, char **argv)
     // Do optimization with inter-trajectory factors
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
-        int SW_CLOUDNUM_HALF = int(SW_CLOUDNUM/2);
-        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDNUM_HALF; cidx+= int(SW_CLOUDNUM_HALF))
+        int SW_CLOUDSTEP = 1;
+        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
         {
             if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
                 continue;
 
             int SW_BEG = cidx;
             int SW_END = min(cidx + SW_CLOUDNUM, int(cloudsx[0].size())-1);
-            int SW_MID = min(cidx + SW_CLOUDNUM_HALF, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + SW_CLOUDSTEP, int(cloudsx[0].size())-1);
 
             // The effective length of the sliding window by the number of point clouds
             int SW_CLOUDNUM_EFF = SW_END - SW_BEG;
@@ -684,7 +700,7 @@ int main(int argc, char **argv)
                 }
 
                 // Optimize
-                gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
+                gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
 
                 if (inner_iter == max_inner_iter - 1)
                 {
@@ -713,9 +729,9 @@ int main(int argc, char **argv)
                     static vector<nav_msgs::Odometry> odomMsg(2);
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
-                        double ts = trajs[lidx]->getMaxTime() - trajs[lidx]->getDt()/2;
-                        SE3d pose = trajs[lidx]->pose(ts);
-                        odomMsg[lidx].header.stamp = ros::Time(ts);
+                        double ts = tmax - trajs[lidx]->getDt()/2;
+                        SE3d pose = trajs[lidx]->pose(tmax);
+                        odomMsg[lidx].header.stamp = ros::Time(tmax);
                         odomMsg[lidx].header.frame_id = "world";
                         odomMsg[lidx].child_frame_id = myprintf("lidar_%d_body", lidx);
                         odomMsg[lidx].pose.pose.position.x = pose.translation().x();
@@ -762,41 +778,40 @@ int main(int argc, char **argv)
 
         // Reset the marginalization factor
         gpmlc->Reset();
+
+        // Log the result
+
+        // Create directories if they do not exist
+        string output_dir = log_dir + myprintf("/run_%02d/", outer_iter);
+        std::filesystem::create_directories(output_dir);
+
+        // Save the trajectory and estimation result
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+        {
+            // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
+            printf("Exporting trajectory logs to %s.\n", output_dir.c_str());
+            gpmaplo[lidx]->GetTraj()->saveTrajectory(output_dir, lidx, gndtr_ts[lidx]);
+        }
+
+        // Log the extrinsics
+        string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
+        std::ofstream xts_logfile;
+        xts_logfile.open(xts_log); // Open the file for writing
+        xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
+        xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
+        for(auto &pose : extrinsic_poses[1])
+        {
+            xts_logfile << pose.header.stamp.toSec() << ","
+                        << pose.pose.position.x << ","
+                        << pose.pose.position.y << ","
+                        << pose.pose.position.z << ","
+                        << pose.pose.orientation.x << ","
+                        << pose.pose.orientation.y << ","
+                        << pose.pose.orientation.z << ","
+                        << pose.pose.orientation.w << "," << endl;
+        }
+        xts_logfile.close();
     }
-
-/* #region Save the result --------------------------------------------------------------------------------------*/
-
-    // Create directories if they do not exist
-    std::filesystem::create_directories(log_dir);
-
-    // Save the trajectory and estimation result
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
-        printf("Exporting trajectory logs to %s.\n", log_dir.c_str());
-        gpmaplo[lidx]->GetTraj()->saveTrajectory(log_dir, lidx, gndtr_ts[lidx]);
-    }
-
-    // Log the extrinsics
-    string xts_log = log_dir + "/extrinsics_" + std::to_string(1) + ".csv";
-    std::ofstream xts_logfile;
-    xts_logfile.open(xts_log); // Open the file for writing
-    xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
-    xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
-    for(auto &pose : extrinsic_poses[1])
-    {
-        xts_logfile << pose.header.stamp.toSec() << ","
-                    << pose.pose.position.x << ","
-                    << pose.pose.position.y << ","
-                    << pose.pose.position.z << ","
-                    << pose.pose.orientation.x << ","
-                    << pose.pose.orientation.y << ","
-                    << pose.pose.orientation.z << ","
-                    << pose.pose.orientation.w << "," << endl;
-    }
-    xts_logfile.close();
-
-/* #endregion Save the result -----------------------------------------------------------------------------------*/
 
 /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
 

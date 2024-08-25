@@ -456,11 +456,12 @@ public:
         map<double*, ParamInfo> &paramInfo,
         FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior);
 
-    void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
-                  double tmin, double tmax, double tmid,
-                  const vector<deque<vector<LidarCoef>>> &cloudCoef,
-                  bool do_marginalization,
-                  myTf<double> &T_B_Li_gndtr);
+    void Evaluate(
+        int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
+        double tmin, double tmax, double tmid,
+        const vector<deque<vector<LidarCoef>>> &cloudCoef,
+        bool do_marginalization,
+        myTf<double> &T_B_Li_gndtr);
 
     SE3d GetExtrinsics();
 
