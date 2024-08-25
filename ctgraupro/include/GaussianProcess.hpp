@@ -1282,13 +1282,13 @@ public:
         logfile.open(log_); // Open the file for writing
         logfile.precision(std::numeric_limits<double>::digits10 + 1);
 
-        logfile << "Dt: " << dt << "; Order: " << 3 << "; Knots: " << getNumKnots() << "; MinTime: " << t0 << "; MaxTime: " << getMaxTime()
-                << "; SigNu: " << getSigGa()(0, 0) << " " << getSigGa()(0, 1) << " " << getSigGa()(0, 2) << " "
-                               << getSigGa()(1, 0) << " " << getSigGa()(1, 1) << " " << getSigGa()(1, 2) << " "
-                               << getSigGa()(2, 0) << " " << getSigGa()(2, 1) << " " << getSigGa()(2, 2) << " "
-                << "; SigNu: " << getSigNu()(0, 0) << " " << getSigNu()(0, 1) << " " << getSigNu()(0, 2) << " "
-                               << getSigNu()(1, 0) << " " << getSigNu()(1, 1) << " " << getSigNu()(1, 2) << " "
-                               << getSigNu()(2, 0) << " " << getSigNu()(2, 1) << " " << getSigNu()(2, 2) << " "   
+        logfile << "Dt:" << dt << ";Order:" << 3 << ";Knots:" << getNumKnots() << ";MinTime:" << t0 << ";MaxTime:" << getMaxTime()
+                << ";SigNu:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
+                             << getSigGa()(1, 0) << "," << getSigGa()(1, 1) << "," << getSigGa()(1, 2) << ","
+                             << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2) << ","
+                << ";SigNu:" << getSigNu()(0, 0) << "," << getSigNu()(0, 1) << "," << getSigNu()(0, 2) << ","
+                             << getSigNu()(1, 0) << "," << getSigNu()(1, 1) << "," << getSigNu()(1, 2) << ","
+                             << getSigNu()(2, 0) << "," << getSigNu()(2, 1) << "," << getSigNu()(2, 2)
                 << endl;
 
         for(int kidx = 0; kidx < getNumKnots(); kidx++)
