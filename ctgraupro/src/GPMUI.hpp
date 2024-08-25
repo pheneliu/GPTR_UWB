@@ -60,15 +60,15 @@ public:
             paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
             paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
             
-            if (kidx == kidxmin && true) // kidx == kidxmin && fix_kidxmin
-            {
-                problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-                problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
-            }
+            // if (kidx == kidxmin && true) // kidx == kidxmin && fix_kidxmin
+            // {
+            //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
+            //     problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
+            // }
 
             // if (kidx == kidxmax && fix_kidxmax)
             // {
@@ -87,11 +87,15 @@ public:
             map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
             double tmin, double tmax, double mp_loss_thres, bool if_autodiff)
     {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;      
         // Add the GP factors based on knot difference
         for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
         {
-            if (traj->getKnotTime(kidx + 1) < tmin 
-                    || traj->getKnotTime(kidx) > tmax) {            
+            if (kidx < kidxmin || kidx+1 > kidxmax) {        
                 continue;
             }
             if (if_autodiff) {
@@ -187,8 +191,8 @@ public:
         {
             ParamInfo &param = margInfo->keptParamInfo[idx];
             bool state_found = (paramInfoMap.find(param.address) != paramInfoMap.end());
-            printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
-                    param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
+            // printf("param 0x%8x of tidx %2d kidx %4d of sidx %4d is %sfound in paramInfoMap\n",
+                    // param.address, param.tidx, param.kidx, param.sidx, state_found ? "" : "NOT ");
             
             if (!state_found)
             {
@@ -352,6 +356,12 @@ public:
         const vector<TDOAData> &tdoaData, std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag,
         double tmin, double tmax, double w_tdoa, double tdoa_loss_thres, bool if_autodiff)
     {
+
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;        
         for (auto &tdoa : tdoaData)
         {
             if (!traj->TimeInInterval(tdoa.t, 1e-6)) {
@@ -367,7 +377,8 @@ public:
             int    u  = us.first;
             double s  = us.second;
 
-            if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+            // if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+            if (u < kidxmin || u+1 > kidxmax) {
                 std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax tdoa.t: "
                           << tdoa.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
                           << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
@@ -457,10 +468,15 @@ public:
         const vector<IMUData> &imuData, double tmin, double tmax, 
         double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, bool if_autodiff)
     {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;  
         for (auto &imu : imuData)
         {
             if (!traj->TimeInInterval(imu.t, 1e-6)) {
-                std::cout << "warn: !traj->TimeInInterval(imu.t, 1e-6)" << std::endl;
+                // std::cout << "warn: !traj->TimeInInterval(imu.t, 1e-6)" << std::endl;
                 continue;
             }
             
@@ -468,7 +484,7 @@ public:
             int    u  = us.first;
             double s  = us.second;
 
-            if (traj->getKnotTime(u) < tmin || traj->getKnotTime(u+1) > tmax) {
+            if (u < kidxmin || u+1 > kidxmax) {
                 std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax imu.t: "
                           << imu.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
                           << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
@@ -566,7 +582,8 @@ public:
     void Marginalize(ceres::Problem &problem, GaussianProcessPtr &traj,
                             double tmin, double tmax, double tmid,
                             map<double*, ParamInfo> &paramInfoMap,
-                            FactorMeta &factorMetaMp2k, FactorMeta &factorMetaTDOA, FactorMeta &factorMetaPrior)
+                            FactorMeta &factorMetaMp2k, FactorMeta &factorMetaTDOA, 
+                            FactorMeta &factorMetaIMU, FactorMeta &factorMetaPrior)
     {
         // Deskew, Transform and Associate
         auto FindRemovedFactors = [&tmid](FactorMeta &factorMeta, FactorMeta &factorMetaRemoved, FactorMeta &factorMetaRetained) -> void
@@ -614,9 +631,9 @@ public:
         printf("factorMetaTDOA: %d. Removed: %d\n", factorMetaTDOA.size(), factorMetaTDOARemoved.size());
 
         // Find the extrinsic factors that will be removed
-        // FactorMeta factorMetaGpxRemoved, factorMetaGpxRetained;
-        // FindRemovedFactors(factorMetaGpx, factorMetaGpxRemoved, factorMetaGpxRetained);
-        // printf("factorMetaGpx: %d. Removed: %d\n", factorMetaGpx.size(), factorMetaGpxRemoved.size());
+        FactorMeta factorMetaIMURemoved, factorMetaIMURetained;
+        FindRemovedFactors(factorMetaIMU, factorMetaIMURemoved, factorMetaIMURetained);
+        printf("factorMetaIMU: %d. Removed: %d\n", factorMetaIMU.size(), factorMetaIMURemoved.size());
 
         FactorMeta factorMetaPriorRemoved, factorMetaPriorRetained;
         FindRemovedFactors(factorMetaPrior, factorMetaPriorRemoved, factorMetaPriorRetained);
@@ -632,7 +649,7 @@ public:
         }
         
         // factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
-        printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
+        // printf("Factor retained: %d. Factor removed %d.\n", factorMetaRetained.size(), factorMetaRemoved.size());
 
         // Find the set of params belonging to removed factors
         map<double*, ParamInfo> removed_params;
@@ -830,7 +847,7 @@ public:
 
             for (int c = 0; c < param.delta_size; c++)
             {
-                printf("%d. %d. %d. %d. %d\n", Jtarg.cols(), Jsrc.cols(), BASE_TARGET, XBASE, c);
+                // printf("%d. %d. %d. %d. %d\n", Jtarg.cols(), Jsrc.cols(), BASE_TARGET, XBASE, c);
 
                 // Copy the column from source to target
                 Jtarg.col(BASE_TARGET + c) << Jsrc.col(XBASE + c);
@@ -891,13 +908,13 @@ public:
         MatrixXd Jkeep; VectorXd rkeep;
         margInfo->HbToJr(Hkeep, bkeep, Jkeep, rkeep);
 
-        printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
-               "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
-               "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
-                Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
-                Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
-                Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
-                0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
+        // printf("Jacobian %d x %d. Jmkx: %d x %d. Params: %d.\n"
+        //        "Jkeep: %d x %d. rkeep: %d x %d. Keep size: %d.\n"
+        //        "Hkeepmax: %f. bkeepmap: %f. rkeep^2: %f. mcost: %f. Ratio: %f\n",
+        //         Jacobian.rows(), Jacobian.cols(), Jmk.rows(), Jmk.cols(), tk2p.size(),
+        //         Jkeep.rows(), Jkeep.cols(), rkeep.rows(), rkeep.cols(), KEPT_SIZE,
+        //         Hkeep.cwiseAbs().maxCoeff(), bkeep.cwiseAbs().maxCoeff(),
+        //         0.5*pow(rkeep.norm(), 2), marg_cost, marg_cost/(0.5*pow(rkeep.norm(), 2)));
 
         // // Show the marginalization matrices
         // cout << "Jkeep\n" << Hkeep << endl;
@@ -978,7 +995,9 @@ public:
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
                   bool do_marginalization, double w_tdoa, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double tdoa_loss_thres, double mp_loss_thres, bool if_autodiff)
     {
+        static int cnt = 0;
         TicToc tt_build;
+        cnt++;
 
         // Ceres problem
         ceres::Problem problem;
@@ -990,6 +1009,7 @@ public:
         options.num_threads = MAX_THREADS;
         options.max_num_iterations = 100;
         options.check_gradients = false;
+        
         options.gradient_check_relative_precision = 0.02;
 
         if (if_autodiff) {
@@ -1075,6 +1095,7 @@ public:
         AddTDOAFactors(problem, traj, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, P_I_tag, tmin, tmax, w_tdoa, tdoa_loss_thres, if_autodiff);
         // AddTDOAFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaTDOA, tdoaData, pos_anchors, tmin, tmax, w_tdoa);
         FactorMeta factorMetaIMU;
+        double cost_imu_init = -1; double cost_imu_final = -1;
         AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce, if_autodiff);
 
         // Add the extrinsics factors
@@ -1100,7 +1121,7 @@ public:
         // Find the initial cost
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_init, problem);
-        // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
+        Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_init,   problem);
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
         ceres::Solve(options, &problem, &summary);
@@ -1109,12 +1130,12 @@ public:
 
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
         Util::ComputeCeresCost(factorMetaTDOA.res, cost_tdoa_final, problem);
-        // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
+        Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_final,   problem);
         Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
         // if (do_marginalization && !if_autodiff) {
-        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaPrior);
+        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaTDOA, factorMetaIMU, factorMetaPrior);
         // }
 
         tt_slv.Toc();

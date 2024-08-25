@@ -47,8 +47,8 @@ public:
         Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getSigNu());
         
         // Find the square root info
-        sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
-        // sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
+        // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
+        sqrtW = Eigen::LLT<Matrix<double, STATE_DIM, STATE_DIM>>(Info.inverse()).matrixL().transpose();
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -140,7 +140,7 @@ public:
                 Dr_DRa.block<3, 3>(0, 0) = DTheb_DRa;
                 Dr_DRa.block<3, 3>(3, 0) = DThedotb_DRa;
                 Dr_DRa.block<3, 3>(6, 0) = DTheddotb_DRa;
-                Dr_DRa = 2*sqrtW*Dr_DRa;
+                Dr_DRa = sqrtW*Dr_DRa;
             }
 
             // dr_dOa
@@ -176,7 +176,7 @@ public:
                 Dr_DRb.block<3, 3>(0, 0) = DTheb_DRb;
                 Dr_DRb.block<3, 3>(3, 0) = DThedotb_DRb;
                 Dr_DRb.block<3, 3>(6, 0) = DTheddotb_DRb;
-                Dr_DRb = 2*sqrtW*Dr_DRb;
+                Dr_DRb = sqrtW*Dr_DRb;
             }
 
             // dr_dOb

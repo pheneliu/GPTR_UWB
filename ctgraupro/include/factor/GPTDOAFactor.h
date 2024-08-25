@@ -132,7 +132,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 1, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
             Dr_DRa.setZero();
-            Dr_DRa.block<1, 3>(0, 0) = 2*w*Dr_DRt*DXt_DXa[Ridx][Ridx];
+            Dr_DRa.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXa[Ridx][Ridx];
         }
 
         // Jacobian on Oa
@@ -186,7 +186,7 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 1, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
             Dr_DRb.setZero();
-            Dr_DRb.block<1, 3>(0, 0) = 2*w*Dr_DRt*DXt_DXb[Ridx][Ridx];
+            Dr_DRb.block<1, 3>(0, 0) = w*Dr_DRt*DXt_DXb[Ridx][Ridx];
         }
 
         // Jacobian on Ob

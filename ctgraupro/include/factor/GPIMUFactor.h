@@ -145,8 +145,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
             Dr_DRa.setZero();
-            Dr_DRa.block<3, 3>(0, 0) = 2*wAcce*Dr_DRt*DXt_DXa[Ridx][Ridx];
-            Dr_DRa.block<3, 3>(3, 0) = 2*wGyro*Dr_DOt*DXt_DXa[Oidx][Ridx];
+            Dr_DRa.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXa[Ridx][Ridx];
+            Dr_DRa.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXa[Oidx][Ridx];
         }
 
         // Jacobian on Oa
@@ -202,8 +202,8 @@ public:
         {
             Eigen::Map<Eigen::Matrix<double, 12, 4, Eigen::RowMajor>> Dr_DRb(jacobians[idx]);
             Dr_DRb.setZero();
-            Dr_DRb.block<3, 3>(0, 0) = 2*wAcce*Dr_DRt*DXt_DXb[Ridx][Ridx];
-            Dr_DRb.block<3, 3>(3, 0) = 2*wGyro*Dr_DOt*DXt_DXb[Oidx][Ridx];
+            Dr_DRb.block<3, 3>(0, 0) = wAcce*Dr_DRt*DXt_DXb[Ridx][Ridx];
+            Dr_DRb.block<3, 3>(3, 0) = wGyro*Dr_DOt*DXt_DXb[Oidx][Ridx];
         }
 
         // Jacobian on Ob
