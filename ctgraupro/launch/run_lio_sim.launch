@@ -7,20 +7,23 @@
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
 
+        <!-- Location of the prior map -->
         <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/priormap.pcd" />
 
-        <!-- <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/cloud_avia_mid_no_offset.bag" /> -->
+        <!-- Location of bag file -->
         <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/cloud_avia_mid.bag" />
         
-        <param name="MAX_CLOUDS"     value="300"/>
-        <param name="SKIPPED_TIME"   value="4.9"/>  <!-- Time to skip MAP Opt-->
+        <!-- Total number of clouds loaded -->
+        <param name="MAX_CLOUDS"     value="300" />
+         <!-- Time since first pointcloud to skip MAP Opt-->
+        <param name="SKIPPED_TIME"   value="4.9"/>
         
         <param name="lidar_topic"    value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
         <param name="lidar_type"     value="['livox', 'livox']" type="yaml" />
         <param name="xyzypr_W_L0"    value="[ 0, 0, 0.7,  045, 45, 0,
                                               0, 0, 0.5, -135, 00, 0 ]" type="yaml"/>
         <!-- Groundtruth for evaluation-->
-        <param name="xtrns_gndtr"    value="[ 0, 0, 0, 0, 0, 0,
+        <param name="xtrz_gndtr"     value="[ 0, 0, 0, 0, 0, 0,
                                              -0.1767767, 0, -0.53033009, 180, 45, 0 ]" type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
@@ -52,12 +55,12 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="CLOUDS_XW"      value="20"     />
-        <param name="Nsample"        value="1000"   />
-        <param name="t_shift"        value="0.02"   />
+        <param name="SW_CLOUDNUM"    value="8"      />
+        <param name="SW_CLOUDSTEP"   value="2"      />
+        <param name="max_lidarcoefs" value="1000"   />
+        <param name="XTRZ_DENSITY"   value="4"      />
         <param name="max_outer_iter" value="3"      />
         <param name="max_inner_iter" value="2"      />
-        <param name="max_debug"      value="-1"     />
         <param name="fix_kidxmin"    value="0"      />
         <param name="fix_kidxmax"    value="0"      />
 

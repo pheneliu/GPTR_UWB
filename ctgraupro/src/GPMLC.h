@@ -32,7 +32,7 @@ class ParamInfo
 public:
     double* address = NULL; // Actual address of the param block
     ParamType type;         // Type of the param block (SO3 or RV3)
-    ParamRole role;         // What this param is used for state or role
+    ParamRole role;         // What this param is used for state or extrinsics
     // int param_size;         // Size of the param block
     int pidx;               // Index of the parameter in the problem
     int tidx;               // Index of the trajectory
@@ -456,11 +456,12 @@ public:
         map<double*, ParamInfo> &paramInfo,
         FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior);
 
-    void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
-                  double tmin, double tmax, double tmid,
-                  const vector<deque<vector<LidarCoef>>> &cloudCoef,
-                  bool do_marginalization,
-                  myTf<double> &T_B_Li_gndtr);
+    void Evaluate(
+        int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
+        double tmin, double tmax, double tmid,
+        const vector<deque<vector<LidarCoef>>> &cloudCoef,
+        bool do_marginalization,
+        myTf<double> &T_B_Li_gndtr);
 
     SE3d GetExtrinsics();
 

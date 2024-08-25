@@ -5,9 +5,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Lidar01/GPCtrlPoints1
+        - /Lidar01
         - /Lidar01/Odom01/Shape1
-        - /Lidar11/PosePrior11
+        - /Lidar11
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
       Splitter Ratio: 0.6441176533699036
@@ -333,8 +333,8 @@ Visualization Manager:
           Queue Size: 0
           Shape:
             Alpha: 1
-            Axes Length: 3
-            Axes Radius: 0.30000001192092896
+            Axes Length: 5
+            Axes Radius: 0.20000000298023224
             Color: 255; 25; 0
             Head Length: 0.30000001192092896
             Head Radius: 0.10000000149011612
@@ -525,7 +525,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 0; 255; 32
+          Color: 252; 175; 62
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -537,7 +537,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.05000000074505806
+          Size (m): 0.20000000298023224
           Style: Spheres
           Topic: /lidar_1/gp_traj
           Unreliable: false
@@ -596,8 +596,8 @@ Visualization Manager:
           Queue Size: 0
           Shape:
             Alpha: 1
-            Axes Length: 5
-            Axes Radius: 0.15000000596046448
+            Axes Length: 3
+            Axes Radius: 0.30000001192092896
             Color: 255; 25; 0
             Head Length: 0.30000001192092896
             Head Radius: 0.10000000149011612
@@ -614,7 +614,7 @@ Visualization Manager:
       Marker Topic: /ctgaupro/extr_marker
       Name: Marker
       Namespaces:
-        {}
+        lines: true
       Queue Size: 1
       Value: true
   Enabled: true
@@ -645,7 +645,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 17.987241744995117
+      Distance: 35.53774642944336
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -653,17 +653,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 68.77651977539062
-        Y: 108.19342041015625
-        Z: -4.664368316298351e-05
+        X: 63.026611328125
+        Y: 121.58819580078125
+        Z: -4.280989014660008e-05
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6347978115081787
+      Pitch: 0.7397974729537964
       Target Frame: body
-      Yaw: 3.8467838764190674
+      Yaw: 5.514970779418945
     Saved: ~
 Window Geometry:
   Displays:

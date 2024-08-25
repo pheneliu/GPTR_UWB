@@ -178,6 +178,9 @@ public:
         deque<Vector4d> srcSurfCoeff;
         int totalSurfF2M = 0, totalEdgeF2M = 0;
 
+        pcl::KdTreeFLANN<PointXYZI> kdTreeSurfFromMap; 
+        kdTreeSurfFromMap.setInputCloud(refSurfMap);
+
         double *PARAM_POSE;
         PARAM_POSE = new double[7];
         
@@ -192,7 +195,7 @@ public:
             tt_assoc.Tic();
 
             // Build the map
-            CalSurfF2MCoeff(refSurfMap, srcSurfCloud, tf_Ref_Src_init, srcSurfCoord, srcSurfCoeff, totalSurfF2M, surf_assoc_time);
+            CalSurfF2MCoeff(kdTreeSurfFromMap, refSurfMap, srcSurfCloud, tf_Ref_Src_init, srcSurfCoord, srcSurfCoeff, totalSurfF2M, surf_assoc_time);
 
             tt_assoc.Toc();
 
@@ -341,221 +344,6 @@ public:
         ioaSum.process_time = tt_proc_time.Toc();
     }
 
-    void IterateAssociateOptimize(IOAOptions &ioaOpt, IOASummary &ioaSum, const CloudXYZIPtr &refSurfMap, const CloudXYZIPtr &refEdgeMap,
-                                  const CloudXYZIPtr &srcSurfCloud, const CloudXYZIPtr &srcEdgeCloud)
-    {
-        TicToc tt_proc_time;
-        TicToc tt_assoc;
-        TicToc tt_solve;
-
-        double surf_assoc_time = 0, edge_assoc_time = 0;
-        
-        // Get the input parameters
-        mytf tf_Ref_Src_init = ioaOpt.init_tf;
-        int &maxF2MOptIters = ioaOpt.max_iterations;
-
-        // Initialize the summary
-        bool   &converged = ioaSum.converged; 
-        int    &actualItr = ioaSum.iterations;
-        double &JM        = ioaSum.JM;
-        double &J0        = ioaSum.J0;
-        double &JK        = ioaSum.JK;
-        double &JKavr     = ioaSum.JKavr;
-        double &DJ        = ioaSum.DJ;
-        mytf &tf_Ref_Src_iao = ioaSum.final_tf;
-
-        JM = 0; J0 = 0; JK = 0;
-        tf_Ref_Src_iao = tf_Ref_Src_init;
-
-        // Back up the transform
-        IOASummary ioaSumPrev = ioaSum;
-
-        deque<Vector3d> srcSurfCoord, srcEdgeCoord;
-        deque<Vector4d> srcSurfCoeff, srcEdgeCoeff;
-        int totalSurfF2M = 0, totalEdgeF2M = 0;
-
-        double *PARAM_POSE;
-        PARAM_POSE = new double[7];
-        
-        int iter = -1;
-        static int opt_num = -1; opt_num++;
-        while(iter < maxF2MOptIters)
-        {
-            iter++;
-
-            /* #region Find associations --------------------------------------------------------------------------*/
-
-            tt_assoc.Tic();
-
-            // Build the map
-            CalSurfF2MCoeff(refSurfMap, srcSurfCloud, tf_Ref_Src_init, srcSurfCoord, srcSurfCoeff, totalSurfF2M, surf_assoc_time);
-            CalEdgeF2MCoeff(refEdgeMap, srcEdgeCloud, tf_Ref_Src_init, srcEdgeCoord, srcEdgeCoeff, totalEdgeF2M, edge_assoc_time);
-
-            tt_assoc.Toc();
-
-            /* #endregion Find associations -----------------------------------------------------------------------*/
-        
-
-            /* #region Solve the problem --------------------------------------------------------------------------*/
-
-            tt_solve.Tic();
-
-            // Create variable & initialize
-            PARAM_POSE[0] = tf_Ref_Src_init.pos(0);
-            PARAM_POSE[1] = tf_Ref_Src_init.pos(1);
-            PARAM_POSE[2] = tf_Ref_Src_init.pos(2);
-            PARAM_POSE[3] = tf_Ref_Src_init.rot.x();
-            PARAM_POSE[4] = tf_Ref_Src_init.rot.y();
-            PARAM_POSE[5] = tf_Ref_Src_init.rot.z();
-            PARAM_POSE[6] = tf_Ref_Src_init.rot.w();
-
-            // Create ceres problem and settings
-            ceres::Problem problem;
-            // Settings
-            ceres::Solver::Options options;
-            options.linear_solver_type = ceres::DENSE_SCHUR;
-            options.trust_region_strategy_type = ioaOpt.trustRegType;
-            options.dense_linear_algebra_library_type = ioaOpt.linAlgbLib;
-            options.num_threads = MAX_THREADS;
-
-            // Add parameter blocks
-            ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-            problem.AddParameterBlock(PARAM_POSE, 7, local_parameterization);
-
-            // Add factors
-            ceres::LossFunction *huber_loss_function = new ceres::HuberLoss(1.0);
-
-            // Surface factors
-            int Nsurf = srcSurfCoord.size();
-            double surf_init_cost = 0, surf_final_cost = -1;
-            vector<ceres::internal::ResidualBlock *> res_ids_proj_surf;
-            for (int j = 0; j < Nsurf; j++)
-            {
-                PointToPlaneFactor *f = new PointToPlaneFactor(srcSurfCoord[j], srcSurfCoeff[j]);
-                ceres::internal::ResidualBlock *res_id = problem.AddResidualBlock(f, huber_loss_function, PARAM_POSE);
-                res_ids_proj_surf.push_back(res_id);
-            }
-
-            // Edge factors
-            int Nedge = srcEdgeCoord.size();
-            double edge_init_cost = 0, edge_final_cost = -1;
-            vector<ceres::internal::ResidualBlock *> res_ids_proj_edge;
-            for (int j = 0; j < Nedge; j++)
-            {
-                PointToPlaneFactor *f = new PointToPlaneFactor(srcEdgeCoord[j], srcEdgeCoeff[j]);
-                ceres::internal::ResidualBlock *res_id = problem.AddResidualBlock(f, huber_loss_function, PARAM_POSE);
-                res_ids_proj_edge.push_back(res_id);
-            }
-            
-            // Calculate the initial cost
-            ceres::Problem::EvaluateOptions e_option;
-            e_option.num_threads = MAX_THREADS;
-
-            Util::ComputeCeresCost(res_ids_proj_surf, surf_init_cost, problem);
-            Util::ComputeCeresCost(res_ids_proj_edge, edge_init_cost, problem);
-
-            // Solve the problem
-            ceres::Solver::Summary summary;
-            ceres::Solve(options, &problem, &summary);
-
-            Util::ComputeCeresCost(res_ids_proj_surf, surf_final_cost, problem);
-            Util::ComputeCeresCost(res_ids_proj_edge, edge_final_cost, problem);
-
-            // Unload the estimate to the states
-            Vector3d Ps(PARAM_POSE[0], PARAM_POSE[1], PARAM_POSE[2]);
-            Quaternd Qs(PARAM_POSE[6], PARAM_POSE[3], PARAM_POSE[4], PARAM_POSE[5]);
-
-            tf_Ref_Src_iao = mytf(Qs, Ps);
-
-            double t_slv = tt_solve.Toc();
-
-            /* #endregion Solve the problem -----------------------------------------------------------------------*/
-        
-
-            /* #region Report the estimate ------------------------------------------------------------------------*/
-            
-            Vector3d ypr_init = Util::Quat2YPR(tf_Ref_Src_init.rot);
-            Vector3d ypr_last = Util::Quat2YPR(tf_Ref_Src_iao.rot);
-            Vector3d pos_init = tf_Ref_Src_init.pos;
-            Vector3d pos_last = tf_Ref_Src_iao.pos;
-
-            int total_surf_features = srcSurfCloud->size();
-            int total_edge_features = srcEdgeCloud->size();
-
-            int total_surf_factors = res_ids_proj_surf.size();
-            int total_edge_factors = res_ids_proj_edge.size();
-
-            double JKavr_surf = (surf_final_cost == 0 || total_surf_factors == 0)
-                                ? 0 : (surf_final_cost / total_surf_factors) * ((double)(total_surf_features) / total_surf_factors);
-            double JKavr_edge = (edge_final_cost == 0 || total_edge_factors == 0)
-                                ? 0 : (edge_final_cost / total_edge_factors) * ((double)(total_edge_features) * 2 / total_edge_factors);
-
-            double DJ = summary.initial_cost - summary.final_cost;
-
-            JM = (iter == 0) ? summary.initial_cost : JM;
-            J0 = summary.initial_cost;
-            JK = summary.final_cost;
-            JKavr = JKavr_surf + JKavr_edge;
-
-            // Reload the initial guess with the optimized for the next iteration
-            actualItr = iter;
-            tf_Ref_Src_init = tf_Ref_Src_iao;
-
-            if (ioaOpt.show_report)
-            {
-                printf(KBLU
-                    "%s. Try: %2d. Itr: %2d. "
-                    "t_assoc: %3.0f (%3.0f, %3.0f). t_slv: %3.0f.\n"
-                    "Pinit: %7.2f. %7.2f. %7.2f. YPR: %4.0f. %4.0f. %4.0f.\n"
-                    "Plast: %7.2f. %7.2f. %7.2f. YPR: %4.0f. %4.0f. %4.0f.\n"
-                    "J0: %9.3f. Surf: %9.3f. Edge: %9.3f. Factors: Surf: %3d. Edge: %3d\n"
-                    "JK: %9.3f. Surf: %9.3f. Edge: %9.3f. Javrage: %f\n"
-                    "DJ: %9.3f. Surf: %9.3f. Edge: %9.3f. %s\n"
-                    RESET,
-                    ioaOpt.text.c_str(), iter, static_cast<int>(summary.iterations.size()),
-                    tt_assoc.GetLastStop(),
-                    surf_assoc_time, edge_assoc_time,
-                    tt_solve.GetLastStop(),
-                    pos_init.x(), pos_init.y(), pos_init.z(),
-                    ypr_init.x(), ypr_init.y(), ypr_init.z(),
-                    pos_last.x(), pos_last.y(), pos_last.z(),
-                    ypr_last.x(), ypr_last.y(), ypr_last.z(),
-                    summary.initial_cost, surf_init_cost, edge_init_cost,
-                    res_ids_proj_surf.size(), res_ids_proj_edge.size(),
-                    summary.final_cost, surf_final_cost, edge_final_cost,
-                    JKavr,
-                    summary.initial_cost - summary.final_cost,
-                    surf_init_cost - surf_final_cost,
-                    edge_init_cost - edge_final_cost,
-                    DJ < 0.001 ? "CONVERGED!" : "");
-            }
-
-            if (iter == 0)
-            {
-                ioaSumPrev.JM = JM;
-                ioaSumPrev.J0 = J0;
-                ioaSumPrev.JK = JK;
-                ioaSumPrev.JKavr = JKavr;
-            }
-            
-            /* #endregion Report the estimate ---------------------------------------------------------------------*/ 
-        
-
-            // Quit early if change is very small
-            if (DJ < ioaOpt.DJ_end)
-            {
-                converged = true;
-                break;
-            }
-        }
-
-        // Add a line break
-        if (ioaOpt.show_report)
-            printf("\n");
-
-        ioaSum.process_time = tt_proc_time.Toc();
-    }
-
     bool CheckICP(CloudXYZIPtr &ref_pcl, CloudXYZIPtr &src_pcl, Matrix4f relPosIcpGuess, Matrix4f &relPosIcpEst,
                   double hisKFSearchRadius, int icp_max_iters, double icpFitnessThres, double &icpFitnessRes, double &ICPtime)
     {
@@ -614,7 +402,7 @@ public:
 
     }
 
-    void CalSurfF2MCoeff(const CloudXYZIPtr &refSurfMap, const CloudXYZIPtr &srcSurfMap,
+    void CalSurfF2MCoeff(const pcl::KdTreeFLANN<PointXYZI> &kdTreeSurfFromMap, const CloudXYZIPtr &refSurfMap, const CloudXYZIPtr &srcSurfMap,
                          mytf tf_Ref_Src, deque<Vector3d> &srcSurfCoord, deque<Vector4d> &srcSurfCoeff,
                          int &totalSurfF2M, double &time_surf_assoc)
     {
@@ -625,9 +413,6 @@ public:
             int pointsCount = srcSurfMap->points.size();
             deque<LidarCoef> CloudCoefTemp(pointsCount);
             
-            pcl::KdTreeFLANN<PointXYZI> kdTreeSurfFromMap; 
-            kdTreeSurfFromMap.setInputCloud(refSurfMap);
-
             #pragma omp parallel for num_threads(MAX_THREADS)
             for (int i = 0; i < pointsCount; i++)
             {

@@ -9,7 +9,6 @@
 
 // Sophus
 #include <sophus/se3.hpp>
-// #include <ceres/local_parameterization.h>   // For the local parameterization
 
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
@@ -198,6 +197,16 @@ public:
                 result.block(i * B.rows(), j * B.cols(), B.rows(), B.cols()) = A(i, j) * B;
 
         return result;
+    }
+
+    void setSigGa(const Mat3 &m)
+    {
+        SigGa = m;
+    }
+
+    void setSigNu(const Mat3 &m)
+    {
+        SigNu = m;
     }
 
     // Transition Matrix, PHI(tau, 0)
@@ -1213,6 +1222,16 @@ public:
             propagateCovariance();
     }
 
+    void setSigNu(const Matrix3d &m)
+    {
+        gpm->setSigNu(m);
+    }
+
+    void setSigGa(const Matrix3d &m)
+    {
+        gpm->setSigGa(m);
+    }
+
     void setKnot(int kidx, const GPState<double> &Xn)
     {
         R[kidx] = Xn.R;
@@ -1282,7 +1301,14 @@ public:
         logfile.open(log_); // Open the file for writing
         logfile.precision(std::numeric_limits<double>::digits10 + 1);
 
-        logfile << "Dt: " << dt << ", Order: " << 3 << ", Knots: " << getNumKnots() << ", MinTime: " << t0 << ", MaxTime: " << getMaxTime() << endl;
+        logfile << "Dt:" << dt << ";Order:" << 3 << ";Knots:" << getNumKnots() << ";MinTime:" << t0 << ";MaxTime:" << getMaxTime()
+                << ";SigGa:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
+                             << getSigGa()(1, 0) << "," << getSigGa()(1, 1) << "," << getSigGa()(1, 2) << ","
+                             << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2) << ","
+                << ";SigNu:" << getSigNu()(0, 0) << "," << getSigNu()(0, 1) << "," << getSigNu()(0, 2) << ","
+                             << getSigNu()(1, 0) << "," << getSigNu()(1, 1) << "," << getSigNu()(1, 2) << ","
+                             << getSigNu()(2, 0) << "," << getSigNu()(2, 1) << "," << getSigNu()(2, 2)
+                << endl;
 
         for(int kidx = 0; kidx < getNumKnots(); kidx++)
         {
@@ -1309,6 +1335,140 @@ public:
         }
 
         logfile.close();
+        return true;
+    }
+
+    bool loadTrajectory(string log_file)
+    {
+        std::ifstream file(log_file);
+
+        auto splitstr = [](const string s_, const char d) -> vector<string>
+        {
+            std::istringstream s(s_);
+            vector<string> o; string p;
+            while(std::getline(s, p, d))
+                o.push_back(p);
+            return o;    
+        };
+
+        // Get the first line for specification
+        if (file.is_open())
+        {
+            // Read the first line from the file
+            std::string header;
+            std::getline(file, header);
+
+            printf("Get header: %s\n", header.c_str());
+            vector<string> fields = splitstr(header, ',');
+            map<string, int> fieldidx;
+            for(auto &field : fields)
+            {
+                vector<string> fv = splitstr(field, ':');
+                fieldidx[fv[0]] = fieldidx.size();
+                // printf("Field: %s. Value: %s\n", fv[0].c_str(), splitstr(fields[fieldidx[fv[0]]], ':').back().c_str());
+            }
+
+            auto strToMat3 = [&splitstr](const string &s, char d) -> Matrix3d
+            {
+                vector<string> Mstr = splitstr(s, d);
+                vector<double> Mdbl = {stod(Mstr[0]), stod(Mstr[1]), stod(Mstr[2]),
+                                       stod(Mstr[3]), stod(Mstr[4]), stod(Mstr[5]), 
+                                       stod(Mstr[6]), stod(Mstr[7]), stod(Mstr[8])};
+                Eigen::Map<Matrix3d, Eigen::RowMajor> M(&Mdbl[0]);
+                return M;
+            };
+            Matrix3d logSigNu = strToMat3(splitstr(fields[fieldidx["SigNu"]], ':').back(), ' ');
+            Matrix3d logSigGa = strToMat3(splitstr(fields[fieldidx["SigGa"]], ':').back(), ' ');
+            double logDt = stod(splitstr(fields[fieldidx["Dt"]], ':').back());
+            double logMinTime = stod(splitstr(fields[fieldidx["MinTime"]], ':').back());
+            bool logkeepCov = (stoi(splitstr(fields[fieldidx["keepCov"]], ':').back()) == 1);
+            
+            printf("Log configs:\n");
+            printf("Dt: %f\n", logDt);
+            printf("MinTime: %f\n", logMinTime);
+            printf("SigNu: \n");
+            cout << logSigNu << endl;
+            printf("SigGa: \n");
+            cout << logSigGa << endl;
+
+            dt = logDt;
+            t0 = logMinTime;
+            gpm = GPMixerPtr(new GPMixer(logDt, logSigGa, logSigNu));
+
+            if (logkeepCov == keepCov)
+                printf(KYEL "Covariance tracking is disabled\n" RESET);
+
+            keepCov = false;
+        }
+
+        // Read txt to matrix
+        auto read_csv =  [](const std::string &path, string dlm, int r_start = 0, int col_start = 0) -> MatrixXd
+        {
+            std::ifstream indata;
+            indata.open(path);
+            std::string line;
+            std::vector<double> values;
+            int row_idx = -1;
+            int rows = 0;
+            while (std::getline(indata, line))
+            {
+                row_idx++;
+                if (row_idx < r_start)
+                    continue;
+
+                // printf("line: %s\n", line.c_str());
+
+                std::stringstream lineStream(line);
+                std::string cell;
+                int col_idx = -1;
+                while (std::getline(lineStream, cell, dlm[0]))
+                {
+                    if (cell == dlm || cell.size() == 0)
+                        continue;
+
+                    col_idx++;
+                    if (col_idx < col_start)
+                        continue;
+
+                    values.push_back(std::stod(cell));
+
+                    // printf("cell: %s\n", cell.c_str());
+                }
+
+                rows++;
+            }
+
+            return Eigen::Map<Matrix<double, -1, -1, Eigen::RowMajor>>(values.data(), rows, values.size() / rows);
+        };
+
+        // Load the control point values
+        MatrixXd traj = read_csv(log_file, ",", 1, 0);
+        printf("Found %d control points.\n", traj.rows());
+        // for(int ridx = 0; ridx < traj.rows(); ridx++)
+        // {
+        //     cout << "Row: " << traj.row(ridx) << endl;
+        //     if (ridx == 10)
+        //         exit(-1);
+        // }
+        
+        // Clear the knots
+        R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear(); C.clear();
+
+        // Set the knot values
+        for(int ridx = 0; ridx < traj.rows(); ridx++)
+        {
+
+            VectorXd X = traj.row(ridx);
+            R.push_back(SO3d(Quaternd(X(4), X(1), X(2), X(3))));
+            O.push_back(Vec3(X(5),  X(6),  X(7)));
+            S.push_back(Vec3(X(8),  X(9),  X(10)));
+            P.push_back(Vec3(X(11), X(12), X(13)));
+            V.push_back(Vec3(X(14), X(15), X(16)));
+            A.push_back(Vec3(X(17), X(18), X(19)));
+
+            // C.push_back(CovMZero);
+        }
+
         return true;
     }
 };

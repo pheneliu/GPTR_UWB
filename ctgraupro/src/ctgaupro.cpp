@@ -69,6 +69,9 @@ vector<string> lidar_type = {"ouster"};
 // Get the lidar stamp time (start /  end)
 vector<string> stamp_time = {"start"};
 
+// Check for log and load the GP trajectory with the control points in log
+vector<int> resume_from_log = {0};
+
 // Get the prior map leaf size
 double pmap_leaf_size = 0.15;
 vector<double> cloud_ds;
@@ -86,7 +89,8 @@ int sw_shift = 5;
 ikdtreePtr ikdtPM;
 
 // Number of poses per knot in the extrinsic optimization
-int SW_CLOUDNUM = 2;
+int SW_CLOUDNUM = 20;
+int SW_CLOUDSTEP = 2;
 double t_shift = 0.0;
 int max_outer_iter = 3;
 int max_inner_iter = 2;
@@ -105,6 +109,42 @@ typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 // vector<GPKFLOPtr> gpkflo;
 vector<GPMAPLOPtr> gpmaplo;
 
+template <typename Scalar = double, int RowSize = Dynamic, int ColSize = Dynamic>
+Matrix<Scalar, RowSize, ColSize> load_dlm(const std::string &path, string dlm, int r_start = 0, int col_start = 0)
+{
+    std::ifstream indata;
+    indata.open(path);
+    std::string line;
+    std::vector<double> values;
+    int row_idx = -1;
+    int rows = 0;
+    while (std::getline(indata, line))
+    {
+        row_idx++;
+        if (row_idx < r_start)
+            continue;
+
+        std::stringstream lineStream(line);
+        std::string cell;
+        int col_idx = -1;
+        while (std::getline(lineStream, cell, dlm[0]))
+        {
+            if (cell == dlm || cell.size() == 0)
+                continue;
+
+            col_idx++;
+            if (col_idx < col_start)
+                continue;
+
+            values.push_back(std::stod(cell));
+        }
+
+        rows++;
+    }
+
+    return Map<const Matrix<Scalar, RowSize, ColSize, RowMajor>>(values.data(), rows, values.size() / rows);
+}
+
 template <typename PointType>
 typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::PointCloud<PointType>::Ptr &cloudin, double sampling_radius)
 {
@@ -118,11 +158,12 @@ typename pcl::PointCloud<PointType>::Ptr uniformDownsample(const typename pcl::P
     return cloudout;
 }
 
-void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
+void getInitPose(int lidx,
+                 const vector<vector<CloudXYZITPtr>> &clouds,
                  const vector<vector<ros::Time>> &cloudstamp,
                  CloudXYZIPtr &priormap,
-                 vector<double> timestart,
-                 vector<double> xyzypr_W_L0,
+                 vector<double> &timestart,
+                 const vector<double> &xyzypr_W_L0,
                  vector<CloudXYZIPtr> &pc0,
                  vector<myTf<double>> &tf_W_Li0)
 {
@@ -135,9 +176,9 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
     ROS_ASSERT(pc0.size() == Nlidar);
     ROS_ASSERT(tf_W_Li0.size() == Nlidar);
 
-    // Find the init pose of each lidar
-    for (int lidx = 0; lidx < Nlidar; lidx++)
-    {
+    // // Find the init pose of each lidar
+    // for (int lidx = 0; lidx < Nlidar; lidx++)
+    // {
         // Merge the pointclouds in the first few seconds
         pc0[lidx] = CloudXYZIPtr(new CloudXYZI());
         int Ncloud = cloudstamp[lidx].size();
@@ -197,7 +238,9 @@ void getInitPose(const vector<vector<CloudXYZITPtr>> &clouds,
 
         // Save the result to external buffer
         tf_W_Li0[lidx] = ioaSum.final_tf;
-    }
+    // }
+
+    return;
 }
 
 void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
@@ -297,7 +340,7 @@ int main(int argc, char **argv)
 
     printf(KGRN "Multi-Lidar Coupled Motion Estimation Started.\n" RESET);
 
-/* #region Read input data --------------------------------------------------------------------------------------*/
+    /* #region Read parameters --------------------------------------------------------------------------------------*/
 
     // Knot length
     nh_ptr->getParam("deltaT", deltaT);
@@ -306,11 +349,14 @@ int main(int argc, char **argv)
     // Get the user define parameters
     nh_ptr->getParam("priormap_file", priormap_file);
     nh_ptr->getParam("lidar_bag_file", lidar_bag_file);
+    
     nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
+    nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
+    
     nh_ptr->getParam("lidar_topic", lidar_topic);
     nh_ptr->getParam("lidar_type", lidar_type);
     nh_ptr->getParam("stamp_time", stamp_time);
-    nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
+    nh_ptr->getParam("resume_from_log", resume_from_log);
 
     // Determine the number of lidar
     int Nlidar = lidar_topic.size();
@@ -324,6 +370,7 @@ int main(int argc, char **argv)
 
     // Find the settings for cross trajectory optimmization
     nh_ptr->getParam("SW_CLOUDNUM", SW_CLOUDNUM);
+    nh_ptr->getParam("SW_CLOUDSTEP", SW_CLOUDSTEP);
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
@@ -363,24 +410,24 @@ int main(int argc, char **argv)
     }
 
     T_B_Li_gndtr.resize(Nlidar);
-    vector<double> xtrns_gndtr(Nlidar*6, 0.0);
-    if( nh_ptr->getParam("xtrns_gndtr", xtrns_gndtr) )
+    vector<double> xtrz_gndtr(Nlidar*6, 0.0);
+    if( nh_ptr->getParam("xtrz_gndtr", xtrz_gndtr) )
     {
-        if (xtrns_gndtr.size() < Nlidar*6)
+        if (xtrz_gndtr.size() < Nlidar*6)
         {
-            printf(KYEL "xtrns_gndtr missing values. Setting all to zeros \n" RESET);
-            xtrns_gndtr = vector<double>(Nlidar*6, 0.0);
+            printf(KYEL "xtrz_gndtr missing values. Setting all to zeros \n" RESET);
+            xtrz_gndtr = vector<double>(Nlidar*6, 0.0);
         }
         else
         {
-            printf("xtrns_gndtr found: \n");
+            printf("xtrz_gndtr found: \n");
             for(int i = 0; i < Nlidar; i++)
             {
-                T_B_Li_gndtr[i] = myTf(Util::YPR2Quat(xtrns_gndtr[i*6 + 3], xtrns_gndtr[i*6 + 4], xtrns_gndtr[i*6 + 5]),
-                                             Vector3d(xtrns_gndtr[i*6 + 0], xtrns_gndtr[i*6 + 1], xtrns_gndtr[i*6 + 2]));
+                T_B_Li_gndtr[i] = myTf(Util::YPR2Quat(xtrz_gndtr[i*6 + 3], xtrz_gndtr[i*6 + 4], xtrz_gndtr[i*6 + 5]),
+                                             Vector3d(xtrz_gndtr[i*6 + 0], xtrz_gndtr[i*6 + 1], xtrz_gndtr[i*6 + 2]));
 
                 for(int j = 0; j < 6; j++)
-                    printf("%f, ", xtrns_gndtr[i*6 + j]);
+                    printf("%f, ", xtrz_gndtr[i*6 + j]);
                 cout << endl;
             }
         }
@@ -391,14 +438,19 @@ int main(int argc, char **argv)
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
 
-/* #endregion Read input data -----------------------------------------------------------------------------------*/
+    /* #endregion Read parameters -----------------------------------------------------------------------------------*/
 
-    // Load the priormap
+    /* #region Load the priormap ------------------------------------------------------------------------------------*/
+
     pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
     priormap = uniformDownsample<PointXYZI>(priormap, pmap_leaf_size);
     // Create the kd tree
     printf("Building the prior map");
     kdTreeMap->setInputCloud(priormap);
+
+    /* #endregion Load the priormap ---------------------------------------------------------------------------------*/
+
+    /* #region Load the data ----------------------------------------------------------------------------------------*/
 
     // Converting the topic to index
     map<string, int> pctopicidx;
@@ -409,7 +461,7 @@ int main(int argc, char **argv)
     vector<vector<CloudXYZITPtr>> clouds(lidar_topic.size());
     vector<vector<ros::Time>> cloudstamp(lidar_topic.size());
     vector<tf2_msgs::TFMessage> gndtr;
-    
+
     vector<string> queried_topics = lidar_topic;
     queried_topics.push_back("/tf");
 
@@ -418,7 +470,7 @@ int main(int argc, char **argv)
     lidar_bag.open(lidar_bag_file);
     rosbag::View view(lidar_bag, rosbag::TopicQuery(queried_topics));
 
-    // Load the pointclouds
+    // Load the message
     for (rosbag::MessageInstance const m : view)
     {
         sensor_msgs::PointCloud2::ConstPtr pcMsgOuster = m.instantiate<sensor_msgs::PointCloud2>();
@@ -538,7 +590,10 @@ int main(int argc, char **argv)
             break;
     }
 
-    // Extract the ground truth and publish
+    /* #endregion Load the data -------------------------------------------------------------------------------------*/
+
+    /* #region Extract the ground truth and publish -----------------------------------------------------------------*/
+
     vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
     for(auto &cloud : gndtrCloud)
@@ -581,15 +636,33 @@ int main(int argc, char **argv)
     // Create thread for visualizing groundtruth
     thread vizGtr = thread(VisualizeGndtr, std::ref(gndtrCloud));
 
+
+    /* #endregion Extract the ground truth and publish --------------------------------------------------------------*/
+    
+    /* #region Initialize the pose of each lidar --------------------------------------------------------------------*/
+    
     // Initial coordinates of the lidar
     vector<myTf<double>> tf_W_Li0(Nlidar);
     vector<CloudXYZIPtr> pc0(Nlidar);
 
-    // Initialize the pose
     vector<double> timestart(Nlidar);
-    getInitPose(clouds, cloudstamp, priormap, timestart, xyzypr_W_L0, pc0, tf_W_Li0);
+    vector<thread> poseInitThread(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        poseInitThread[lidx] = thread(getInitPose, lidx, std::ref(clouds),
+                                      std::ref(cloudstamp),
+                                      std::ref(priormap),
+                                      std::ref(timestart),
+                                      std::ref(xyzypr_W_L0),
+                                      std::ref(pc0),
+                                      std::ref(tf_W_Li0));
 
-    // Split the pointcloud by time.
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        poseInitThread[lidx].join();
+
+    /* #endregion Initialize the pose of each lidar -----------------------------------------------------------------*/
+    
+    /* #region Split the pointcloud by time -------------------------------------------------------------------------*/
+    
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
     for(int lidx = 1; lidx < Nlidar; lidx++)
     {
@@ -597,29 +670,55 @@ int main(int argc, char **argv)
         syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
     }
 
-    // Create the LOAM modules
+    /* #endregion Split the pointcloud by time ----------------------------------------------------------------------*/
+
+    /* #region Create the LOAM modules ------------------------------------------------------------------------------*/
+    
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         // Create the gpmaplo objects
         gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), cloudsx[lidx].front()->points.front().t, lidx));
+
+    // If there is a log, load them up
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
+        if(resume_from_log[lidx] == 1 && file_exist(log_file))
+        {
+            printf("Loading traj file: %s\n", log_file.c_str());
+            gpmaplo[lidx]->GetTraj()->loadTrajectory(log_file);
+
+            // GaussianProcessPtr &traj = gpmaplo[lidx]->GetTraj();
+            // for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+            // {
+            //     GPState<double> x = traj->getKnot(kidx);
+            //     Quaternd q = x.R.unit_quaternion();
+            //     printf("Lidar %d. Knot: %d. XYZ: %9.3f, %9.3f, %9.3f. Q: %9.3f, %9.3f, %9.3f, %9.3f.\n",
+            //             lidx, kidx, x.P.x(), x.P.y(), x.P.z(), q.x(), q.y(), q.z(), q.w());
+            // }
+        }
+    }
 
     // Create the estimation module
     GPMLCPtr gpmlc(new GPMLC(nh_ptr));
     vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
     vector<vector<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
 
-    // Do optimization with inter-trajectory factors
+    /* #endregion Create the LOAM modules ---------------------------------------------------------------------------*/
+
+    /* #region Do optimization with inter-trajectory factors --------------------------------------------------------*/
+    
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
-        int SW_CLOUDNUM_HALF = int(SW_CLOUDNUM/2);
-        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDNUM_HALF; cidx+= int(SW_CLOUDNUM_HALF))
+        int SW_CLOUDSTEP = 1;
+        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
         {
             if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
                 continue;
 
             int SW_BEG = cidx;
             int SW_END = min(cidx + SW_CLOUDNUM, int(cloudsx[0].size())-1);
-            int SW_MID = min(cidx + SW_CLOUDNUM_HALF, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + SW_CLOUDSTEP, int(cloudsx[0].size())-1);
 
             // The effective length of the sliding window by the number of point clouds
             int SW_CLOUDNUM_EFF = SW_END - SW_BEG;
@@ -684,7 +783,7 @@ int main(int argc, char **argv)
                 }
 
                 // Optimize
-                gpmlc->Evaluate(outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
+                gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
 
                 if (inner_iter == max_inner_iter - 1)
                 {
@@ -713,9 +812,9 @@ int main(int argc, char **argv)
                     static vector<nav_msgs::Odometry> odomMsg(2);
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
-                        double ts = trajs[lidx]->getMaxTime() - trajs[lidx]->getDt()/2;
-                        SE3d pose = trajs[lidx]->pose(ts);
-                        odomMsg[lidx].header.stamp = ros::Time(ts);
+                        double ts = tmax - trajs[lidx]->getDt()/2;
+                        SE3d pose = trajs[lidx]->pose(tmax);
+                        odomMsg[lidx].header.stamp = ros::Time(tmax);
                         odomMsg[lidx].header.frame_id = "world";
                         odomMsg[lidx].child_frame_id = myprintf("lidar_%d_body", lidx);
                         odomMsg[lidx].pose.pose.position.x = pose.translation().x();
@@ -726,6 +825,8 @@ int main(int argc, char **argv)
                         odomMsg[lidx].pose.pose.orientation.z = pose.unit_quaternion().z();
                         odomMsg[lidx].pose.pose.orientation.w = pose.unit_quaternion().w();
                         odomPub[lidx].publish(odomMsg[lidx]);
+
+                        // printf("Lidar %d. Pos: %f, %f, %f\n", lidx, pose.translation().x(), pose.translation().y(), pose.translation().z());
                     }
 
                     // Publish a line between the lidars
@@ -762,43 +863,44 @@ int main(int argc, char **argv)
 
         // Reset the marginalization factor
         gpmlc->Reset();
+
+        // Log the result
+
+        // Create directories if they do not exist
+        string output_dir = log_dir + myprintf("/run_%02d/", outer_iter);
+        std::filesystem::create_directories(output_dir);
+
+        // Save the trajectory and estimation result
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+        {
+            // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
+            printf("Exporting trajectory logs to %s.\n", output_dir.c_str());
+            gpmaplo[lidx]->GetTraj()->saveTrajectory(output_dir, lidx, gndtr_ts[lidx]);
+        }
+
+        // Log the extrinsics
+        string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
+        std::ofstream xts_logfile;
+        xts_logfile.open(xts_log); // Open the file for writing
+        xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
+        xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
+        for(auto &pose : extrinsic_poses[1])
+        {
+            xts_logfile << pose.header.stamp.toSec() << ","
+                        << pose.pose.position.x << ","
+                        << pose.pose.position.y << ","
+                        << pose.pose.position.z << ","
+                        << pose.pose.orientation.x << ","
+                        << pose.pose.orientation.y << ","
+                        << pose.pose.orientation.z << ","
+                        << pose.pose.orientation.w << "," << endl;
+        }
+        xts_logfile.close();
     }
 
-/* #region Save the result --------------------------------------------------------------------------------------*/
+    /* #endregion Do optimization with inter-trajectory factors -----------------------------------------------------*/
 
-    // Create directories if they do not exist
-    std::filesystem::create_directories(log_dir);
-
-    // Save the trajectory and estimation result
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
-        printf("Exporting trajectory logs to %s.\n", log_dir.c_str());
-        gpmaplo[lidx]->GetTraj()->saveTrajectory(log_dir, lidx, gndtr_ts[lidx]);
-    }
-
-    // Log the extrinsics
-    string xts_log = log_dir + "/extrinsics_" + std::to_string(1) + ".csv";
-    std::ofstream xts_logfile;
-    xts_logfile.open(xts_log); // Open the file for writing
-    xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
-    xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
-    for(auto &pose : extrinsic_poses[1])
-    {
-        xts_logfile << pose.header.stamp.toSec() << ","
-                    << pose.pose.position.x << ","
-                    << pose.pose.position.y << ","
-                    << pose.pose.position.z << ","
-                    << pose.pose.orientation.x << ","
-                    << pose.pose.orientation.y << ","
-                    << pose.pose.orientation.z << ","
-                    << pose.pose.orientation.w << "," << endl;
-    }
-    xts_logfile.close();
-
-/* #endregion Save the result -----------------------------------------------------------------------------------*/
-
-/* #region Create the pose sampling publisher -------------------------------------------------------------------*/
+    /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
 
     vector<ros::Publisher> poseSamplePub(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -809,6 +911,6 @@ int main(int argc, char **argv)
     while(ros::ok())
         rate.sleep();
 
-/* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
+    /* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
 
 }
