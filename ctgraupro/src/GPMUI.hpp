@@ -599,7 +599,7 @@ public:
                     factorMetaRemoved.res.push_back(res);
                     factorMetaRemoved.coupled_params.push_back(factorMeta.coupled_params[ridx]);
                     factorMetaRemoved.stamp.push_back(factorMeta.stamp[ridx]);
-
+                    std::cout << "factorMeta.coupled_params[ridx] size: " << factorMeta.coupled_params[ridx].size() << std::endl;
                     // for(int coupling_idx = 0; coupling_idx < KC; coupling_idx++)
                     // {
                     //     int kidx = factorMeta.kidx[ridx][coupling_idx];
@@ -641,11 +641,11 @@ public:
         FactorMeta factorMetaRemoved;
         FactorMeta factorMetaRetained;
 
-        factorMetaRemoved = factorMetaMp2kRemoved + factorMetaTDOARemoved + factorMetaPriorRemoved;
+        factorMetaRemoved = factorMetaMp2kRemoved + factorMetaTDOARemoved + factorMetaIMURemoved + factorMetaPriorRemoved;
         if (factorMetaPriorRetained.res.empty()) {
-            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained;
+            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaIMURetained;
         } else {
-            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
+            factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaIMURetained + factorMetaPriorRetained;
         }
         
         // factorMetaRetained = factorMetaMp2kRetained + factorMetaTDOARetained + factorMetaPriorRetained;
@@ -654,8 +654,9 @@ public:
         // Find the set of params belonging to removed factors
         map<double*, ParamInfo> removed_params;
         for(auto &cpset : factorMetaRemoved.coupled_params)
-            for(auto &cp : cpset)
+            for(auto &cp : cpset) {
                 removed_params[cp.address] = paramInfoMap[cp.address];
+            }
 
         // Find the set of params belonging to the retained factors
         map<double*, ParamInfo> retained_params;
