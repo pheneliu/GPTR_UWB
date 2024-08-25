@@ -61,7 +61,6 @@
         <param name="XTRZ_DENSITY"   value="4"      />
         <param name="max_outer_iter" value="3"      />
         <param name="max_inner_iter" value="2"      />
-        <param name="max_debug"      value="-1"     />
         <param name="fix_kidxmin"    value="0"      />
         <param name="fix_kidxmax"    value="0"      />
 

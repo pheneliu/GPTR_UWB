@@ -6,36 +6,38 @@
 
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
+          <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled_cropped.pcd" />
+        <param name="priormap_file"   value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled_cropped.pcd" />
 
         <!-- Location of bag file -->
-        <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
+        <param name="lidar_bag_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
         
         <!-- Total number of clouds loaded -->
-        <param name="MAX_CLOUDS"     value="-1" />
-         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"   value="12.5"/>
+        <param name="MAX_CLOUDS"      value="-1" />
+        <!-- Time since first pointcloud to skip MAP Opt-->
+        <param name="SKIPPED_TIME"    value="12.5"/>
+        <!-- <param name="SKIPPED_TIME"    value="197.5"/> -->
         
-        <param name="lidar_topic"    value="['/os_cloud_node/points', '/livox/lidar']" type="yaml" />
-        <param name="lidar_type"     value="['ouster', 'livox']" type="yaml" />
-        <param name="stamp_time"     value="['end', 'start']" type="yaml" />
-        <!-- Initial pose of each lidars-->
-        <param name="xyzypr_W_L0"    value="[ 62.03, 119.61, 7.69, -134, 3, 1,
-                                              62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
-        <!-- Groundtruth for evaluation-->
-        <param name="xtrz_gndtr"     value="[ 0, 0, 0, 0, 0, 0,
-                                              0, 0, 0, 0, 0, 0 ]" type="yaml"/>
+        <param name="lidar_topic"     value="['/os_cloud_node/points', '/livox/lidar']" type="yaml" />
+        <param name="lidar_type"      value="['ouster', 'livox']" type="yaml" />
+        <param name="stamp_time"      value="['end', 'start']" type="yaml" />
         <!-- Set to 1 to load the search for previous logs and redo -->
-        <param name="resume"         value="[1, 1]" type="yaml"/>
+        <param name="resume_from_log" value="[0, 0]" type="yaml"/>
+        <!-- Initial pose of each lidars-->
+        <param name="xyzypr_W_L0"     value="[ 62.03, 119.61, 7.69, -134, 3, 1,
+                                               62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
+        <!-- Groundtruth for evaluation-->
+        <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0, 0,
+                                               0, 0, 0, 0, 0, 0 ]" type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
-        <param name="pmap_leaf_size" value="0.15"   />
-        <param name="cloud_ds"       value="[1.6, 0.1]" type="yaml" />
+        <param name="pmap_leaf_size"  value="0.15"  />
+        <param name="cloud_ds"        value="[0.4, 0.1]" type="yaml" />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.04357"/>
+        <param name="deltaT"         value="0.02"/>
         <param name="WINDOW_SIZE"    value="5"      />
         <param name="use_ceres"      value="0"      />
         <param name="max_gniter"     value="3"      />
@@ -59,13 +61,14 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"    value="8"     />
-        <param name="SW_CLOUDSTEP"   value="2"      />
+        <param name="SW_CLOUDNUM"    value="8"      />
+        <param name="SW_CLOUDSTEP"   value="1"      />
         <param name="max_lidarcoefs" value="1000"   />
         <param name="XTRZ_DENSITY"   value="4"      />
+        <param name="min_planarity"  value="0.5"    />
+        <param name="max_plane_dis"  value="0.5"    />
         <param name="max_outer_iter" value="3"      />
-        <param name="max_inner_iter" value="10"     />
-        <param name="max_debug"      value="-1"     />
+        <param name="max_inner_iter" value="5"      />
         <param name="fix_kidxmin"    value="0"      />
         <param name="fix_kidxmax"    value="0"      />
 

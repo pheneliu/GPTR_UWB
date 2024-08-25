@@ -32,7 +32,7 @@ class ParamInfo
 public:
     double* address = NULL; // Actual address of the param block
     ParamType type;         // Type of the param block (SO3 or RV3)
-    ParamRole role;         // What this param is used for state or role
+    ParamRole role;         // What this param is used for state or extrinsics
     // int param_size;         // Size of the param block
     int pidx;               // Index of the parameter in the problem
     int tidx;               // Index of the trajectory

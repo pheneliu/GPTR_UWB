@@ -37,6 +37,9 @@ private:
     // Leaf size to downsample input pointcloud
     double ds_size;
 
+    double min_planarity = 0.2;
+    double max_plane_dis = 0.3;
+
     // How many point clouds to import into the sliding window
     int WINDOW_SIZE = 10;
 
@@ -141,6 +144,10 @@ public:
         nh_ptr->getParam("smSigmaR", smSigmaR);
         nh_ptr->getParam("smSigmaP", smSigmaP);
 
+        // Association params
+        nh_ptr->getParam("min_planarity", min_planarity);
+        nh_ptr->getParam("max_plane_dis", max_plane_dis);
+
         trajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gp_traj", LIDX), 1);
         swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
         assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
@@ -232,7 +239,7 @@ public:
                     continue;
 
                 // Fit the plane
-                if(Util::fitPlane(nbrPoints, 0.5, 0.1, Coef_[pidx].n, Coef_[pidx].plnrty))
+                if(Util::fitPlane(nbrPoints, min_planarity, max_plane_dis, Coef_[pidx].n, Coef_[pidx].plnrty))
                 {
                     ROS_ASSERT(tpoint >= 0);
                     Coef_[pidx].t = tpoint;
