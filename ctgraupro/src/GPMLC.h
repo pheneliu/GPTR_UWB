@@ -403,8 +403,8 @@ private:
 
 protected:
 
-    bool fix_kidxmin = false;
-    bool fix_kidxmax = false;
+    double fix_time_begin = -1;
+    double fix_time_end = -1;
 
     int max_lidarcoefs = 4000;
 

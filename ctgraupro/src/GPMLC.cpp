@@ -7,8 +7,8 @@ GPMLC::~GPMLC(){};
 GPMLC::GPMLC(ros::NodeHandlePtr &nh_)
     : nh(nh_), R_Lx_Ly(Quaternd(1, 0, 0, 0)), P_Lx_Ly(Vec3(0, 0, 0))
 {
-    fix_kidxmin = Util::GetBoolParam(nh, "fix_kidxmin", false);
-    fix_kidxmax = Util::GetBoolParam(nh, "fix_kidxmax", false);
+    nh->getParam("fix_time_begin", fix_time_begin);
+    nh->getParam("fix_time_end", fix_time_end);
     nh->getParam("max_lidarcoefs", max_lidarcoefs);
 };
 
@@ -51,24 +51,24 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
         paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
         paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
         
-        if (kidx == kidxmin && fix_kidxmin)
+        if (traj->getKnotTime(kidx) < tmin + fix_time_begin && fix_time_begin > 0)
         {
-            problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-            // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-            // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-            problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-            // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-            // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
+            problem.SetParameterBlockConstant(traj->getKnotSO3(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotOmg(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotAlp(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotPos(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotVel(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotAcc(kidx).data());
         }
 
-        if (kidx == kidxmax && fix_kidxmax)
+        if (traj->getKnotTime(kidx) > tmax - fix_time_end && fix_time_end > 0)
         {
-            problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
-            // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
-            // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-            problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
-            // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
-            // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
+            problem.SetParameterBlockConstant(traj->getKnotSO3(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotOmg(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotAlp(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotPos(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotVel(kidx).data());
+            problem.SetParameterBlockConstant(traj->getKnotAcc(kidx).data());
         }
     }
 }
@@ -1067,14 +1067,14 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
         optnum++;
 
     printf(KGRN
-           "GPX Opt #%4d.%2d.%2d: CeresIter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d.\n"
+           "GPX Opt #%4d.%2d.%2d: CeresIter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %f, %f.\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
            optnum, inner_iter, outer_iter,
-           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_kidxmin, fix_kidxmax,
+           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_time_begin, fix_time_end,
            factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final,
