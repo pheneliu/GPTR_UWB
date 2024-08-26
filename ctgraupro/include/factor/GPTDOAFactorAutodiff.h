@@ -24,10 +24,6 @@
 * along with splio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
 #include <ceres/ceres.h>
 #include "basalt/spline/ceres_spline_helper.h"
 #include "basalt/utils/sophus_utils.hpp"

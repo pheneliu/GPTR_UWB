@@ -76,7 +76,6 @@ public:
 
         // Rotational residual
         Vec3 rRot = Theb - Dt*Xa.O - 0.5*Dtsq*Xa.S;
-        // Vec3 rRot = - 0.5*Dtsq*Xa.S;
 
         // Rotational rate residual
         Vec3 rRdot = Thedotb - Xa.O - Dt*Xa.S;
@@ -117,7 +116,6 @@ public:
         Mat3 DThedotb_DRb = DThedotb_DTheb*DTheb_DRb;
 
         Mat3 DJrInvThebSb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.S);
-        // Mat3 DJrInvThebOb_DTheb = gpm->DJrInvXV_DX(Theb, Xb.O);
         Mat3 DDJrInvThebObThedotb_DThebDTheb = gpm->DDJrInvXVA_DXDX(Theb, Xb.O, Thedotb);
         
         Mat3 DTheddotb_DTheb = DJrInvThebSb_DTheb + DDJrInvThebObThedotb_DThebDTheb + DJrInvThebOb_DTheb*DJrInvThebOb_DTheb;
@@ -151,7 +149,6 @@ public:
                 Dr_DOa.setZero();
                 Dr_DOa.block<3, 3>(0, 0) = -DtI;
                 Dr_DOa.block<3, 3>(3, 0) = -Eye;
-                // Dr_DOa.block<3, 3>(6, 0) =  0;
                 Dr_DOa = sqrtW*Dr_DOa;
             }
 
@@ -185,7 +182,6 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, STATE_DIM, 3, Eigen::RowMajor>> Dr_DOb(jacobians[idx]);
                 Dr_DOb.setZero();
-                // Dr_DOb.block<3, 3>(0, 0) = 0;
                 Dr_DOb.block<3, 3>(3, 0) = JrInvTheb;
                 Dr_DOb.block<3, 3>(6, 0) = DTheddotb_DOb;
                 Dr_DOb = sqrtW*Dr_DOb;
@@ -197,8 +193,6 @@ public:
             {
                 Eigen::Map<Eigen::Matrix<double, STATE_DIM, 3, Eigen::RowMajor>> Dr_DSb(jacobians[idx]);
                 Dr_DSb.setZero();
-                // Dr_DSb.block<3, 3>(0, 0) = 0;
-                // Dr_DSb.block<3, 3>(3, 0) = 0;
                 Dr_DSb.block<3, 3>(6, 0) = JrInvTheb;
                 Dr_DSb = sqrtW*Dr_DSb;
             }
@@ -283,13 +277,6 @@ public:
     }
 
 private:
-
-    // const int Ridx = 0;
-    // const int Oidx = 1;
-    // const int Sidx = 2;
-    // const int Pidx = 3;
-    // const int Vidx = 4;
-    // const int Aidx = 5;
 
     const int RaIdx = 0;
     const int OaIdx = 1;

@@ -1,7 +1,5 @@
 #include "utility.h"
 #include "GaussianProcess.hpp"
-// #include "GPKFLO.hpp"
-// #include "GPMAPLO.hpp"
 
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
 #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"

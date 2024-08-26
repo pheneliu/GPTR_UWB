@@ -24,10 +24,6 @@
 * along with splio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
 #include <ceres/ceres.h>
 #include "basalt/spline/ceres_spline_helper.h"
 #include "basalt/utils/sophus_utils.hpp"
@@ -111,15 +107,12 @@ public:
         Eigen::Vector3d diff_i = p_tag_W - pos_anchor_i;
         Eigen::Vector3d diff_j = p_tag_W - pos_anchor_j;        
         residual[0] = w*(diff_j.norm() - diff_i.norm() - tdoa);
-        // std::cout << "Xt.P: " << Xt.P.transpose() << " pos_anchor_i: " << pos_anchor_i.transpose() << " pos_anchor_j: "
-                //   << pos_anchor_j.transpose() << " tdoa: " << tdoa << " residual[0]: " << residual[0] << std::endl;
+
         /* #endregion Calculate the pose at sampling time -----------------------------------------------------------*/
 
         if (!jacobians)
             return true;
 
-        // Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
-        // Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
         Matrix<double, 1, 3> Dr_DPW  = (diff_j.normalized() - diff_i.normalized()).transpose();   
         Matrix<double, 1, 3> Dr_DRt  = - Dr_DPW * Xt.R.matrix() * SO3d::hat(offset);
         Matrix<double, 1, 3> Dr_DPt  = Dr_DPW;        
@@ -250,8 +243,7 @@ private:
     // Weight
     double w = 10;
 
-    // Gaussian process params
-    
+    // Gaussian process param
     const int Ridx = 0;
     const int Oidx = 1;
     const int Sidx = 2;
