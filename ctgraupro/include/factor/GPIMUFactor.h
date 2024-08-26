@@ -24,10 +24,6 @@
 * along with splio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
 #include <ceres/ceres.h>
 #include "basalt/spline/ceres_spline_helper.h"
 #include "basalt/utils/sophus_utils.hpp"
@@ -87,6 +83,7 @@ public:
         // Acceleration of the second knot
         mutable_parameter_block_sizes()->push_back(3);
 
+        // IMU biases
         mutable_parameter_block_sizes()->push_back(3);
         mutable_parameter_block_sizes()->push_back(3);
     }
@@ -117,7 +114,6 @@ public:
         Eigen::Vector3d g(0, 0, 9.81);
 
         residual.block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
-        // residual.block<3, 1>(0, 0) = w*((Xt.A + g) - acc + biasA);
         residual.block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
         residual.block<3, 1>(6, 0) = wBiasGyro*(biasW - gyro_bias);
         residual.block<3, 1>(9, 0) = wBiasAcce*(biasA - acc_bias);
@@ -125,17 +121,9 @@ public:
         if (!jacobians)
             return true;
 
-        // Matrix3d Dr_DRt  = Xt.R.matrix().transpose() * SO3d::hat(Xt.A + g);
         Matrix3d Dr_DRt  = SO3d::hat(Xt.R.matrix().transpose() * (Xt.A + g));
-        // Matrix3d Dr_DRt  = Matrix3d::Zero();
-        // Matrix3d Dr_DPt  = Xt.R.matrix().transpose();
         Matrix3d Dr_DAt  = Xt.R.matrix().transpose();
-
-        // Matrix3d Dr_DBg  = Matrix3d::Identity();
         Matrix3d Dr_DOt  = Matrix3d::Identity();    
-
-        // Matrix3d Dr_DBg  = Matrix3d::Identity();
-        // Matrix3d Dr_DBa  = Matrix3d::Identity();
 
         size_t idx;
 

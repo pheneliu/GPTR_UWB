@@ -27,8 +27,6 @@ public:
                               map<double*, ParamInfo> &paramInfoMap,
                               double tmin, double tmax, double tmid)
     {
-        // GaussianProcessPtr &traj = trajs[tidx];
-
         auto usmin = traj->computeTimeIndex(tmin);
         auto usmax = traj->computeTimeIndex(tmax);
 
@@ -60,7 +58,7 @@ public:
             paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
             paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
             
-            // if (kidx == kidxmin && true) // kidx == kidxmin && fix_kidxmin
+            // if (kidx == kidxmin && fix_kidxmin) 
             // {
             //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
             //     problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
@@ -98,83 +96,35 @@ public:
             if (kidx < kidxmin || kidx+1 > kidxmax) {        
                 continue;
             }
-            // if (if_autodiff) {
-            //     GPMotionPriorTwoKnotsFactorAutodiff *GPMPFactor = new GPMotionPriorTwoKnotsFactorAutodiff(traj->getGPMixerPtr());
-            //     auto *cost_function = new ceres::DynamicAutoDiffCostFunction<GPMotionPriorTwoKnotsFactorAutodiff>(GPMPFactor);
-            //     cost_function->SetNumResiduals(18);    
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            
+            // Add the parameter blocks
+            for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
 
-            //     vector<double *> factor_param_blocks;
-            //     factorMeta.coupled_params.push_back(vector<ParamInfo>());
-                
-            //     // Add the parameter blocks
-            //     for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
-            //     {
-            //         factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
-            //         factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
-            //         factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
-            //         factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
-            //         factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
-            //         factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
-
-            //         // Record the param info
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
-            //         factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
-                
-            //         cost_function->AddParameterBlock(4);
-            //         cost_function->AddParameterBlock(3);
-            //         cost_function->AddParameterBlock(3);
-            //         cost_function->AddParameterBlock(3);
-            //         cost_function->AddParameterBlock(3);
-            //         cost_function->AddParameterBlock(3);                  
-            //     }
-                
-            //     // Create the factors
-            //     // double mp_loss_thres = -1;
-            //     // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            //     ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            //     // ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
-            //     auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-                
-            //     // Record the residual block
-            //     factorMeta.res.push_back(res_block);
-            // } else {
-                vector<double *> factor_param_blocks;
-                factorMeta.coupled_params.push_back(vector<ParamInfo>());
-                
-                // Add the parameter blocks
-                for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
-                {
-                    factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
-                    factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
-                    factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
-                    factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
-                    factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
-                    factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
-
-                    // Record the param info
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
-                    factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
-                }
-                
-                // Create the factors
-                // double mp_loss_thres = -1;
-                // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-                ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-                ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
-                auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-                
-                // Record the residual block
-                factorMeta.res.push_back(res_block);
-            // }
-
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+            }
+            
+            // Create the factors
+            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
+            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+            
+            // Record the residual block
+            factorMeta.res.push_back(res_block);
             
             // Record the time stamp of the factor
             factorMeta.stamp.push_back(traj->getKnotTime(kidx+1));
@@ -365,7 +315,6 @@ public:
         for (auto &tdoa : tdoaData)
         {
             if (!traj->TimeInInterval(tdoa.t, 1e-6)) {
-                std::cout << "warn: !traj->TimeInInterval(tdoa.t, 1e-6)" << std::endl;
                 continue;
             }
             
@@ -374,10 +323,6 @@ public:
             double s  = us.second;
 
             if (u < kidxmin || u+1 > kidxmax) {
-                std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax tdoa.t: "
-                          << tdoa.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
-                          << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
-                          << " tmin: " << tmin << " tmax: " << tmax << std::endl;
                 continue;
             }
 
@@ -436,10 +381,6 @@ public:
             double s  = us.second;
 
             if (u < kidxmin || u+1 > kidxmax) {
-                std::cout << "warn: traj->getKnotTime(u) <= tmin || traj->getKnotTime(u+1) >= tmax imu.t: "
-                          << imu.t << " u: " << u << " traj->getKnotTime(u): " << traj->getKnotTime(u)
-                          << " traj->getKnotTime(u+1): " << traj->getKnotTime(u+1) 
-                          << " tmin: " << tmin << " tmax: " << tmax << std::endl;
                 continue;
             }
       
@@ -808,7 +749,7 @@ public:
         }
     }    
 
-    void Evaluate(int iter, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
+    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 

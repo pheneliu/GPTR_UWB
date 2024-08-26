@@ -24,10 +24,6 @@
 * along with splio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
 #include <ceres/ceres.h>
 #include "basalt/spline/ceres_spline_helper.h"
 #include "basalt/utils/sophus_utils.hpp"
@@ -84,8 +80,6 @@ public:
 
         // Residual
         Eigen::Map<Matrix<T, 12, 1>> residual(residuals);      
-        // Eigen::Matrix<T, 3, 1> ba = Eigen::Matrix<T, 3, 1>::Zero();
-        // Eigen::Matrix<T, 3, 1> bg = Eigen::Matrix<T, 3, 1>::Zero();
         Eigen::Vector3d g(0, 0, 9.81);
 
         residual.template block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);

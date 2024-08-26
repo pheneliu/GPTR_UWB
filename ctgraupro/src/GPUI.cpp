@@ -250,6 +250,7 @@ ros::Publisher gt_pub;
 ros::Publisher gt_path_pub;
 ros::Publisher est_pub;
 ros::Publisher odom_pub;
+ros::Publisher knot_pub;
 
 ros::Subscriber tdoaSub;
 ros::Subscriber tofSub ;
@@ -315,8 +316,6 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
     gt_path_pub.publish(gt_path);          
 }
 
-ros::Publisher knot_pub;
-
 void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list)
 {
     UwbImuBuf swUIBuf;
@@ -350,16 +349,14 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         }
 
         // Step 3: Optimization
-        TicToc tt_solve;
-        
-        int outer_iter = 1;
-          
+        TicToc tt_solve;          
         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE) + 1e-3;     // Start time of the sliding window
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
-                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);
+        gpmui->Evaluate(traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
+                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
+                        w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);
         tt_solve.Toc();
 
         // Step 4: Report, visualize
@@ -367,6 +364,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
                 UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
 
+        // Visualize knots
         pcl::PointCloud<pcl::PointXYZ> est_knots;
         for (int i = 0; i < traj->getNumKnots(); i++) {   
             Eigen::Vector3d knot_pos = traj->getKnotPose(i).translation();
@@ -378,10 +376,10 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         knot_msg.header.frame_id = "map";        
         knot_pub.publish(knot_msg);
 
+        // Visualize estimated trajectory
         auto est_pose = traj->pose(swUIBuf.tdoa_data.front().t);
         Eigen::Vector3d est_pos = est_pose.translation();
         Eigen::Quaterniond est_ort = est_pose.unit_quaternion();
-
         geometry_msgs::PoseStamped traj_msg;
         traj_msg.header.stamp = ros::Time::now();
         traj_msg.pose.position.x = est_pos.x();
@@ -394,18 +392,16 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         est_path.poses.push_back(traj_msg);
         est_pub.publish(est_path);
 
+        // Visualize odometry
         nav_msgs::Odometry odom_msg;
         odom_msg.header.stamp = ros::Time::now();
         odom_msg.header.frame_id = "map";
-
         est_pose = traj->pose(traj->getKnotTime(traj->getNumKnots() - 1));
         est_pos = est_pose.translation();
         est_ort = est_pose.unit_quaternion();
-
         odom_msg.pose.pose.position.x = est_pos[0];
         odom_msg.pose.pose.position.y = est_pos[1];
         odom_msg.pose.pose.position.z = est_pos[2];
-
         odom_msg.pose.pose.orientation.w = est_ort.w();
         odom_msg.pose.pose.orientation.x = est_ort.x();
         odom_msg.pose.pose.orientation.y = est_ort.y();
@@ -416,7 +412,6 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {
             double removeTime = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE + SLIDE_SIZE);
-            std::cout << "removeTime: " << removeTime << std::endl;
             swUIBuf.slideForward(removeTime);
         }
     }
