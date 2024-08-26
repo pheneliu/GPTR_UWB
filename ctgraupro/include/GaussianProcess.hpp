@@ -984,6 +984,7 @@ public:
 
     Mat3 getSigGa() const { return gpm->getSigGa(); }
     Mat3 getSigNu() const { return gpm->getSigNu(); }
+    bool getKeepCov() const {return keepCov;}
 
     GPMixerPtr getGPMixerPtr()
     {
@@ -1304,10 +1305,11 @@ public:
         logfile << "Dt:" << dt << ";Order:" << 3 << ";Knots:" << getNumKnots() << ";MinTime:" << t0 << ";MaxTime:" << getMaxTime()
                 << ";SigGa:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
                              << getSigGa()(1, 0) << "," << getSigGa()(1, 1) << "," << getSigGa()(1, 2) << ","
-                             << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2) << ","
+                             << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2)
                 << ";SigNu:" << getSigNu()(0, 0) << "," << getSigNu()(0, 1) << "," << getSigNu()(0, 2) << ","
                              << getSigNu()(1, 0) << "," << getSigNu()(1, 1) << "," << getSigNu()(1, 2) << ","
                              << getSigNu()(2, 0) << "," << getSigNu()(2, 1) << "," << getSigNu()(2, 2)
+                << ";keepCov:" << getKeepCov()
                 << endl;
 
         for(int kidx = 0; kidx < getNumKnots(); kidx++)
@@ -1359,30 +1361,39 @@ public:
             std::getline(file, header);
 
             printf("Get header: %s\n", header.c_str());
-            vector<string> fields = splitstr(header, ',');
+            vector<string> fields = splitstr(header, ';');
             map<string, int> fieldidx;
             for(auto &field : fields)
             {
                 vector<string> fv = splitstr(field, ':');
                 fieldidx[fv[0]] = fieldidx.size();
-                // printf("Field: %s. Value: %s\n", fv[0].c_str(), splitstr(fields[fieldidx[fv[0]]], ':').back().c_str());
+                printf("Field: %s. Value: %s\n", fv[0].c_str(), splitstr(fields[fieldidx[fv[0]]], ':').back().c_str());
             }
-
+yolo();
             auto strToMat3 = [&splitstr](const string &s, char d) -> Matrix3d
             {
                 vector<string> Mstr = splitstr(s, d);
+yolo();
+                for(int idx = 0; idx < Mstr.size(); idx++)
+                    printf("Mstr[%d] = %s. S: %s\n", idx, Mstr[idx].c_str(), s.c_str());
+yolo();
                 vector<double> Mdbl = {stod(Mstr[0]), stod(Mstr[1]), stod(Mstr[2]),
                                        stod(Mstr[3]), stod(Mstr[4]), stod(Mstr[5]), 
                                        stod(Mstr[6]), stod(Mstr[7]), stod(Mstr[8])};
+yolo();
                 Eigen::Map<Matrix3d, Eigen::RowMajor> M(&Mdbl[0]);
                 return M;
             };
-            Matrix3d logSigNu = strToMat3(splitstr(fields[fieldidx["SigNu"]], ':').back(), ' ');
-            Matrix3d logSigGa = strToMat3(splitstr(fields[fieldidx["SigGa"]], ':').back(), ' ');
+            Matrix3d logSigNu = strToMat3(splitstr(fields[fieldidx["SigNu"]], ':').back(), ',');
+yolo();
+            Matrix3d logSigGa = strToMat3(splitstr(fields[fieldidx["SigGa"]], ':').back(), ',');
+yolo();
             double logDt = stod(splitstr(fields[fieldidx["Dt"]], ':').back());
+yolo();
             double logMinTime = stod(splitstr(fields[fieldidx["MinTime"]], ':').back());
+yolo();
             bool logkeepCov = (stoi(splitstr(fields[fieldidx["keepCov"]], ':').back()) == 1);
-            
+yolo();
             printf("Log configs:\n");
             printf("Dt: %f\n", logDt);
             printf("MinTime: %f\n", logMinTime);
