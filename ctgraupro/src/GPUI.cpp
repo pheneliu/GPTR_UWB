@@ -353,10 +353,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         TicToc tt_solve;
         
         int outer_iter = 1;
-        // bool if_autodiff = false;
-        
-        // double tmin = swUIBuf.tdoa_data.front().t;     // Start time of the sliding window
-        // double tmax = swUIBuf.tdoa_data.back().t;      // End time of the sliding window      
+          
         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE) + 1e-3;     // Start time of the sliding window
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
@@ -364,8 +361,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
                         anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);
         tt_solve.Toc();
-        std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
-        std::cout << "bg: " << bg.transpose() << " ba: " << ba.transpose() << std::endl;
+
         // Step 4: Report, visualize
         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
@@ -450,18 +446,6 @@ int main(int argc, char **argv)
     
     // Load the anchor pose 
     std::map<uint16_t, Eigen::Vector3d> anc_pose_ = getAnchorListFromUTIL(anchor_pose_path);
-    // MatrixXd anc_pose_ = load_dlm(anchor_pose_path, ",", 1, 0);
-    // for(int ridx = 0; ridx < anc_pose_.rows(); ridx++)
-    // {
-    //     Vector4d Q_; Q_ << anc_pose_.block<1, 4>(ridx, 3).transpose();
-    //     Quaternd Q(Q_.w(), Q_.x(), Q_.y(), Q_.z());
-    //     Vector3d P = anc_pose_.block<1, 3>(ridx, 0).transpose();
-    //     anc_pose.push_back(SE3d(Q, P));
-
-    //     myTf tf(anc_pose.back());
-    //     printf("Anchor: %2d. Pos: %6.3f, %6.3f, %6.3f. Rot: %4.0f, %4.0f, %4.0f.\n",
-    //             ridx, P.x(), P.y(), P.z(), tf.yaw(), tf.pitch(), tf.roll());
-    // }
 
     // Topics to subscribe to
     string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
@@ -501,7 +485,6 @@ int main(int argc, char **argv)
     nh_ptr->getParam("ACC_W", ACC_W);    
     nh_ptr->getParam("tdoa_loss_thres", tdoa_loss_thres);
     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    // bool if_autodiff = Util::GetBoolParam(nh_ptr, "auto_diff", false);
     
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
