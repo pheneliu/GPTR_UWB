@@ -1607,6 +1607,20 @@ struct LidarCoef
     bool marginalized = false;
 };
 
+struct TDOAData {
+  const double t;         // Time stamp
+  const int idA;          // Index of anchor A
+  const int idB;          // Index of anchor B
+  const double data;      // TDOA measurement
+  TDOAData(double s, int idxA, int idxB, double r) : t(s), idA(idxA), idB(idxB), data(r) {};
+};
+
+struct IMUData {
+  const double t;            // Time stamp
+  const Eigen::Vector3d acc; // acceleration measurement
+  const Eigen::Vector3d gyro;// gyroscope measurement
+  IMUData(double s, const Eigen::Vector3d& acc_, const Eigen::Vector3d& gyro_) : t(s), acc(acc_), gyro(gyro_) {};
+};
 
 // Interfacing ufo::map data with Eigen
 // namespace ufo::math

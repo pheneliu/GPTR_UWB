@@ -37,6 +37,9 @@ private:
     // Leaf size to downsample input pointcloud
     double ds_size;
 
+    double min_planarity = 0.2;
+    double max_plane_dis = 0.3;
+
     // How many point clouds to import into the sliding window
     int WINDOW_SIZE = 10;
 
@@ -89,13 +92,14 @@ private:
     ros::Publisher trajPub;
     ros::Publisher swTrajPub;
     ros::Publisher assocCloudPub;
+    ros::Publisher deskewedCloudPub;
 
 public:
 
     // Destructor
    ~GPMAPLO() {};
 
-    GPMAPLO(NodeHandlePtr &nh_ptr_, mutex & nh_mtx, const SE3d &T_W_Li0_, int &LIDX_)
+    GPMAPLO(NodeHandlePtr &nh_ptr_, mutex & nh_mtx, const SE3d &T_W_Li0_, double t0, int &LIDX_)
         : nh_ptr(nh_ptr_), T_W_Li0(T_W_Li0_), LIDX(LIDX_)
     {
         lock_guard<mutex> lg(nh_mtx);
@@ -140,9 +144,14 @@ public:
         nh_ptr->getParam("smSigmaR", smSigmaR);
         nh_ptr->getParam("smSigmaP", smSigmaP);
 
+        // Association params
+        nh_ptr->getParam("min_planarity", min_planarity);
+        nh_ptr->getParam("max_plane_dis", max_plane_dis);
+
         trajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gp_traj", LIDX), 1);
         swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
         assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
+        deskewedCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/cloud_inW", LIDX), 1);
         
         // Create the solver
         mySolver = GNSolverPtr(new GNSolver(nh_ptr, LIDX));
@@ -151,6 +160,13 @@ public:
         printf("Window size: %2d. Fixes: %.3f, %.3f. DK: %.3f, %2d. lidar_weight: %.3f. ppSigma: %.3f, %.3f. mpSigmaR: %.3f, %.3f\n",
                 WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
         // printf("GPMAPLO subscribing to %s\n\n", cloudSegTopic.c_str());
+
+        Matrix3d SigGa = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
+        Matrix3d SigNu = Vector3d(mpSigmaP, mpSigmaP, mpSigmaP).asDiagonal();
+
+        traj = GaussianProcessPtr(new GaussianProcess(deltaT, SigGa, SigNu, true));
+        traj->setStartTime(t0);
+        traj->setKnot(0, GPState(t0, T_W_Li0));
 
     }
 
@@ -223,7 +239,7 @@ public:
                     continue;
 
                 // Fit the plane
-                if(Util::fitPlane(nbrPoints, 0.5, 0.1, Coef_[pidx].n, Coef_[pidx].plnrty))
+                if(Util::fitPlane(nbrPoints, min_planarity, max_plane_dis, Coef_[pidx].n, Coef_[pidx].plnrty))
                 {
                     ROS_ASSERT(tpoint >= 0);
                     Coef_[pidx].t = tpoint;
@@ -276,7 +292,7 @@ public:
         }
     }
 
-    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef, bool publish_full_traj=false)
+    void Visualize(double tmin, double tmax, deque<vector<LidarCoef>> &swCloudCoef, CloudXYZIPtr &cloudUndiInW, bool publish_full_traj=false)
     {
         if (publish_full_traj)
         {
@@ -314,17 +330,13 @@ public:
         // static ros::Publisher assocCloudPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud", LIDX), 1);
         if (assoc_cloud->size() != 0)
             Util::publishCloud(assocCloudPub, *assoc_cloud, ros::Time::now(), "world");
+
+        // Publish the deskewed pointCloud
+        Util::publishCloud(deskewedCloudPub, *cloudUndiInW, ros::Time::now(), "world");
     }
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
     {
-        Matrix3d Qr = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
-        Matrix3d Qc = Vector3d(mpSigmaP, mpSigmaP, mpSigmaP).asDiagonal();
-
-        traj = GaussianProcessPtr(new GaussianProcess(deltaT, Qr, Qc, true));
-        traj->setStartTime(t0);
-        traj->setKnot(0, GPState(t0, T_W_Li0));
-
         deque<CloudXYZITPtr> swCloudSeg;
         deque<CloudXYZIPtr > swCloudSegUndi;
         deque<CloudXYZIPtr > swCloudSegUndiInW;
@@ -399,7 +411,7 @@ public:
             Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
             // Step 2.3: Create a local trajectory for optimization
-            GaussianProcessPtr swTraj(new GaussianProcess(deltaT, Qr, Qc));
+            GaussianProcessPtr swTraj(new GaussianProcess(deltaT, traj->getSigGa(), traj->getSigNu()));
             int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
             double tmin = traj->getKnotTime(umin);
             double tmax = min(traj->getMaxTime(), TSWEND);
@@ -484,7 +496,7 @@ public:
                 }
 
                 // Visualize the result on the sliding window
-                Visualize(tmin, tmax, swCloudCoef);
+                Visualize(tmin, tmax, swCloudCoef, swCloudSegUndiInW.back());
 
                 tt_aftop.Toc();
 

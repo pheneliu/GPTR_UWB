@@ -1,14 +1,8 @@
 #pragma once
 
 #include <ceres/ceres.h>
-// #include "basalt/spline/ceres_spline_helper.h"
-// #include "basalt/utils/sophus_utils.hpp"
-#include "../utility.h"
 #include "GaussianProcess.hpp"
-
-using SO3d = Sophus::SO3<double>;
-using SE3d = Sophus::SE3<double>;
-
+#include "utility.h"
 
 class GPMotionPriorTwoKnotsFactorTMN
 {
@@ -44,8 +38,8 @@ public:
         Qtilde << 1.0/20.0*Dtpow[5], 1.0/8.0*Dtpow[4], 1.0/6.0*Dtpow[3],
                   1.0/08.0*Dtpow[4], 1.0/3.0*Dtpow[3], 1.0/2.0*Dtpow[2],
                   1.0/06.0*Dtpow[3], 1.0/2.0*Dtpow[2], 1.0/1.0*Dtpow[1];
-        Info.block<9, 9>(0, 0) = gpm->kron(Qtilde, gpm->getQr());
-        Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getQc());
+        Info.block<9, 9>(0, 0) = gpm->kron(Qtilde, gpm->getSigGa());
+        Info.block<9, 9>(9, 9) = gpm->kron(Qtilde, gpm->getSigNu());
         
         // Find the square root info
         // sqrtW = Matrix<double, STATE_DIM, STATE_DIM>::Identity(STATE_DIM, STATE_DIM);
@@ -143,7 +137,6 @@ public:
                 Dr_DOa.setZero();
                 Dr_DOa.block<3, 3>(0, 0) = -DtI;
                 Dr_DOa.block<3, 3>(3, 0) = -Eye;
-                // Dr_DOa.block<3, 3>(6, 0) =  0;
                 Dr_DOa = sqrtW*Dr_DOa;
             }
 
@@ -174,7 +167,6 @@ public:
             {
                 Eigen::Block<MatJ, STATE_DIM, 3> Dr_DOb(jacobian.block<STATE_DIM, 3>(0, idx));
                 Dr_DOb.setZero();
-                // Dr_DOb.block<3, 3>(0, 0) = 0;
                 Dr_DOb.block<3, 3>(3, 0) = JrInvTheb;
                 Dr_DOb.block<3, 3>(6, 0) = DTheddotb_DOb;
                 Dr_DOb = sqrtW*Dr_DOb;
@@ -185,8 +177,6 @@ public:
             {
                 Eigen::Block<MatJ, STATE_DIM, 3> Dr_DSb(jacobian.block<STATE_DIM, 3>(0, idx));
                 Dr_DSb.setZero();
-                // Dr_DSb.block<3, 3>(0, 0) = 0;
-                // Dr_DSb.block<3, 3>(3, 0) = 0;
                 Dr_DSb.block<3, 3>(6, 0) = JrInvTheb;
                 Dr_DSb = sqrtW*Dr_DSb;
             }
@@ -246,28 +236,19 @@ public:
 
 private:
 
-    // const int Ridx = 0;
-    // const int Oidx = 1;
-    // const int Pidx = 2;
-    // const int Vidx = 3;
-    // const int Aidx = 4;
+    int RaIdx = 0;
+    int OaIdx = 3;
+    int SaIdx = 6;
+    int PaIdx = 9;
+    int VaIdx = 12;
+    int AaIdx = 15;
 
-    const int RaIdx = 0;
-    const int OaIdx = 3;
-    const int SaIdx = 6;
-    const int PaIdx = 9;
-    const int VaIdx = 12;
-    const int AaIdx = 15;
-
-    const int RbIdx = 18;
-    const int ObIdx = 21;
-    const int SbIdx = 24;
-    const int PbIdx = 27;
-    const int VbIdx = 30;
-    const int AbIdx = 33;
-
-    double wR;
-    double wP;
+    int RbIdx = 18;
+    int ObIdx = 21;
+    int SbIdx = 24;
+    int PbIdx = 27;
+    int VbIdx = 30;
+    int AbIdx = 33;
 
     // Square root information
     Matrix<double, STATE_DIM, STATE_DIM> sqrtW;

@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+
+<launch>
+
+    <arg name="autorun" default="false" />
+
+    <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
+          launch-prefix="bash -c 'sleep 3; $0 $@' ">
+
+        <!-- Location of the prior map -->
+        <param name="priormap_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/priormap.pcd" />
+
+        <!-- Location of bag file -->
+        <param name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/cloud_avia_mid.bag" />
+        
+        <!-- Total number of clouds loaded -->
+        <param name="MAX_CLOUDS"     value="300" />
+         <!-- Time since first pointcloud to skip MAP Opt-->
+        <param name="SKIPPED_TIME"   value="4.9"/>
+        
+        <param name="lidar_topic"    value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
+        <param name="lidar_type"     value="['livox', 'livox']" type="yaml" />
+        <param name="xyzypr_W_L0"    value="[ 0, 0, 0.7,  045, 45, 0,
+                                              0, 0, 0.5, -135, 00, 0 ]" type="yaml"/>
+        <!-- Groundtruth for evaluation-->
+        <param name="xtrz_gndtr"     value="[ 0, 0, 0, 0, 0, 0,
+                                             -0.1767767, 0, -0.53033009, 180, 45, 0 ]" type="yaml"/>
+
+        <!-- Leaf size to downsample priormap -->
+        <param name="pmap_leaf_size" value="0.15"   />
+        <param name="cloud_ds"       value="0.1"   />
+  
+        <!-- GN MAP optimization params -->
+        <param name="deltaT"         value="0.04357"/>
+        <param name="WINDOW_SIZE"    value="5"      />
+        <param name="use_ceres"      value="0"      />
+        <param name="max_gniter"     value="3"      />
+        <param name="lambda"         value="0.1"    />
+        <param name="dxmax"          value="0.5"    />
+        <param name="fixed_start"    value="-0.001" />
+        <param name="fixed_end"      value="-0.001" />
+        
+        <param name="ds_size"        value="0.1"    />
+        <param name="lidar_ds_rate"  value="1"      />
+        <param name="lidar_weight"   value="5.0"    />
+
+        <!-- Motion prior factors -->
+        <param name="mpSigmaR"       value="1.0"    />
+        <param name="mpSigmaP"       value="1.0"    />
+
+        <!-- Loss function threshold -->
+        <param name="ld_loss_thres"  value="1.0"    />
+        <param name="pp_loss_thres"  value="-1.0"   />
+        <param name="mp_loss_thres"  value="-1.0"   />
+        <param name="sm_loss_thres"  value="-1.0"   />
+
+        <!-- Extrinsic estimation -->
+        <param name="SW_CLOUDNUM"    value="8"      />
+        <param name="SW_CLOUDSTEP"   value="2"      />
+        <param name="max_lidarcoefs" value="1000"   />
+        <param name="XTRZ_DENSITY"   value="4"      />
+        <param name="max_outer_iter" value="3"      />
+        <param name="max_inner_iter" value="2"      />
+        <param name="fix_kidxmin"    value="0"      />
+        <param name="fix_kidxmax"    value="0"      />
+
+        <!-- Log dir -->
+        <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/log/gp/exp_sim"/>
+
+    </node>
+
+    <!-- Visualize -->
+    <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
+        args="-d $(find ctgaupro)/launch/ctgaupro_lio.rviz" />
+
+</launch>

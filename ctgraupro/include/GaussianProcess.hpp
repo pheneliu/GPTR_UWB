@@ -1,12 +1,14 @@
 #pragma once
 
 #include <iostream>
+#include <fstream>
+#include <filesystem>
+
 #include <algorithm>    // Include this header for std::max
 #include <Eigen/Dense>
 
 // Sophus
 #include <sophus/se3.hpp>
-// #include <ceres/local_parameterization.h>   // For the local parameterization
 
 typedef Sophus::SO3<double> SO3d;
 typedef Sophus::SE3<double> SE3d;
@@ -102,6 +104,7 @@ public:
 
     GPState(double t_, const GPState<T> &other)
         : t(t_), R(other.R), O(other.O), S(other.S), P(other.P), V(other.V), A(other.A) {}
+    
     GPState &operator=(const GPState &Xother)
     {
         this->t = Xother.t;
@@ -168,10 +171,10 @@ private:
     const Mat3 Eye = Mat3::Identity();
 
     // Covariance of angular jerk
-    Mat3 Qr = Eye;
+    Mat3 SigGa = Eye;
 
     // Covariance of translational jerk
-    Mat3 Qc = Eye;
+    Mat3 SigNu = Eye;
 
 public:
 
@@ -179,11 +182,11 @@ public:
    ~GPMixer() {};
 
     // Constructor
-    GPMixer(double dt_, const Mat3 Qr_, const Mat3 Qc_) : dt(dt_), Qr(Qr_), Qc(Qc_) {};
+    GPMixer(double dt_, const Mat3 SigGa_, const Mat3 SigNu_) : dt(dt_), SigGa(SigGa_), SigNu(SigNu_) {};
 
     double getDt() const { return dt; }
-    Mat3   getQr() const { return Qr; }
-    Mat3   getQc() const { return Qc; }
+    Mat3   getSigGa() const { return SigGa; }
+    Mat3   getSigNu() const { return SigNu; }
 
     template <typename MatrixType1, typename MatrixType2>
     MatrixXd kron(const MatrixType1& A, const MatrixType2& B) const
@@ -196,8 +199,18 @@ public:
         return result;
     }
 
+    void setSigGa(const Mat3 &m)
+    {
+        SigGa = m;
+    }
+
+    void setSigNu(const Mat3 &m)
+    {
+        SigNu = m;
+    }
+
     // Transition Matrix, PHI(tau, 0)
-    MatrixXd Ftilde(const double dtau, int N) const
+    MatrixXd Fbase(const double dtau, int N) const
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
 
@@ -209,8 +222,8 @@ public:
         return Phi;
     }
 
-    // Gaussian Process covariance, Q = \int{Phi*F*Qc*F'*Phi'}
-    MatrixXd Qtilde(const double dtau, int N) const 
+    // Gaussian Process covariance, Q = \int{Phi*F*SigNu*F'*Phi'}
+    MatrixXd Qbase(const double dtau, int N) const 
     {
         std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
         
@@ -222,16 +235,44 @@ public:
         return Q;
     }
 
+    MatrixXd Qga(const double s, int N) const 
+    {
+        double dtau = s*dt;
+
+        std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
+        
+        MatrixXd Q(N, N);
+        for(int n = 0; n < N; n++)
+            for(int m = 0; m < N; m++)
+                Q(n, m) = pow(dtau, 2*N-1-n-m)/double(2*N-1-n-m)/double(factorial(N-1-n))/double(factorial(N-1-m));
+
+        return kron(Qbase(dt, 3), SigGa);
+    }
+
+    MatrixXd Qnu(const double s, int N) const 
+    {
+        double dtau = s*dt;
+
+        std::function<int(int)> factorial = [&factorial](int n) -> int {return (n <= 1) ? 1 : n * factorial(n - 1);};
+        
+        MatrixXd Q(N, N);
+        for(int n = 0; n < N; n++)
+            for(int m = 0; m < N; m++)
+                Q(n, m) = pow(dtau, 2*N-1-n-m)/double(2*N-1-n-m)/double(factorial(N-1-n))/double(factorial(N-1-m));
+
+        return kron(Qbase(dt, 3), SigNu);
+    }
+
     Matrix<double, STATE_DIM, STATE_DIM> PropagateFullCov(Matrix<double, STATE_DIM, STATE_DIM> P0) const
     {
         Matrix<double, STATE_DIM, STATE_DIM> F; F.setZero();
         Matrix<double, STATE_DIM, STATE_DIM> Q; Q.setZero();
         
-        F.block<9, 9>(0, 0) = kron(Ftilde(dt, 3), Eye);
-        F.block<9, 9>(9, 9) = kron(Ftilde(dt, 3), Eye);
+        F.block<9, 9>(0, 0) = kron(Fbase(dt, 3), Eye);
+        F.block<9, 9>(9, 9) = kron(Fbase(dt, 3), Eye);
 
-        Q.block<9, 9>(0, 0) = kron(Qtilde(dt, 3), Qr);
-        Q.block<9, 9>(9, 9) = kron(Qtilde(dt, 3), Qc);
+        Q.block<9, 9>(0, 0) = kron(Qbase(dt, 3), SigGa);
+        Q.block<9, 9>(9, 9) = kron(Qbase(dt, 3), SigNu);
 
         return F*P0*F.transpose() + Q;
     }
@@ -241,40 +282,40 @@ public:
         if (dtau < 1e-4)
             return kron(MatrixXd::Zero(3, 3), Eye);
 
-        MatrixXd Phidtaubar = kron(Ftilde(dt - dtau, 3), Eye);
-        MatrixXd Qdtau = kron(Qtilde(dtau, 3), Q);
-        MatrixXd Qdt = kron(Qtilde(dt, 3), Q);
+        MatrixXd Phidtaubar = kron(Fbase(dt - dtau, 3), Eye);
+        MatrixXd Qdtau = kron(Qbase(dtau, 3), Q);
+        MatrixXd Qdt = kron(Qbase(dt, 3), Q);
 
         return Qdtau*Phidtaubar.transpose()*Qdt.inverse();
     }
 
     MatrixXd PSI_ROS(const double dtau) const
     {
-        return PSI(dtau, Qr);
+        return PSI(dtau, SigGa);
     }
 
     MatrixXd PSI_PVA(const double dtau) const
     {
-        return PSI(dtau, Qc);
+        return PSI(dtau, SigNu);
     }
 
     MatrixXd LAMDA(const double dtau, const Mat3 &Q) const
     {
         MatrixXd PSIdtau = PSI(dtau, Q);
-        MatrixXd Fdtau = kron(Ftilde(dtau, 3), Eye);
-        MatrixXd Fdt = kron(Ftilde(dt, 3), Eye);
+        MatrixXd Fdtau = kron(Fbase(dtau, 3), Eye);
+        MatrixXd Fdt = kron(Fbase(dt, 3), Eye);
 
         return Fdtau - PSIdtau*Fdt;
     }
 
     MatrixXd LAMDA_ROS(const double dtau) const
     {
-        return LAMDA(dtau, Qr);
+        return LAMDA(dtau, SigGa);
     }
 
     MatrixXd LAMDA_PVA(const double dtau) const
     {
-        return LAMDA(dtau, Qc);
+        return LAMDA(dtau, SigNu);
     }
 
     template <class T = double>
@@ -643,10 +684,10 @@ public:
         Vec3T  &At = Xt.A;
         
         // Calculate the the mixer matrixes
-        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAMDA(tau, Qr).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI(tau,   Qr).cast<T>();
-        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMDA(tau, Qc).cast<T>();
-        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   Qc).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_ROSt = LAMDA(tau, SigGa).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_ROSt = PSI(tau,   SigGa).cast<T>();
+        Matrix<T, Dynamic, Dynamic> LAM_PVAt = LAMDA(tau, SigNu).cast<T>();
+        Matrix<T, Dynamic, Dynamic> PSI_PVAt = PSI(tau,   SigNu).cast<T>();
 
         // Find the relative rotation
         SO3T Rab = Xa.R.inverse()*Xb.R;
@@ -750,7 +791,8 @@ public:
         Mat3T JThetd0Oa = JThetd0Thead1*JThead1Oa;
         Mat3T JThetd0Ob = JThetd0Thebd1*JThebd1Ob + JThetd0Thebd2*JThebd2Ob;
         Mat3T JThetd0Sa = JThetd0Thead2*JThead2Sa;
-        Mat3T JThetd0Sb = JThetd0Thead2*JThebd2Sb;
+        // Mat3T JThetd0Sb = JThetd0Thead2*JThebd2Sb; // ???
+        Mat3T JThetd0Sb = JThetd0Thebd2*JThebd2Sb;
 
         Mat3T JThetd1Ra = JThetd1Thebd0*JThebd0Ra + JThetd1Thebd1*JThebd1Ra + JThetd1Thebd2*JThebd2Ra;
         Mat3T JThetd1Rb = JThetd1Thebd0*JThebd0Rb + JThetd1Thebd1*JThebd1Rb + JThetd1Thebd2*JThebd2Rb;
@@ -764,7 +806,8 @@ public:
         Mat3T JThetd2Oa = JThetd2Thead1*JThead1Oa;
         Mat3T JThetd2Ob = JThetd2Thebd1*JThebd1Ob + JThetd2Thebd2*JThebd2Ob;
         Mat3T JThetd2Sa = JThetd2Thead2*JThead2Sa;
-        Mat3T JThetd2Sb = JThetd2Thead2*JThebd2Sb;
+        // Mat3T JThetd2Sb = JThetd2Thead2*JThebd2Sb; // ???
+        Mat3T JThetd2Sb = JThetd2Thebd2*JThebd2Sb;
 
 
         // Jacobians from L3 to L2
@@ -889,8 +932,8 @@ public:
     GPMixer &operator=(const GPMixer &other)
     {
         this->dt = other.dt;
-        this->Qr = other.Qr;
-        this->Qc = other.Qc;
+        this->SigGa = other.SigGa;
+        this->SigNu = other.SigNu;
     }
 };
 
@@ -936,11 +979,12 @@ public:
     ~GaussianProcess(){};
 
     // Constructor
-    GaussianProcess(double dt_, Mat3 Qr_, Mat3 Qc_, bool keepCov_=false)
-        : dt(dt_), gpm(GPMixerPtr(new GPMixer(dt_, Qr_, Qc_))), keepCov(keepCov_) {};
+    GaussianProcess(double dt_, Mat3 SigGa_, Mat3 SigNu_, bool keepCov_=false)
+        : dt(dt_), gpm(GPMixerPtr(new GPMixer(dt_, SigGa_, SigNu_))), keepCov(keepCov_) {};
 
-    Mat3 getQr() const { return gpm->getQr(); }
-    Mat3 getQc() const { return gpm->getQc(); }
+    Mat3 getSigGa() const { return gpm->getSigGa(); }
+    Mat3 getSigNu() const { return gpm->getSigNu(); }
+    bool getKeepCov() const {return keepCov;}
 
     GPMixerPtr getGPMixerPtr()
     {
@@ -1179,6 +1223,16 @@ public:
             propagateCovariance();
     }
 
+    void setSigNu(const Matrix3d &m)
+    {
+        gpm->setSigNu(m);
+    }
+
+    void setSigGa(const Matrix3d &m)
+    {
+        gpm->setSigGa(m);
+    }
+
     void setKnot(int kidx, const GPState<double> &Xn)
     {
         R[kidx] = Xn.R;
@@ -1239,6 +1293,189 @@ public:
         this->A = other.A;
 
         return *this;
+    }
+
+    bool saveTrajectory(string log_dir, int lidx, vector<double> ts)
+    {
+        string log_ = log_dir + "/gptraj_" + std::to_string(lidx) + ".csv";
+        std::ofstream logfile;
+        logfile.open(log_); // Open the file for writing
+        logfile.precision(std::numeric_limits<double>::digits10 + 1);
+
+        logfile << "Dt:" << dt << ";Order:" << 3 << ";Knots:" << getNumKnots() << ";MinTime:" << t0 << ";MaxTime:" << getMaxTime()
+                << ";SigGa:" << getSigGa()(0, 0) << "," << getSigGa()(0, 1) << "," << getSigGa()(0, 2) << ","
+                             << getSigGa()(1, 0) << "," << getSigGa()(1, 1) << "," << getSigGa()(1, 2) << ","
+                             << getSigGa()(2, 0) << "," << getSigGa()(2, 1) << "," << getSigGa()(2, 2)
+                << ";SigNu:" << getSigNu()(0, 0) << "," << getSigNu()(0, 1) << "," << getSigNu()(0, 2) << ","
+                             << getSigNu()(1, 0) << "," << getSigNu()(1, 1) << "," << getSigNu()(1, 2) << ","
+                             << getSigNu()(2, 0) << "," << getSigNu()(2, 1) << "," << getSigNu()(2, 2)
+                << ";keepCov:" << getKeepCov()
+                << endl;
+
+        for(int kidx = 0; kidx < getNumKnots(); kidx++)
+        {
+            logfile << kidx << ", "
+                    << getKnotSO3(kidx).unit_quaternion().x() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().y() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().z() << ", "
+                    << getKnotSO3(kidx).unit_quaternion().w() << ", "
+                    << getKnotOmg(kidx).x() << ", "
+                    << getKnotOmg(kidx).y() << ", "
+                    << getKnotOmg(kidx).z() << ", "
+                    << getKnotAlp(kidx).x() << ", "
+                    << getKnotAlp(kidx).y() << ", "
+                    << getKnotAlp(kidx).z() << ", "
+                    << getKnotPos(kidx).x() << ", "
+                    << getKnotPos(kidx).y() << ", "
+                    << getKnotPos(kidx).z() << ", "
+                    << getKnotVel(kidx).x() << ", "
+                    << getKnotVel(kidx).y() << ", "
+                    << getKnotVel(kidx).z() << ", "
+                    << getKnotAcc(kidx).x() << ", "
+                    << getKnotAcc(kidx).y() << ", "
+                    << getKnotAcc(kidx).z() << endl;
+        }
+
+        logfile.close();
+        return true;
+    }
+
+    bool loadTrajectory(string log_file)
+    {
+        std::ifstream file(log_file);
+
+        auto splitstr = [](const string s_, const char d) -> vector<string>
+        {
+            std::istringstream s(s_);
+            vector<string> o; string p;
+            while(std::getline(s, p, d))
+                o.push_back(p);
+            return o;    
+        };
+
+        // Get the first line for specification
+        if (file.is_open())
+        {
+            // Read the first line from the file
+            std::string header;
+            std::getline(file, header);
+
+            printf("Get header: %s\n", header.c_str());
+            vector<string> fields = splitstr(header, ';');
+            map<string, int> fieldidx;
+            for(auto &field : fields)
+            {
+                vector<string> fv = splitstr(field, ':');
+                fieldidx[fv[0]] = fieldidx.size();
+                printf("Field: %s. Value: %s\n", fv[0].c_str(), splitstr(fields[fieldidx[fv[0]]], ':').back().c_str());
+            }
+
+            auto strToMat3 = [&splitstr](const string &s, char d) -> Matrix3d
+            {
+                vector<string> Mstr = splitstr(s, d);
+                for(int idx = 0; idx < Mstr.size(); idx++)
+                    printf("Mstr[%d] = %s. S: %s\n", idx, Mstr[idx].c_str(), s.c_str());
+
+                vector<double> Mdbl = {stod(Mstr[0]), stod(Mstr[1]), stod(Mstr[2]),
+                                       stod(Mstr[3]), stod(Mstr[4]), stod(Mstr[5]), 
+                                       stod(Mstr[6]), stod(Mstr[7]), stod(Mstr[8])};
+
+                Eigen::Map<Matrix3d, Eigen::RowMajor> M(&Mdbl[0]);
+                return M;
+            };
+            Matrix3d logSigNu = strToMat3(splitstr(fields[fieldidx["SigNu"]], ':').back(), ',');
+            Matrix3d logSigGa = strToMat3(splitstr(fields[fieldidx["SigGa"]], ':').back(), ',');
+            double logDt = stod(splitstr(fields[fieldidx["Dt"]], ':').back());
+            double logMinTime = stod(splitstr(fields[fieldidx["MinTime"]], ':').back());
+            bool logkeepCov = (stoi(splitstr(fields[fieldidx["keepCov"]], ':').back()) == 1);
+
+            printf("Log configs:\n");
+            printf("Dt: %f\n", logDt);
+            printf("MinTime: %f\n", logMinTime);
+            printf("SigNu: \n");
+            cout << logSigNu << endl;
+            printf("SigGa: \n");
+            cout << logSigGa << endl;
+
+            dt = logDt;
+            t0 = logMinTime;
+            gpm = GPMixerPtr(new GPMixer(logDt, logSigGa, logSigNu));
+
+            if (logkeepCov == keepCov)
+                printf(KYEL "Covariance tracking is disabled\n" RESET);
+
+            keepCov = false;
+        }
+
+        // Read txt to matrix
+        auto read_csv =  [](const std::string &path, string dlm, int r_start = 0, int col_start = 0) -> MatrixXd
+        {
+            std::ifstream indata;
+            indata.open(path);
+            std::string line;
+            std::vector<double> values;
+            int row_idx = -1;
+            int rows = 0;
+            while (std::getline(indata, line))
+            {
+                row_idx++;
+                if (row_idx < r_start)
+                    continue;
+
+                // printf("line: %s\n", line.c_str());
+
+                std::stringstream lineStream(line);
+                std::string cell;
+                int col_idx = -1;
+                while (std::getline(lineStream, cell, dlm[0]))
+                {
+                    if (cell == dlm || cell.size() == 0)
+                        continue;
+
+                    col_idx++;
+                    if (col_idx < col_start)
+                        continue;
+
+                    values.push_back(std::stod(cell));
+
+                    // printf("cell: %s\n", cell.c_str());
+                }
+
+                rows++;
+            }
+
+            return Eigen::Map<Matrix<double, -1, -1, Eigen::RowMajor>>(values.data(), rows, values.size() / rows);
+        };
+
+        // Load the control point values
+        MatrixXd traj = read_csv(log_file, ",", 1, 0);
+        printf("Found %d control points.\n", traj.rows());
+        // for(int ridx = 0; ridx < traj.rows(); ridx++)
+        // {
+        //     cout << "Row: " << traj.row(ridx) << endl;
+        //     if (ridx == 10)
+        //         exit(-1);
+        // }
+        
+        // Clear the knots
+        R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear(); C.clear();
+
+        // Set the knot values
+        for(int ridx = 0; ridx < traj.rows(); ridx++)
+        {
+
+            VectorXd X = traj.row(ridx);
+            R.push_back(SO3d(Quaternd(X(4), X(1), X(2), X(3))));
+            O.push_back(Vec3(X(5),  X(6),  X(7)));
+            S.push_back(Vec3(X(8),  X(9),  X(10)));
+            P.push_back(Vec3(X(11), X(12), X(13)));
+            V.push_back(Vec3(X(14), X(15), X(16)));
+            A.push_back(Vec3(X(17), X(18), X(19)));
+
+            // C.push_back(CovMZero);
+        }
+
+        return true;
     }
 };
 // Define the shared pointer

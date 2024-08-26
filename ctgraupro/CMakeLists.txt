@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(cartiber)
+project(ctgaupro)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors -g")
+set(CMAKE_CXX_FLAGS "-std=c++17 -Wfatal-errors")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 
 ## Find catkin macros and libraries
@@ -119,7 +119,7 @@ find_package(Ceres REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES cartiber
+#  LIBRARIES ctgaupro
 #  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
 )
@@ -142,7 +142,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/cartiber.cpp
+#   src/${PROJECT_NAME}/ctgaupro.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -153,10 +153,17 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
+<<<<<<< HEAD:cartiber/CMakeLists.txt
 # add_executable(${PROJECT_NAME} src/cartiber.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
 # add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 # target_compile_options(${PROJECT_NAME} PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 # target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt)
+=======
+add_executable(${PROJECT_NAME} src/ctgaupro.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
+add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME} PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+>>>>>>> 03bbaa7c40e7deccfbb23e3da55d508fc605d54f:ctgraupro/CMakeLists.txt
 
 # add_executable(${PROJECT_NAME}_test src/test.cpp include/ikdTree/ikd_Tree.cpp)
 # add_dependencies(${PROJECT_NAME}_test ${catkin_EXPORTED_TARGETS})
@@ -169,7 +176,19 @@ target_compile_options(${PROJECT_NAME}_test_ljp PRIVATE ${OpenMP_CXX_FLAGS} "-is
 target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt) 
 
 # UWB fusion
+<<<<<<< HEAD:cartiber/CMakeLists.txt
 # add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp)
 # add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
 # target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 # target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt)
+=======
+add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
+add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
+add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
+add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+>>>>>>> 03bbaa7c40e7deccfbb23e3da55d508fc605d54f:ctgraupro/CMakeLists.txt

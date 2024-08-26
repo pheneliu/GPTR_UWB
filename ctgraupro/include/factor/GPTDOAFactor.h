@@ -24,10 +24,6 @@
 * along with splio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//
-// Created by Thien-Minh Nguyen on 01/08/22.
-//
-
 #include <ceres/ceres.h>
 #include "basalt/spline/ceres_spline_helper.h"
 #include "basalt/utils/sophus_utils.hpp"
@@ -35,26 +31,27 @@
 
 using namespace Eigen;
 
-class GPPointToPlaneFactor: public ceres::CostFunction
+class GPTDOAFactor: public ceres::CostFunction
 {
 public:
 
     // Destructor
-    ~GPPointToPlaneFactor() {};
+    ~GPTDOAFactor() {};
 
     // Constructor
-    GPPointToPlaneFactor(const Vector3d &f_, const Vector4d &coef, double w_,
+    GPTDOAFactor(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, const Vector3d &offset_, double w_,
                          GPMixerPtr gpm_, double s_)
-    :   f          (f_               ),
-        n          (coef.head<3>()   ),
-        m          (coef.tail<1>()(0)),
-        w          (w_               ),
-        Dt         (gpm_->getDt()    ),
-        s          (s_               ),
-        gpm        (gpm_             )
+    :   tdoa        (tdoa_            ),
+        pos_anchor_i(pos_anchor_i_    ),
+        pos_anchor_j(pos_anchor_j_    ),
+        offset      (offset_          ),
+        w           (w_               ),
+        Dt          (gpm_->getDt()    ),
+        s           (s_               ),
+        gpm         (gpm_             )
 
     {
-        // 1-element residual: n^T*(Rt*f + pt) + m
+        // 1-element residual: || p_itp - pos_an_i || - || p_itp - pos_an_j || - tdoa
         set_num_residuals(1);
 
         // Rotation of the first knot
@@ -106,15 +103,19 @@ public:
 
         // Residual
         Eigen::Map<Matrix<double, 1, 1>> residual(residuals);
-        residual[0] = w*(n.dot(Xt.R*f + Xt.P) + m);
+        Eigen::Vector3d p_tag_W = Xt.R.matrix() * offset + Xt.P;
+        Eigen::Vector3d diff_i = p_tag_W - pos_anchor_i;
+        Eigen::Vector3d diff_j = p_tag_W - pos_anchor_j;        
+        residual[0] = w*(diff_j.norm() - diff_i.norm() - tdoa);
 
         /* #endregion Calculate the pose at sampling time -----------------------------------------------------------*/
-    
+
         if (!jacobians)
             return true;
 
-        Matrix<double, 1, 3> Dr_DRt  = -n.transpose()*Xt.R.matrix()*SO3d::hat(f);
-        Matrix<double, 1, 3> Dr_DPt  =  n.transpose();
+        Matrix<double, 1, 3> Dr_DPW  = (diff_j.normalized() - diff_i.normalized()).transpose();   
+        Matrix<double, 1, 3> Dr_DRt  = - Dr_DPW * Xt.R.matrix() * SO3d::hat(offset);
+        Matrix<double, 1, 3> Dr_DPt  = Dr_DPW;        
 
         size_t idx;
 
@@ -231,20 +232,18 @@ public:
 
 private:
 
-    // Feature coordinates in body frame
-    Vector3d f;
+    // TDOA measurement
+    double tdoa;
 
-    // Plane normal
-    Vector3d n;
-
-    // Plane offset
-    double m;
+    // Anchor positions
+    Vector3d pos_anchor_i;
+    Vector3d pos_anchor_j;
+    const Vector3d offset;
 
     // Weight
-    double w = 0.1;
+    double w = 10;
 
-    // Gaussian process params
-    
+    // Gaussian process param
     const int Ridx = 0;
     const int Oidx = 1;
     const int Sidx = 2;

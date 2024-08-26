@@ -9,6 +9,7 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_)
 {
     fix_kidxmin = Util::GetBoolParam(nh, "fix_kidxmin", false);
     fix_kidxmax = Util::GetBoolParam(nh, "fix_kidxmax", false);
+    nh->getParam("max_lidarcoefs", max_lidarcoefs);
 };
 
 // Add parameters
@@ -123,6 +124,7 @@ void GPMLC::AddMP2KFactors(
 // Add lidar factors
 void GPMLC::AddLidarFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
+        int ds_rate,
         map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
         const deque<vector<LidarCoef>> &cloudCoef,
         double tmin, double tmax)
@@ -136,10 +138,11 @@ void GPMLC::AddLidarFactors(
                 continue;
             if (!traj->TimeInInterval(coef.t, 1e-6))
                 continue;
-            // skip++;
-            // if (skip % lidar_ds_rate != 0)
-            //     continue;
-            
+
+            static int skip = 0; skip++;
+            if (skip % ds_rate != 0)
+                continue;
+
             auto   us = traj->computeTimeIndex(coef.t);
             int    u  = us.first;
             double s  = us.second;
@@ -194,11 +197,8 @@ void GPMLC::AddGPExtrinsicFactors(
     GPMixerPtr gpmx = trajx->getGPMixerPtr();
     GPMixerPtr gpmy = trajy->getGPMixerPtr();
 
-    int Nseg = 1;
-    nh->getParam("Nseg", Nseg);
-
-    double t_shift;
-    nh->getParam("t_shift", t_shift);
+    int XTRZ_DENSITY = 1;
+    nh->getParam("XTRZ_DENSITY", XTRZ_DENSITY);
 
     for (int kidx = 0; kidx < trajx->getNumKnots() - 2; kidx++)
     {
@@ -214,10 +214,10 @@ void GPMLC::AddGPExtrinsicFactors(
             continue;
         }
 
-        for(int i = 0; i < Nseg; i++)
+        for(int i = 0; i < XTRZ_DENSITY; i++)
         {
             // Get the knot time
-            double t = trajx->getKnotTime(kidx) + trajx->getDt()/Nseg*i + t_shift;
+            double t = trajx->getKnotTime(kidx) + trajx->getDt()/(XTRZ_DENSITY+1)*(i+1);
 
             // Skip if time is outside the range of the other trajectory
             if (!trajy->TimeInInterval(t))
@@ -232,6 +232,12 @@ void GPMLC::AddGPExtrinsicFactors(
             double ss = uss.second;
             double sf = usf.second;
 
+            if(paramInfoMap.find(trajx->getKnotSO3(umins).data()) == paramInfoMap.end()   ||
+               paramInfoMap.find(trajx->getKnotSO3(umins+1).data()) == paramInfoMap.end() ||
+               paramInfoMap.find(trajx->getKnotSO3(uminf).data()) == paramInfoMap.end()   ||
+               paramInfoMap.find(trajx->getKnotSO3(uminf+1).data()) == paramInfoMap.end())
+               continue;
+
             // Add the parameter blocks
             vector<double *> factor_param_blocks;
             factorMeta.coupled_params.push_back(vector<ParamInfo>());
@@ -239,6 +245,7 @@ void GPMLC::AddGPExtrinsicFactors(
             for (int idx = umins; idx < umins + 2; idx++)
             {
                 ROS_ASSERT(idx < trajx->getNumKnots());
+
                 // ROS_ASSERT(Util::SO3IsValid(trajx->getKnotSO3(idx)));
                 factor_param_blocks.push_back(trajx->getKnotSO3(idx).data());
                 factor_param_blocks.push_back(trajx->getKnotOmg(idx).data());
@@ -246,6 +253,13 @@ void GPMLC::AddGPExtrinsicFactors(
                 factor_param_blocks.push_back(trajx->getKnotPos(idx).data());
                 factor_param_blocks.push_back(trajx->getKnotVel(idx).data());
                 factor_param_blocks.push_back(trajx->getKnotAcc(idx).data());
+
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotSO3(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotOmg(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotAlp(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotPos(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotVel(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajx->getKnotAcc(idx).data()) != paramInfoMap.end());
 
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajx->getKnotSO3(idx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajx->getKnotOmg(idx).data()]);
@@ -266,6 +280,13 @@ void GPMLC::AddGPExtrinsicFactors(
                 factor_param_blocks.push_back(trajy->getKnotVel(idx).data());
                 factor_param_blocks.push_back(trajy->getKnotAcc(idx).data());
 
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotSO3(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotOmg(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotAlp(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotPos(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotVel(idx).data()) != paramInfoMap.end());
+                ROS_ASSERT(paramInfoMap.find(trajy->getKnotAcc(idx).data()) != paramInfoMap.end());
+
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotSO3(idx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotOmg(idx).data()]);
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotAlp(idx).data()]);
@@ -279,16 +300,19 @@ void GPMLC::AddGPExtrinsicFactors(
             factorMeta.coupled_params.back().push_back(paramInfoMap[R_Lx_Ly.data()]);
             factorMeta.coupled_params.back().push_back(paramInfoMap[P_Lx_Ly.data()]);
 
+            ROS_ASSERT(paramInfoMap.find(R_Lx_Ly.data()) != paramInfoMap.end());
+            ROS_ASSERT(paramInfoMap.find(P_Lx_Ly.data()) != paramInfoMap.end());
+            
             // Create the factors
-            MatrixXd InvCov = (trajx->getKnotCov(umins) + trajy->getKnotCov(uminf))/1e6;
+            // MatrixXd InvCov = MatrixXd::Identity(STATE_DIM, STATE_DIM);
             // double mpSigmaR = 1.0;
             // double mpSigmaP = 1.0;
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(InvCov, gpmx, gpmy, ss, sf);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(MatrixXd::Identity(STATE_DIM, STATE_DIM), gpmx, gpmy, ss, sf);
             auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
-            
+
             // Save the residual block
             factorMeta.res.push_back(res_block);
 
@@ -383,12 +407,6 @@ void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &
             for (int col = 0; col < matrix_tp.cols(); ++col)
                 if (std::find(idxToRemove_.begin(), idxToRemove_.end(), col) == idxToRemove_.end())
                 {
-// yolos("matrix: %d, %d. matrix_tp: %d %d. result %d %d. idxToRemove: %d. idxToRemove_: %d. idxToKeep: %d. currentCol: %d. %d.\n",
-//        matrix.rows(), matrix.cols(),
-//        matrix_tp.rows(), matrix_tp.cols(),
-//        result.rows(), result.cols(),
-//        idxToRemove.size(), idxToRemove_.size(), idxToKeep,
-//        currentCol, col);
                     result.col(currentCol) = matrix_tp.col(col);
                     currentCol++;
                 }
@@ -479,6 +497,23 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
                         FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior)
 {
 
+    // Insanity check to keep track of all the params
+    for(auto &cpset : factorMetaMp2k.coupled_params)
+        for(auto &cp : cpset)
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
+
+    for(auto &cpset : factorMetaLidar.coupled_params)
+        for(auto &cp : cpset)
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
+
+    for(auto &cpset : factorMetaGpx.coupled_params)
+        for(auto &cp : cpset)
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
+
+    for(auto &cpset : factorMetaPrior.coupled_params)
+        for(auto &cp : cpset)
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
+
     // Deskew, Transform and Associate
     auto FindRemovedFactors = [&tmid](FactorMeta &factorMeta, FactorMeta &factorMetaRemoved, FactorMeta &factorMetaRetained) -> void
     {
@@ -541,13 +576,19 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     map<double*, ParamInfo> removed_params;
     for(auto &cpset : factorMetaRemoved.coupled_params)
         for(auto &cp : cpset)
+        {
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
             removed_params[cp.address] = paramInfoMap[cp.address];
+        }
 
     // Find the set of params belonging to the retained factors
     map<double*, ParamInfo> retained_params;
     for(auto &cpset : factorMetaRetained.coupled_params)
         for(auto &cp : cpset)
+        {
+            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
             retained_params[cp.address] = paramInfoMap[cp.address];
+        }
 
     // Find the intersection of the two sets, which will be the kept parameters
     vector<ParamInfo> marg_params;
@@ -560,7 +601,8 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         else
             marg_params.push_back(param.second);
     }
-
+    
+    // Compare the params following a hierarchy: traj0 knot < traj1 knots < extrinsics
     auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
     {
         bool abpidx = a.pidx < b.pidx;
@@ -832,7 +874,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         // printf("KnotParam: %2d. Traj %2d, Knot %2d. Max: %f\n",
         //         pidx, tkp.first.first, tkp.first.second, Jparam.cwiseAbs().maxCoeff());
     }
-    cout << endl;
+    // cout << endl;
 
     // Check to see if removed res are among the wierd res
     for(auto &res : factorMetaMp2kRemoved.res)
@@ -852,7 +894,9 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
     // printf("Wierd res: %d. No overlap with Gpx\n", wierdRes.size());
 
     // Save the marginalization factors and states
-    if (margInfo == NULL) margInfo = new MarginalizationInfo();
+    if (margInfo == nullptr)
+        margInfo = MarginalizationInfoPtr(new MarginalizationInfo());
+
     // Copy the marginalization matrices
     margInfo->Hkeep = Hkeep;
     margInfo->bkeep = bkeep;
@@ -870,9 +914,10 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 }
 
 // Prototype
-void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
+void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
                      double tmin, double tmax, double tmid,
                      const vector<deque<vector<LidarCoef>>> &cloudCoef,
+                     bool do_marginalization,
                      myTf<double> &T_B_Li_gndtr)
 {
     TicToc tt_build;
@@ -949,6 +994,18 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
         }
     }
 
+    vector<int> lidar_factor_ds(trajs.size(), 0);
+    vector<int> total_lidar_factors(trajs.size(), 0);
+    for(int tidx = 0; tidx < trajs.size(); tidx++)
+        for(int cidx = 0; cidx < cloudCoef[tidx].size(); cidx++)
+            total_lidar_factors[tidx] += cloudCoef[tidx][cidx].size();
+
+    for(int tidx = 0; tidx < trajs.size(); tidx++)
+    {
+        lidar_factor_ds[tidx] = max(int(std::ceil(total_lidar_factors[tidx] / max_lidarcoefs)), 1);
+        // printf("lidar_factor_ds[%d]: %d\n", tidx, lidar_factor_ds[tidx]);
+    }
+
     // Add the motion prior factor
     FactorMeta factorMetaMp2k;
     double cost_mp2k_init = -1, cost_mp2k_final = -1;
@@ -959,7 +1016,7 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     FactorMeta factorMetaLidar;
     double cost_lidar_init = -1; double cost_lidar_final = -1;
     for(int tidx = 0; tidx < trajs.size(); tidx++)
-        AddLidarFactors(problem, trajs[tidx], paramInfoMap, factorMetaLidar, cloudCoef[tidx], tmin, tmax);
+        AddLidarFactors(problem, trajs[tidx], lidar_factor_ds[tidx], paramInfoMap, factorMetaLidar, cloudCoef[tidx], tmin, tmax);
 
     // Add the extrinsics factors
     FactorMeta factorMetaGpx;
@@ -992,7 +1049,8 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
 
     // Determine the factors to remove
-    Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
+    if (do_marginalization)
+        Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
 
     tt_slv.Toc();
 
@@ -1001,29 +1059,35 @@ void GPMLC::Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
     myTf T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr;
     MatrixXd T_err(6, 1); T_err << T_err_1.pos, T_err_2.pos;
 
-    int max_debug = 2; nh->getParam("max_debug", max_debug);
     static int debug_check = 0;
     debug_check++;
 
     static int optnum = -1;
-    optnum++;
+    // if(optnum == -1 || do_marginalization)
+        optnum++;
 
     printf(KGRN
-           "GPX Opt #%4d / %2d: Iter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d. Debug: %d / %d\n"
+           "GPX Opt #%4d.%2d.%2d: CeresIter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %d, %d.\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
-           optnum, iter,
-           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_kidxmin, fix_kidxmax, debug_check, max_debug,
+           optnum, inner_iter, outer_iter,
+           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_kidxmin, fix_kidxmax,
            factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final,
            T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err_1.pos.norm(), T_err_2.pos.norm(), T_err.norm());
+}
 
-    if ( (max_debug > 0) && (debug_check == max_debug) )
-        exit(0);
+SE3d GPMLC::GetExtrinsics()
+{
+    return SE3d(R_Lx_Ly, P_Lx_Ly);
+}
 
+void GPMLC::Reset()
+{
+    margInfo.reset();
 }

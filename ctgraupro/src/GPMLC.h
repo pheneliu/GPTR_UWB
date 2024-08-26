@@ -32,7 +32,7 @@ class ParamInfo
 public:
     double* address = NULL; // Actual address of the param block
     ParamType type;         // Type of the param block (SO3 or RV3)
-    ParamRole role;         // What this param is used for state or role
+    ParamRole role;         // What this param is used for state or extrinsics
     // int param_size;         // Size of the param block
     int pidx;               // Index of the parameter in the problem
     int tidx;               // Index of the trajectory
@@ -238,15 +238,17 @@ public:
     }
 };
 
+typedef std::shared_ptr<MarginalizationInfo> MarginalizationInfoPtr;
+
 class MarginalizationFactor : public ceres::CostFunction
 {
 private:
-        MarginalizationInfo* margInfo;
+        MarginalizationInfoPtr margInfo;
         map<const double*, ParamInfo> keptParamMap;
 
 public:
 
-    MarginalizationFactor(MarginalizationInfo* margInfo_, map<double*, ParamInfo> &paramInfoMap)
+    MarginalizationFactor(MarginalizationInfoPtr margInfo_, map<double*, ParamInfo> &paramInfoMap)
     {
         margInfo = margInfo_;
         keptParamMap.clear();
@@ -399,8 +401,12 @@ private:
     SO3d R_Lx_Ly;
     Vec3 P_Lx_Ly;
 
+protected:
+
     bool fix_kidxmin = false;
     bool fix_kidxmax = false;
+
+    int max_lidarcoefs = 4000;
 
     deque<int> kidx_marg;
     deque<int> kidx_keep;
@@ -408,7 +414,7 @@ private:
     // Map of traj-kidx and parameter id
     map<pair<int, int>, int> tk2p;
     map<double*, ParamInfo> paramInfoMap;
-    MarginalizationInfo* margInfo = NULL;
+    MarginalizationInfoPtr margInfo;
     // MarginalizationFactor* margFactor = NULL;
 
 public:
@@ -430,6 +436,7 @@ public:
 
     void AddLidarFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
+        int ds_rate,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const deque<vector<LidarCoef>> &cloudCoef,
         double tmin, double tmax);
@@ -449,10 +456,16 @@ public:
         map<double*, ParamInfo> &paramInfo,
         FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior);
 
-    void Evaluate(int iter, vector<GaussianProcessPtr> &trajs,
-                  double tmin, double tmax, double tmid,
-                  const vector<deque<vector<LidarCoef>>> &cloudCoef,
-                  myTf<double> &T_B_Li_gndtr);
+    void Evaluate(
+        int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
+        double tmin, double tmax, double tmid,
+        const vector<deque<vector<LidarCoef>>> &cloudCoef,
+        bool do_marginalization,
+        myTf<double> &T_B_Li_gndtr);
+
+    SE3d GetExtrinsics();
+
+    void Reset();  
 };
 
 typedef std::shared_ptr<GPMLC> GPMLCPtr;
