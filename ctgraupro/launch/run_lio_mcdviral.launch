@@ -17,7 +17,7 @@
         <!-- Total number of clouds loaded -->
         <param name="MAX_CLOUDS"      value="-1" />
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="12.5"/>
+        <param name="SKIPPED_TIME"    value="13.0"/>
         <!-- <param name="SKIPPED_TIME"    value="197.5"/> -->
         <param name="VIZ_ONLY"        value="0"/>
         
@@ -62,16 +62,16 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"    value="8"      />
+        <param name="SW_CLOUDNUM"    value="10"      />
         <param name="SW_CLOUDSTEP"   value="1"      />
-        <param name="max_lidarcoefs" value="1000"   />
+        <param name="max_lidarcoefs" value="2000"   />
         <param name="XTRZ_DENSITY"   value="1"      />
         <param name="min_planarity"  value="0.5"    />
         <param name="max_plane_dis"  value="0.5"    />
         <param name="max_outer_iter" value="3"      />
-        <param name="max_inner_iter" value="10"     />
-        <param name="fix_kidxmin"    value="0"      />
-        <param name="fix_kidxmax"    value="0"      />
+        <param name="max_inner_iter" value="5"      />
+        <param name="fix_time_begin" value="0.2"    />
+        <param name="fix_time_end"   value="0.2"    />
 
         <!-- Log dir -->
         <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/log/gp/exp_mcdviral"/>
