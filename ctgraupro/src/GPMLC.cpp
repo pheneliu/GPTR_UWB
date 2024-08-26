@@ -601,7 +601,8 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
         else
             marg_params.push_back(param.second);
     }
-
+    
+    // Compare the params following a hierarchy: traj0 knot < traj1 knots < extrinsics
     auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
     {
         bool abpidx = a.pidx < b.pidx;
@@ -614,7 +615,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 
         if (a.tidx != -1 && b.tidx == -1)
         {
-            ROS_ASSERT_MSG(abpidx == true, "%d, %d, %d, %d, %d, %d\n", a.pidx, b.pidx, a.tidx, b.tidx, a.role, b.role);
+            ROS_ASSERT(abpidx == true);
             return true;
         }
         

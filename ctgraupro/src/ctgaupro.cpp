@@ -82,18 +82,18 @@ KdFLANNPtr kdTreeMap(new KdFLANN());
 // Spline knot length
 double deltaT = 0.01;
 
-// Number of poinclouds to shift the sliding window
-int sw_shift = 5;
-
 // ikdtree of the priormap
 ikdtreePtr ikdtPM;
 
 // Number of poses per knot in the extrinsic optimization
 int SW_CLOUDNUM = 20;
 int SW_CLOUDSTEP = 2;
+bool VIZ_ONLY = false;
+
 double t_shift = 0.0;
 int max_outer_iter = 3;
 int max_inner_iter = 2;
+
 
 vector<myTf<double>> T_B_Li_gndtr;
 
@@ -369,6 +369,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("cloud_ds", cloud_ds);
 
     // Find the settings for cross trajectory optimmization
+    VIZ_ONLY = Util::GetBoolParam(nh_ptr, "VIZ_ONLY", false);
     nh_ptr->getParam("SW_CLOUDNUM", SW_CLOUDNUM);
     nh_ptr->getParam("SW_CLOUDSTEP", SW_CLOUDSTEP);
     nh_ptr->getParam("t_shift", t_shift);
@@ -783,7 +784,8 @@ int main(int argc, char **argv)
                 }
 
                 // Optimize
-                gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
+                if(!VIZ_ONLY)
+                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
 
                 if (inner_iter == max_inner_iter - 1)
                 {

@@ -682,7 +682,8 @@ public:
 
         auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
         {
-            // bool abpidx = a.pidx < b.pidx;
+            // No need to do insanity check since we only work with one trajectory here
+            return a.pidx < b.pidx;
             // ROS_ASSERT(a.tidx == b.tidx);
             
             // if (a.tidx == -1 && b.tidx != -1)
@@ -711,61 +712,61 @@ public:
 
             // Including the situation that two knots are 01
             // if (a.tidx == b.tidx)
-            {
-                if (a.kidx == -1 && b.kidx != -1)
-                {
-                    // ROS_ASSERT(abpidx == false);
-                    return false;
-                }
+            // {
+            //     if (a.kidx == -1 && b.kidx != -1)
+            //     {
+            //         // ROS_ASSERT(abpidx == false);
+            //         return false;
+            //     }
 
-                if (a.kidx != -1 && b.kidx == -1)
-                {
-                    // ROS_ASSERT(abpidx == true);
-                    return true;
-                }
+            //     if (a.kidx != -1 && b.kidx == -1)
+            //     {
+            //         // ROS_ASSERT(abpidx == true);
+            //         return true;
+            //     }
 
-                if ((a.kidx != -1 && b.kidx != -1) && (a.kidx < b.kidx))
-                {
-                    // ROS_ASSERT(abpidx == true);
-                    return true;
-                }
+            //     if ((a.kidx != -1 && b.kidx != -1) && (a.kidx < b.kidx))
+            //     {
+            //         // ROS_ASSERT(abpidx == true);
+            //         return true;
+            //     }
 
-                if ((a.kidx != -1 && b.kidx != -1) && (a.kidx > b.kidx))
-                {
-                    // ROS_ASSERT(abpidx == false);
-                    return false;
-                }
+            //     if ((a.kidx != -1 && b.kidx != -1) && (a.kidx > b.kidx))
+            //     {
+            //         // ROS_ASSERT(abpidx == false);
+            //         return false;
+            //     }
 
-                if (a.kidx == b.kidx)
-                {
-                    if (a.sidx == -1 && b.sidx != -1)
-                    {
-                        // ROS_ASSERT(abpidx == false);
-                        return false;
-                    }
+            //     if (a.kidx == b.kidx)
+            //     {
+            //         if (a.sidx == -1 && b.sidx != -1)
+            //         {
+            //             // ROS_ASSERT(abpidx == false);
+            //             return false;
+            //         }
 
-                    if (a.sidx != -1 && b.sidx == -1)
-                    {
-                        // ROS_ASSERT(abpidx == true);
-                        return true;
-                    }
+            //         if (a.sidx != -1 && b.sidx == -1)
+            //         {
+            //             // ROS_ASSERT(abpidx == true);
+            //             return true;
+            //         }
 
-                    if ((a.sidx != -1 && b.sidx != -1) && (a.sidx < b.sidx))
-                    {
-                        // ROS_ASSERT(abpidx == true);
-                        return true;
-                    }
+            //         if ((a.sidx != -1 && b.sidx != -1) && (a.sidx < b.sidx))
+            //         {
+            //             // ROS_ASSERT(abpidx == true);
+            //             return true;
+            //         }
                     
-                    if ((a.sidx != -1 && b.sidx != -1) && (a.sidx > b.sidx))
-                    {
-                        // ROS_ASSERT(abpidx == false);
-                        return false;
-                    }
+            //         if ((a.sidx != -1 && b.sidx != -1) && (a.sidx > b.sidx))
+            //         {
+            //             // ROS_ASSERT(abpidx == false);
+            //             return false;
+            //         }
 
-                    // ROS_ASSERT(abpidx == false);
-                    return false;    
-                }
-            }
+            //         // ROS_ASSERT(abpidx == false);
+            //         return false;    
+            //     }
+            // }
         };
 
         std::sort(marg_params.begin(), marg_params.end(), compareParam);
@@ -802,7 +803,7 @@ public:
             int prev_idx = -1;
             for(auto &param : kept_params)
             {
-                ROS_ASSERT(param.pidx > prev_idx);
+                ROS_ASSERT_MSG(param.pidx > prev_idx, "%d, %d", param.pidx, prev_idx);
                 prev_idx = param.pidx;
             }
         }
