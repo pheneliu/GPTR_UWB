@@ -61,8 +61,8 @@
         <param name="XTRZ_DENSITY"   value="4"      />
         <param name="max_outer_iter" value="3"      />
         <param name="max_inner_iter" value="2"      />
-        <param name="fix_kidxmin"    value="0"      />
-        <param name="fix_kidxmax"    value="0"      />
+        <param name="fix_time_begin" value="0.2"    />
+        <param name="fix_time_end"   value="0.2"    />
 
         <!-- Log dir -->
         <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/log/gp/exp_sim"/>
