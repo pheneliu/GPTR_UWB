@@ -1369,31 +1369,26 @@ public:
                 fieldidx[fv[0]] = fieldidx.size();
                 printf("Field: %s. Value: %s\n", fv[0].c_str(), splitstr(fields[fieldidx[fv[0]]], ':').back().c_str());
             }
-yolo();
+
             auto strToMat3 = [&splitstr](const string &s, char d) -> Matrix3d
             {
                 vector<string> Mstr = splitstr(s, d);
-yolo();
                 for(int idx = 0; idx < Mstr.size(); idx++)
                     printf("Mstr[%d] = %s. S: %s\n", idx, Mstr[idx].c_str(), s.c_str());
-yolo();
+
                 vector<double> Mdbl = {stod(Mstr[0]), stod(Mstr[1]), stod(Mstr[2]),
                                        stod(Mstr[3]), stod(Mstr[4]), stod(Mstr[5]), 
                                        stod(Mstr[6]), stod(Mstr[7]), stod(Mstr[8])};
-yolo();
+
                 Eigen::Map<Matrix3d, Eigen::RowMajor> M(&Mdbl[0]);
                 return M;
             };
             Matrix3d logSigNu = strToMat3(splitstr(fields[fieldidx["SigNu"]], ':').back(), ',');
-yolo();
             Matrix3d logSigGa = strToMat3(splitstr(fields[fieldidx["SigGa"]], ':').back(), ',');
-yolo();
             double logDt = stod(splitstr(fields[fieldidx["Dt"]], ':').back());
-yolo();
             double logMinTime = stod(splitstr(fields[fieldidx["MinTime"]], ':').back());
-yolo();
             bool logkeepCov = (stoi(splitstr(fields[fieldidx["keepCov"]], ':').back()) == 1);
-yolo();
+
             printf("Log configs:\n");
             printf("Dt: %f\n", logDt);
             printf("MinTime: %f\n", logMinTime);
