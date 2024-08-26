@@ -2,12 +2,14 @@
 <launch>
 
     <!-- Name of the UWB sequence -->
-    <arg name="bag_file" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/rosbag-data/const4/const4-trial1-tdoa2-traj2.bag"/>
+    <arg name="bag_file" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
 
     <!-- Launch the uwb imu fusion node -->
-    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="log"> <!--launch-prefix="xterm -e gdb -ex run -args"-->
+    <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="screen">
         
         <param name="auto_exit"  value="1"/>
+        <param name="if_save_traj" value="0"/>
+        <param name="traj_save_path" value="/home/kailai/Documents/results/ctgaupro/"/>
 
         <!-- Parameters for the Gaussian Process -->
         <param name="gpDt"       value="0.1"/>
@@ -15,7 +17,7 @@
         <param name="gpQc"       value="1.00"/>
         
         <!-- UWB anchor position -->
-        <param name="anchor_pose_path" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/survey-results/anchor_const4_survey.txt"/>
+        <param name="anchor_pose_path" value="/home/kailai/Documents/100_dataset/util/util-uwb-dataset-main/dataset/flight-dataset/survey-results/anchor_const1_survey.txt"/>
         <param name="tdoa_topic" value="/tdoa_data"/>
         <param name="tof_topic"  value="/tof_data" />
         <param name="imu_topic"  value="/imu_data" />

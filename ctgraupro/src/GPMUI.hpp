@@ -465,17 +465,17 @@ public:
         // Find the MP2k factors that will be removed
         FactorMeta factorMetaMp2kRemoved, factorMetaMp2kRetained;
         FindRemovedFactors(factorMetaMp2k, factorMetaMp2kRemoved, factorMetaMp2kRetained);
-        printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
+        // printf("factorMetaMp2k: %d. Removed: %d\n", factorMetaMp2k.size(), factorMetaMp2kRemoved.size());
 
         // Find the TDOA factors that will be removed
         FactorMeta factorMetaTDOARemoved, factorMetaTDOARetained;
         FindRemovedFactors(factorMetaTDOA, factorMetaTDOARemoved, factorMetaTDOARetained);
-        printf("factorMetaTDOA: %d. Removed: %d\n", factorMetaTDOA.size(), factorMetaTDOARemoved.size());
+        // printf("factorMetaTDOA: %d. Removed: %d\n", factorMetaTDOA.size(), factorMetaTDOARemoved.size());
 
         // Find the extrinsic factors that will be removed
         FactorMeta factorMetaIMURemoved, factorMetaIMURetained;
         FindRemovedFactors(factorMetaIMU, factorMetaIMURemoved, factorMetaIMURetained);
-        printf("factorMetaIMU: %d. Removed: %d\n", factorMetaIMU.size(), factorMetaIMURemoved.size());
+        // printf("factorMetaIMU: %d. Removed: %d\n", factorMetaIMU.size(), factorMetaIMURemoved.size());
 
         FactorMeta factorMetaPriorRemoved, factorMetaPriorRetained;
         FindRemovedFactors(factorMetaPrior, factorMetaPriorRemoved, factorMetaPriorRetained);
@@ -505,7 +505,7 @@ public:
             for(auto &cp : cpset)
                 retained_params[cp.address] = paramInfoMap[cp.address];
                 
-        printf("removed_params: %d. retained_params %d.\n", removed_params.size(), retained_params.size());
+        // printf("removed_params: %d. retained_params %d.\n", removed_params.size(), retained_params.size());
 
         // Find the intersection of the two sets, which will be the kept parameters
         vector<ParamInfo> marg_params;
@@ -519,7 +519,7 @@ public:
                 marg_params.push_back(param.second);
             assert(param.second.pidx >= 0);
         }
-        printf("kept_params: %d. marg_params %d.\n", kept_params.size(), marg_params.size());
+        // printf("kept_params: %d. marg_params %d.\n", kept_params.size(), marg_params.size());
 
         auto compareParam = [](const ParamInfo &a, const ParamInfo &b) -> bool
         {
@@ -534,24 +534,24 @@ public:
         for(auto &param : marg_params)
         {
             marg_count++;
-            printf(KMAG
-                   "Marg param %3d. Addr: %9x. Type: %2d. Role: %2d. "
-                   "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
-                   RESET,
-                   marg_count, param.address, param.type, param.role,
-                   param.pidx, param.tidx, param.kidx, param.sidx);
+            // printf(KMAG
+            //        "Marg param %3d. Addr: %9x. Type: %2d. Role: %2d. "
+            //        "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
+            //        RESET,
+            //        marg_count, param.address, param.type, param.role,
+            //        param.pidx, param.tidx, param.kidx, param.sidx);
         }
 
         int kept_count = 0;
         for(auto &param : kept_params)
         {
             kept_count++;
-            printf(KCYN
-                   "Kept param %3d. Addr: %9x. Type: %2d. Role: %2d. "
-                   "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
-                   RESET,
-                   marg_count, param.address, param.type, param.role,
-                   param.pidx, param.tidx, param.kidx, param.sidx);
+            // printf(KCYN
+            //        "Kept param %3d. Addr: %9x. Type: %2d. Role: %2d. "
+            //        "Pidx: %4d. Tidx: %2d. Kidx: %4d. Sidx: %2d.\n"
+            //        RESET,
+            //        marg_count, param.address, param.type, param.role,
+            //        param.pidx, param.tidx, param.kidx, param.sidx);
         }
 
         ROS_ASSERT(kept_count != 0);

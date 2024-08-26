@@ -261,6 +261,9 @@ Eigen::Vector3d bg = Eigen::Vector3d::Zero();
 Eigen::Vector3d ba = Eigen::Vector3d::Zero();
 const Eigen::Vector3d P_I_tag = Eigen::Vector3d(-0.012, 0.001, 0.091);
 
+bool if_save_traj;
+std::string traj_save_path;
+
 void tdoaCb(const TdoaMsgPtr &msg)
 {
     lock_guard<mutex> lg(UIBuf.tdoaBuf_mtx);
@@ -290,7 +293,7 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
     gtBuf.push_back(pos);    
 
     nav_msgs::Odometry odom_msg;
-    odom_msg.header.stamp = ros::Time::now();
+    odom_msg.header.stamp = gt_msg->header.stamp;
     odom_msg.header.frame_id = "map";
 
     odom_msg.pose.pose.position.x = pos[0];
@@ -304,7 +307,7 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
     gt_pub.publish(odom_msg);  
 
     geometry_msgs::PoseStamped traj_msg;
-    traj_msg.header.stamp = ros::Time::now();
+    traj_msg.header.stamp = gt_msg->header.stamp;
     traj_msg.pose.position.x = pos.x();
     traj_msg.pose.position.y = pos.y();
     traj_msg.pose.position.z = pos.z();
@@ -417,6 +420,43 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
     }
 }
 
+void saveTraj(GaussianProcessPtr traj)
+{
+    if (!std::filesystem::is_directory(traj_save_path) || !std::filesystem::exists(traj_save_path)) {
+        std::filesystem::create_directories(traj_save_path);
+    }
+    std::string traj_file_name = traj_save_path + "traj.txt";
+    std::ofstream f_traj(traj_file_name);    
+    for (int i = 0; i < gt_path.poses.size(); i++) {
+        double t_gt = gt_path.poses[i].header.stamp.toSec();
+        auto   us = traj->computeTimeIndex(t_gt);
+        int    u  = us.first;
+        double s  = us.second;
+
+        if (u < 0 || u+1 >= traj->getNumKnots()) {
+            continue;
+        }        
+        auto est_pose = traj->pose(t_gt);     
+        Eigen::Vector3d est_pos = est_pose.translation();
+        Eigen::Quaterniond est_ort = est_pose.unit_quaternion();    
+        f_traj << std::fixed << t_gt << std::setprecision(7) 
+               << " " << est_pos.x() << " " << est_pos.y() << " " << est_pos.z() 
+               << " " << est_ort.x() << " " << est_ort.y() << " " << est_ort.z()  << " " << est_ort.w() << std::endl;
+    }
+    f_traj.close();
+
+    std::string gt_file_name = traj_save_path + "gt.txt";
+    std::ofstream f_gt(gt_file_name);    
+    for (int i = 0; i < gt_path.poses.size(); i++) {
+        double t_gt = gt_path.poses[i].header.stamp.toSec();
+    
+        f_gt << std::fixed << t_gt << std::setprecision(7) 
+             << " " << gt_path.poses[i].pose.position.x << " " << gt_path.poses[i].pose.position.y << " " << gt_path.poses[i].pose.position.z
+             << " " << gt_path.poses[i].pose.orientation.x << " " << gt_path.poses[i].pose.orientation.y << " " << gt_path.poses[i].pose.orientation.z  << " " << gt_path.poses[i].pose.orientation.w << std::endl;
+    }
+    f_gt.close();    
+}
+
 int main(int argc, char **argv)
 {
     // Initialize the node
@@ -467,9 +507,6 @@ int main(int argc, char **argv)
     est_path.header.frame_id = "map";
     gt_path.header.frame_id = "map";
 
-    // while(ros::ok())
-    //     this_thread::sleep_for(chrono::milliseconds(100));
-
     // Time to check the buffers and perform optimization
     nh_ptr->getParam("WINDOW_SIZE", WINDOW_SIZE);
     nh_ptr->getParam("SLIDE_SIZE", SLIDE_SIZE);
@@ -480,6 +517,8 @@ int main(int argc, char **argv)
     nh_ptr->getParam("ACC_W", ACC_W);    
     nh_ptr->getParam("tdoa_loss_thres", tdoa_loss_thres);
     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+    if_save_traj = Util::GetBoolParam(nh_ptr, "if_save_traj", if_save_traj);
+    nh_ptr->getParam("traj_save_path", traj_save_path);
     
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
@@ -513,5 +552,8 @@ int main(int argc, char **argv)
     ros::MultiThreadedSpinner spinner(0);
     spinner.spin();
     pdthread.join();
+    if (if_save_traj) {
+        saveTraj(traj);
+    }
     return 0;
 }
