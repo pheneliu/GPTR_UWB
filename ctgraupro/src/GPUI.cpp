@@ -317,7 +317,7 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
 
 ros::Publisher knot_pub;
 
-void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list, bool if_autodiff)
+void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list)
 {
     UwbImuBuf swUIBuf;
 
@@ -362,7 +362,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
         gpmui->Evaluate(outer_iter, traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
-                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres, if_autodiff);
+                        anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);
         tt_solve.Toc();
         std::cout << "swUIBuf.tdoa_data: " << swUIBuf.tdoa_data.size() << " tmin: " << tmin << " tmax: " << tmax << std::endl;
         std::cout << "bg: " << bg.transpose() << " ba: " << ba.transpose() << std::endl;
@@ -501,7 +501,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("ACC_W", ACC_W);    
     nh_ptr->getParam("tdoa_loss_thres", tdoa_loss_thres);
     nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-    bool if_autodiff = Util::GetBoolParam(nh_ptr, "auto_diff", false);
+    // bool if_autodiff = Util::GetBoolParam(nh_ptr, "auto_diff", false);
     
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
@@ -529,7 +529,7 @@ int main(int argc, char **argv)
     printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    thread pdthread(processData, traj, gpmui, anc_pose_, if_autodiff);
+    thread pdthread(processData, traj, gpmui, anc_pose_);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);
