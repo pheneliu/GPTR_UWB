@@ -27,7 +27,7 @@
 
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="1"/> <!-- How many knots to slide -->
-        <param name="WINDOW_SIZE" value="80"/> <!-- How many knot length does the sliding window -->
+        <param name="WINDOW_SIZE" value="10"/> <!-- How many knot length does the sliding window -->
         <param name="w_tdoa" value="100.0"/> <!-- Coefficients for TDOA residuals -->
         <param name="GYR_N" value="2000.0"/> <!-- Coefficients for IMU residuals -->
         <param name="GYR_W" value="100.0"/> <!-- Coefficients for IMU residuals -->
