@@ -19,6 +19,7 @@ Example for testing on [UTIL](https://utiasdsl.github.io/util-uwb-dataset/) (TDo
 # Change bag_file and anchor_pose_path in `launch/run_util.launch` according to the path to the data
 roslaunch ctgaupro run_util.launch
 ```
+Baseline approach for comparison is the ESKF presented by the UTIL paper
 Evaluation using [evo](https://github.com/MichaelGrupp/evo) package
 ```
 # Set if_save_traj in `launch/run_util.launch` to `1` and change traj_save_path accordingly
