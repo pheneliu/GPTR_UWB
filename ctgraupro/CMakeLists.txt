@@ -161,12 +161,12 @@ target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${P
 add_executable(${PROJECT_NAME}_test src/test.cpp include/ikdTree/ikd_Tree.cpp)
 add_dependencies(${PROJECT_NAME}_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt)
+target_link_libraries(${PROJECT_NAME}_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
 add_executable(${PROJECT_NAME}_test_ljp src/test_ljp.cpp)
 add_dependencies(${PROJECT_NAME}_test_ljp ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_test_ljp PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt) 
+target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS}) 
 
 # UWB fusion
 add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
