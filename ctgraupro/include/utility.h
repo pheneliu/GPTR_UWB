@@ -581,7 +581,7 @@ namespace Util
     //     return fabs(n - 1.0) < 1e-4;
     // }
 
-    inline void ComputeCeresCost(vector<ceres::internal::ResidualBlock *> &res_ids,
+    inline void ComputeCeresCost(const vector<ceres::internal::ResidualBlock *> &res_ids,
                                  double &cost, ceres::Problem &problem)
     {
         if (res_ids.size() == 0)

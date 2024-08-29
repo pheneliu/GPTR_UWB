@@ -398,8 +398,10 @@ private:
     // Node handle to get information needed
     ros::NodeHandlePtr nh;
 
-    SO3d R_Lx_Ly;
-    Vec3 P_Lx_Ly;
+    int Nlidar;
+
+    vector<SO3d> R_Lx_Ly;
+    vector<Vec3> P_Lx_Ly;
 
 protected:
 
@@ -423,7 +425,7 @@ public:
    ~GPMLC();
    
     // Constructor
-    GPMLC(ros::NodeHandlePtr &nh_);
+    GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_);
 
     void AddTrajParams(
         ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, int &tidx,
@@ -469,7 +471,7 @@ public:
         bool do_marginalization,
         myTf<double> &T_B_Li_gndtr);
 
-    SE3d GetExtrinsics();
+    SE3d GetExtrinsics(int lidx);
 
     void Reset();  
 };

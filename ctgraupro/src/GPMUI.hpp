@@ -17,7 +17,7 @@ public:
    ~GPMUI() {};
    
     // Constructor
-    GPMUI(ros::NodeHandlePtr &nh_) : GPMLC(nh_)
+    GPMUI(ros::NodeHandlePtr &nh_) : GPMLC(nh_, 1)
     {
 
     }

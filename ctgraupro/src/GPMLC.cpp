@@ -4,8 +4,8 @@
 GPMLC::~GPMLC(){};
 
 // Constructor
-GPMLC::GPMLC(ros::NodeHandlePtr &nh_)
-    : nh(nh_), R_Lx_Ly(Quaternd(1, 0, 0, 0)), P_Lx_Ly(Vec3(0, 0, 0))
+GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
+    : nh(nh_), Nlidar(Nlidar_), R_Lx_Ly(vector<SO3d>(Nlidar_, SO3d())), P_Lx_Ly(vector<Vec3>(Nlidar_, Vec3(0, 0, 0)))
 {
     nh->getParam("fix_time_begin", fix_time_begin);
     nh->getParam("fix_time_end", fix_time_end);
@@ -293,13 +293,13 @@ void GPMLC::AddGPExtrinsicFactors(
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotAcc(idx).data()]);
             }
 
-            factor_param_blocks.push_back(R_Lx_Ly.data());
-            factor_param_blocks.push_back(P_Lx_Ly.data());
-            factorMeta.coupled_params.back().push_back(paramInfoMap[R_Lx_Ly.data()]);
-            factorMeta.coupled_params.back().push_back(paramInfoMap[P_Lx_Ly.data()]);
+            factor_param_blocks.push_back(R_Lx_Ly[0].data());
+            factor_param_blocks.push_back(P_Lx_Ly[0].data());
+            factorMeta.coupled_params.back().push_back(paramInfoMap[R_Lx_Ly[0].data()]);
+            factorMeta.coupled_params.back().push_back(paramInfoMap[P_Lx_Ly[0].data()]);
 
-            ROS_ASSERT(paramInfoMap.find(R_Lx_Ly.data()) != paramInfoMap.end());
-            ROS_ASSERT(paramInfoMap.find(P_Lx_Ly.data()) != paramInfoMap.end());
+            ROS_ASSERT(paramInfoMap.find(R_Lx_Ly[0].data()) != paramInfoMap.end());
+            ROS_ASSERT(paramInfoMap.find(P_Lx_Ly[0].data()) != paramInfoMap.end());
             
             // Create the factors
             // MatrixXd InvCov = MatrixXd::Identity(STATE_DIM, STATE_DIM);
@@ -945,58 +945,59 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 
         // Only add extrinsic if there are multiple trajectories
         if (trajs.size() != 0)
-        {   
-            // Add the extrinsic params
-            problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
-            problem.AddParameterBlock(P_Lx_Ly.data(), 3);
-            paramInfoMap.insert(make_pair(R_Lx_Ly.data(), ParamInfo(R_Lx_Ly.data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
-            paramInfoMap.insert(make_pair(P_Lx_Ly.data(), ParamInfo(P_Lx_Ly.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
-        }
-
-        // Sanity check
-        for(auto &param_ : paramInfoMap)
-        {
-            ParamInfo param = param_.second;
-
-            int tidx = param.tidx;
-            int kidx = param.kidx;
-            int sidx = param.sidx;
-
-            if(param.tidx != -1 && param.kidx != -1)
-            {
-                switch(sidx)
-                {
-                    case 0:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotSO3(kidx).data());
-                        break;
-                    case 1:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotOmg(kidx).data());
-                        break;
-                    case 2:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotAlp(kidx).data());
-                        break;
-                    case 3:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotPos(kidx).data());
-                        break;
-                    case 4:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotVel(kidx).data());
-                        break;
-                    case 5:
-                        ROS_ASSERT(param.address == trajs[tidx]->getKnotAcc(kidx).data());
-                        break;
-                    default:
-                        printf("Unrecognized param block! %d, %d, %d\n", tidx, kidx, sidx);
-                        break;
+            for(int lidx = 0; lidx < Nlidar; lidx++)
+                {   
+                    // Add the extrinsic params
+                    problem.AddParameterBlock(R_Lx_Ly[lidx].data(), 4, new GPSO3dLocalParameterization());
+                    problem.AddParameterBlock(P_Lx_Ly[lidx].data(), 3);
+                    paramInfoMap.insert(make_pair(R_Lx_Ly[lidx].data(), ParamInfo(R_Lx_Ly[lidx].data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
+                    paramInfoMap.insert(make_pair(P_Lx_Ly[lidx].data(), ParamInfo(P_Lx_Ly[lidx].data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
                 }
-            }
-            else
-            {
-                if(sidx == 0)
-                    ROS_ASSERT(param.address == R_Lx_Ly.data());
-                if(sidx == 1)    
-                    ROS_ASSERT(param.address == P_Lx_Ly.data());
-            }
-        }
+
+        // // Sanity check
+        // for(auto &param_ : paramInfoMap)
+        // {
+        //     ParamInfo param = param_.second;
+
+        //     int tidx = param.tidx;
+        //     int kidx = param.kidx;
+        //     int sidx = param.sidx;
+
+        //     if(param.tidx != -1 && param.kidx != -1)
+        //     {
+        //         switch(sidx)
+        //         {
+        //             case 0:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotSO3(kidx).data());
+        //                 break;
+        //             case 1:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotOmg(kidx).data());
+        //                 break;
+        //             case 2:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotAlp(kidx).data());
+        //                 break;
+        //             case 3:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotPos(kidx).data());
+        //                 break;
+        //             case 4:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotVel(kidx).data());
+        //                 break;
+        //             case 5:
+        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotAcc(kidx).data());
+        //                 break;
+        //             default:
+        //                 printf("Unrecognized param block! %d, %d, %d\n", tidx, kidx, sidx);
+        //                 break;
+        //         }
+        //     }
+        //     else
+        //     {
+        //         if(sidx == 0)
+        //             ROS_ASSERT(param.address == R_Lx_Ly.data());
+        //         if(sidx == 1)    
+        //             ROS_ASSERT(param.address == P_Lx_Ly.data());
+        //     }
+        // }
     }
 
     vector<int> lidar_factor_ds(trajs.size(), 0);
@@ -1059,7 +1060,7 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 
     tt_slv.Toc();
 
-    myTf<double> T_L0_Li(R_Lx_Ly.unit_quaternion(), P_Lx_Ly);
+    myTf<double> T_L0_Li(R_Lx_Ly[0].unit_quaternion(), P_Lx_Ly[0]);
     myTf T_err_1 = T_B_Li_gndtr.inverse()*T_L0_Li;
     myTf T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr;
     MatrixXd T_err(6, 1); T_err << T_err_1.pos, T_err_2.pos;
@@ -1090,9 +1091,9 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
            T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err_1.pos.norm(), T_err_2.pos.norm(), T_err.norm());
 }
 
-SE3d GPMLC::GetExtrinsics()
+SE3d GPMLC::GetExtrinsics(int lidx)
 {
-    return SE3d(R_Lx_Ly, P_Lx_Ly);
+    return SE3d(R_Lx_Ly[lidx], P_Lx_Ly[lidx]);
 }
 
 void GPMLC::Reset()

@@ -339,7 +339,7 @@ int main(int argc, char **argv)
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
     printf(KGRN "Multi-Lidar Coupled Motion Estimation Started.\n" RESET);
-
+ 
     /* #region Read parameters --------------------------------------------------------------------------------------*/
 
     // Knot length
@@ -440,7 +440,7 @@ int main(int argc, char **argv)
     }
 
     /* #endregion Read parameters -----------------------------------------------------------------------------------*/
-
+ 
     /* #region Load the priormap ------------------------------------------------------------------------------------*/
 
     pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
@@ -450,7 +450,7 @@ int main(int argc, char **argv)
     kdTreeMap->setInputCloud(priormap);
 
     /* #endregion Load the priormap ---------------------------------------------------------------------------------*/
-
+ 
     /* #region Load the data ----------------------------------------------------------------------------------------*/
 
     // Converting the topic to index
@@ -582,7 +582,7 @@ int main(int argc, char **argv)
             cout << endl;
 
             // Confirm the time correctness
-            ROS_ASSERT_MSG(cloudstamp[lidx].back().toSec() == clouds[lidx].back()->points.front().t,
+            ROS_ASSERT_MSG(fabs(cloudstamp[lidx].back().toSec() - clouds[lidx].back()->points.front().t) < 1e-9,
                            "Time: %f, %f.",
                            cloudstamp[lidx].back().toSec(), clouds[lidx].back()->points.front().t);
         }
@@ -592,7 +592,7 @@ int main(int argc, char **argv)
     }
 
     /* #endregion Load the data -------------------------------------------------------------------------------------*/
-
+ 
     /* #region Extract the ground truth and publish -----------------------------------------------------------------*/
 
     vector<vector<double>> gndtr_ts(Nlidar);
@@ -639,7 +639,7 @@ int main(int argc, char **argv)
 
 
     /* #endregion Extract the ground truth and publish --------------------------------------------------------------*/
-    
+ 
     /* #region Initialize the pose of each lidar --------------------------------------------------------------------*/
     
     // Initial coordinates of the lidar
@@ -656,7 +656,7 @@ int main(int argc, char **argv)
         poseInitThread[lidx].join();
 
     /* #endregion Initialize the pose of each lidar -----------------------------------------------------------------*/
-    
+ 
     /* #region Split the pointcloud by time -------------------------------------------------------------------------*/
     
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
@@ -667,9 +667,9 @@ int main(int argc, char **argv)
     }
 
     /* #endregion Split the pointcloud by time ----------------------------------------------------------------------*/
-
+ 
     /* #region Create the LOAM modules ------------------------------------------------------------------------------*/
-    
+
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         // Create the gpmaplo objects
@@ -694,16 +694,19 @@ int main(int argc, char **argv)
             // }
         }
     }
-
+ 
     // Create the estimation module
-    GPMLCPtr gpmlc(new GPMLC(nh_ptr));
-    vector<GaussianProcessPtr> trajs = {gpmaplo[0]->GetTraj(), gpmaplo[1]->GetTraj()};
+    GPMLCPtr gpmlc(new GPMLC(nh_ptr, Nlidar));
+    vector<GaussianProcessPtr> trajs;
+    for(auto &lo : gpmaplo)
+        trajs.push_back(lo->GetTraj());
+
     vector<vector<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
-
+ 
     /* #endregion Create the LOAM modules ---------------------------------------------------------------------------*/
-
+ 
     /* #region Do optimization with inter-trajectory factors --------------------------------------------------------*/
-    
+
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
         int SW_CLOUDSTEP = 1;
@@ -723,40 +726,32 @@ int main(int argc, char **argv)
             double tmax = cloudsx[0][SW_END]->points.back().t;      // End time of the sliding window
             double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window,
                                                                     // also determines the marginalization time limit
-            
             // Extend the trajectories
             for(int lidx = 0; lidx < Nlidar; lidx++)
             {
                 while(trajs[lidx]->getMaxTime() < tmax)
                     trajs[lidx]->extendOneKnot();
             }
-            
+
             // Deskew, Associate, Estimate, repeat max_inner_iter times
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
                 // Create buffers for lidar coefficients
-                vector<deque<vector<LidarCoef>>> swCloudCoef(2, deque<vector<LidarCoef>>(SW_CLOUDNUM_EFF));
-
-                deque<CloudXYZITPtr> swCloud0(SW_CLOUDNUM_EFF);
-                deque<CloudXYZIPtr> swCloudUndi0(SW_CLOUDNUM_EFF);
-                deque<CloudXYZIPtr> swCloudUndiInW0(SW_CLOUDNUM_EFF);
-                deque<vector<LidarCoef>> &swCloudCoef0 = swCloudCoef[0];
-
-                deque<CloudXYZITPtr> swCloudi(SW_CLOUDNUM_EFF);
-                deque<CloudXYZIPtr> swCloudUndii(SW_CLOUDNUM_EFF);
-                deque<CloudXYZIPtr> swCloudUndiInWi(SW_CLOUDNUM_EFF);
-                deque<vector<LidarCoef>> &swCloudCoefi = swCloudCoef[1];
+                vector<deque<CloudXYZITPtr>> swCloud(Nlidar, deque<CloudXYZITPtr>(SW_CLOUDNUM_EFF));
+                vector<deque<CloudXYZIPtr >> swCloudUndi(Nlidar, deque<CloudXYZIPtr>(SW_CLOUDNUM_EFF));
+                vector<deque<CloudXYZIPtr >> swCloudUndiInW(Nlidar, deque<CloudXYZIPtr>(SW_CLOUDNUM_EFF));
+                vector<deque<vector<LidarCoef>>> swCloudCoef(Nlidar, deque<vector<LidarCoef>>(SW_CLOUDNUM_EFF));
 
                 // Deskew, Transform and Associate
                 auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
                                                             CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
                 {
                     GaussianProcessPtr traj = gpmaplo->GetTraj();
-                    
+
                     // Deskew
                     cloudUndi = CloudXYZIPtr(new CloudXYZI());
                     gpmaplo->Deskew(traj, cloudRaw, cloudUndi);
-                    
+
                     // Transform
                     cloudUndiInW = CloudXYZIPtr(new CloudXYZI());
                     SE3d pose = traj->pose(cloudRaw->points.back().t);
@@ -764,53 +759,57 @@ int main(int argc, char **argv)
 
                     // Associate
                     gpmaplo->Associate(traj, kdTreeMap, priormap, cloudRaw, cloudUndi, cloudUndiInW, cloudCoeff);
-
                 };
-                
-                for(int idx = SW_BEG; idx < SW_END; idx++)
+
+                for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
-                    int swIdx = idx - SW_BEG;
-
-                    swCloud0[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[0][idx], cloud_ds[0]);
-                    swCloudi[swIdx] = uniformDownsample<PointXYZIT>(cloudsx[1][idx], cloud_ds[1]);
-
-                    ProcessCloud(gpmaplo[0], swCloud0[swIdx], swCloudUndi0[swIdx], swCloudUndiInW0[swIdx], swCloudCoef0[swIdx]);
-                    ProcessCloud(gpmaplo[1], swCloudi[swIdx], swCloudUndii[swIdx], swCloudUndiInWi[swIdx], swCloudCoefi[swIdx]);
+                    for(int idx = SW_BEG; idx < SW_END; idx++)
+                    {
+                        int swIdx = idx - SW_BEG;
+                        swCloud[lidx][swIdx] = uniformDownsample<PointXYZIT>(cloudsx[lidx][idx], cloud_ds[lidx]);
+                        ProcessCloud(gpmaplo[lidx], swCloud[lidx][swIdx], swCloudUndi[lidx][swIdx], swCloudUndiInW[lidx][swIdx], swCloudCoef[lidx][swIdx]);
+                    }
                 }
 
                 // Optimize
                 if(!VIZ_ONLY)
                     gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
 
-                if (inner_iter == max_inner_iter - 1)
+                for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
-                    SE3d se3 = gpmlc->GetExtrinsics();
-                    geometry_msgs::PoseStamped pose;
-                    pose.header.stamp = ros::Time(tmax);
-                    pose.header.frame_id = "lidar_0";
-                    pose.pose.position.x = se3.translation().x();
-                    pose.pose.position.y = se3.translation().y();
-                    pose.pose.position.z = se3.translation().z();
-                    pose.pose.orientation.x = se3.so3().unit_quaternion().x();
-                    pose.pose.orientation.y = se3.so3().unit_quaternion().y();
-                    pose.pose.orientation.z = se3.so3().unit_quaternion().z();
-                    pose.pose.orientation.w = se3.so3().unit_quaternion().w();
-                    extrinsic_poses[1].push_back(pose);
+                    if (inner_iter == max_inner_iter - 1)
+                    {
+                        SE3d se3 = gpmlc->GetExtrinsics(lidx);
+                        geometry_msgs::PoseStamped pose;
+                        pose.header.stamp = ros::Time(tmax);
+                        pose.header.frame_id = "lidar_0";
+                        pose.pose.position.x = se3.translation().x();
+                        pose.pose.position.y = se3.translation().y();
+                        pose.pose.position.z = se3.translation().z();
+                        pose.pose.orientation.x = se3.so3().unit_quaternion().x();
+                        pose.pose.orientation.y = se3.so3().unit_quaternion().y();
+                        pose.pose.orientation.z = se3.so3().unit_quaternion().z();
+                        pose.pose.orientation.w = se3.so3().unit_quaternion().w();
+                        extrinsic_poses[lidx].push_back(pose);
+                    }
                 }
 
                 // Visualize the result on each trajectory
                 {
-                    gpmaplo[0]->Visualize(tmin, tmax, swCloudCoef0, swCloudUndiInW0.back(), true);
-                    gpmaplo[1]->Visualize(tmin, tmax, swCloudCoefi, swCloudUndiInWi.back(), true);
+                    static vector<ros::Publisher*> odomPub(Nlidar, nullptr);
+                    static vector<ros::Publisher*> marker_pub(Nlidar, nullptr);
+                    static vector<nav_msgs::Odometry> odomMsg(Nlidar, nav_msgs::Odometry());
 
-                    // Publish an odom topic for each lidar
-                    static vector<ros::Publisher> odomPub = {nh_ptr->advertise<nav_msgs::Odometry>(myprintf("/lidar_%d/odom", 0), 1),
-                                                             nh_ptr->advertise<nav_msgs::Odometry>(myprintf("/lidar_%d/odom", 1), 1)};
-                    static vector<nav_msgs::Odometry> odomMsg(2);
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
+                        gpmaplo[lidx]->Visualize(tmin, tmax, swCloudCoef[lidx], swCloudUndiInW[lidx].back(), true);
+
+                        // Publish an odom topic for each lidar
+                        if (odomPub[lidx] == nullptr)
+                            odomPub[lidx] = new ros::Publisher(nh_ptr->advertise<nav_msgs::Odometry>(myprintf("/lidar_%d/odom", lidx), 1));
+
                         double ts = tmax - trajs[lidx]->getDt()/2;
-                        SE3d pose = trajs[lidx]->pose(tmax);
+                        SE3d pose = trajs[lidx]->pose(tmax);    
                         odomMsg[lidx].header.stamp = ros::Time(tmax);
                         odomMsg[lidx].header.frame_id = "world";
                         odomMsg[lidx].child_frame_id = myprintf("lidar_%d_body", lidx);
@@ -821,39 +820,42 @@ int main(int argc, char **argv)
                         odomMsg[lidx].pose.pose.orientation.y = pose.unit_quaternion().y();
                         odomMsg[lidx].pose.pose.orientation.z = pose.unit_quaternion().z();
                         odomMsg[lidx].pose.pose.orientation.w = pose.unit_quaternion().w();
-                        odomPub[lidx].publish(odomMsg[lidx]);
+                        odomPub[lidx]->publish(odomMsg[lidx]);
+
+                        if (lidx == 0)
+                            continue;
 
                         // printf("Lidar %d. Pos: %f, %f, %f\n", lidx, pose.translation().x(), pose.translation().y(), pose.translation().z());
-                    }
+                        if(marker_pub[lidx] == nullptr)
+                            marker_pub[lidx] = new ros::Publisher(nh_ptr->advertise<visualization_msgs::Marker>(myprintf("/lidar_%d/extr_marker", lidx), 1));
 
-                    // Publish a line between the lidars
-                    static ros::Publisher marker_pub = nh_ptr->advertise<visualization_msgs::Marker>("extr_marker", 1);
-                    visualization_msgs::Marker line_strip;
-                    line_strip.header.frame_id = "world";
-                    line_strip.header.stamp = ros::Time::now();
-                    line_strip.ns = "lines";
-                    line_strip.action = visualization_msgs::Marker::ADD;
-                    line_strip.pose.orientation.w = 1.0;
-                    line_strip.id = 0;
-                    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
-                    // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
-                    line_strip.scale.x = 0.05;
-                    // Line strip is red
-                    line_strip.color.r = 0.0;
-                    line_strip.color.g = 0.0;
-                    line_strip.color.b = 1.0;
-                    line_strip.color.a = 1.0;
-                    // Create the vertices for the points and lines
-                    geometry_msgs::Point p;
-                    p.x = odomMsg[0].pose.pose.position.x;
-                    p.y = odomMsg[0].pose.pose.position.y;
-                    p.z = odomMsg[0].pose.pose.position.z;
-                    line_strip.points.push_back(p);
-                    p.x = odomMsg[1].pose.pose.position.x;;
-                    p.y = odomMsg[1].pose.pose.position.y;;
-                    p.z = odomMsg[1].pose.pose.position.z;;
-                    line_strip.points.push_back(p);
-                    marker_pub.publish(line_strip);
+                        // Publish a line between the lidars
+                        visualization_msgs::Marker line_strip;
+                        line_strip.header.frame_id = "world";
+                        line_strip.header.stamp = ros::Time::now();
+                        line_strip.ns = "lines";
+                        line_strip.action = visualization_msgs::Marker::ADD;
+                        line_strip.pose.orientation.w = 1.0;
+                        line_strip.id = 0;
+                        line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+                        line_strip.scale.x = 0.05;
+                        // Line strip is red
+                        line_strip.color.r = 0.0;
+                        line_strip.color.g = 0.0;
+                        line_strip.color.b = 1.0;
+                        line_strip.color.a = 1.0;
+                        // Create the vertices for the points and lines
+                        geometry_msgs::Point p;
+                        p.x = odomMsg[0].pose.pose.position.x;
+                        p.y = odomMsg[0].pose.pose.position.y;
+                        p.z = odomMsg[0].pose.pose.position.z;
+                        line_strip.points.push_back(p);
+                        p.x = odomMsg[lidx].pose.pose.position.x;;
+                        p.y = odomMsg[lidx].pose.pose.position.y;;
+                        p.z = odomMsg[lidx].pose.pose.position.z;;
+                        line_strip.points.push_back(p);
+                        marker_pub[lidx]->publish(line_strip);
+                    }
                 }
             }
         }
@@ -896,7 +898,7 @@ int main(int argc, char **argv)
     }
 
     /* #endregion Do optimization with inter-trajectory factors -----------------------------------------------------*/
-
+ 
     /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
 
     vector<ros::Publisher> poseSamplePub(Nlidar);
@@ -909,5 +911,5 @@ int main(int argc, char **argv)
         rate.sleep();
 
     /* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
-
+ 
 }
