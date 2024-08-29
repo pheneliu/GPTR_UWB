@@ -10,10 +10,6 @@
 #include "factor/GPExtrinsicFactor.h"
 #include "factor/GPExtrinsicFactorAutodiff.h"
 
-double mpSigmaR = 1.0;
-double mpSigmaP = 1.0;
-int lidar_ds_rate = 1;
-
 struct FactorMeta
 {
     vector<double *> so3_parameter_blocks;
