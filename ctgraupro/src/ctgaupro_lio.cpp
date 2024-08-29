@@ -455,12 +455,12 @@ int main(int argc, char **argv)
 
     // Converting the topic to index
     map<string, int> pctopicidx;
-    for(int idx = 0; idx < lidar_topic.size(); idx++)
+    for(int idx = 0; idx < Nlidar; idx++)
         pctopicidx[lidar_topic[idx]] = idx;
 
     // Storage of the pointclouds
-    vector<vector<CloudXYZITPtr>> clouds(lidar_topic.size());
-    vector<vector<ros::Time>> cloudstamp(lidar_topic.size());
+    vector<vector<CloudXYZITPtr>> clouds(Nlidar);
+    vector<vector<ros::Time>> cloudstamp(Nlidar);
     vector<tf2_msgs::TFMessage> gndtr;
 
     vector<string> queried_topics = lidar_topic;
@@ -649,13 +649,8 @@ int main(int argc, char **argv)
     vector<double> timestart(Nlidar);
     vector<thread> poseInitThread(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
-        poseInitThread[lidx] = thread(getInitPose, lidx, std::ref(clouds),
-                                      std::ref(cloudstamp),
-                                      std::ref(priormap),
-                                      std::ref(timestart),
-                                      std::ref(xyzypr_W_L0),
-                                      std::ref(pc0),
-                                      std::ref(tf_W_Li0));
+        poseInitThread[lidx] = thread(getInitPose, lidx, std::ref(clouds), std::ref(cloudstamp), std::ref(priormap),
+                                      std::ref(timestart), std::ref(xyzypr_W_L0), std::ref(pc0), std::ref(tf_W_Li0));
 
     for(int lidx = 0; lidx < Nlidar; lidx++)
         poseInitThread[lidx].join();

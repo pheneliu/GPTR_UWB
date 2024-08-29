@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Lidar01
+        - /Lidar01/Lidar0InW1
         - /Lidar01/Odom01/Shape1
         - /Lidar11
         - /Lidar11/Odom11/Shape1
@@ -645,7 +646,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 27.12413787841797
+      Distance: 28.928321838378906
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -653,17 +654,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 107.05938720703125
-        Y: 56.21320724487305
-        Z: -4.376356446300633e-05
+        X: 100.7847671508789
+        Y: 61.305381774902344
+        Z: -4.928898488287814e-05
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.28479769825935364
+      Pitch: -0.040202174335718155
       Target Frame: body
-      Yaw: 5.884970664978027
+      Yaw: 5.644972324371338
     Saved: ~
 Window Geometry:
   Displays:

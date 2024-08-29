@@ -29,8 +29,6 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
     // Create local parameterization for so3
     ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
 
-    int pidx = -1;
-
     for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
     {
         if (kidx < kidxmin || kidx > kidxmax)
@@ -922,6 +920,8 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 {
     TicToc tt_build;
 
+    int Nlidar = 0;
+
     // Ceres problem
     ceres::Problem problem;
     ceres::Solver::Options options;
@@ -942,11 +942,16 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
             AddTrajParams(problem, trajs, tidx, paramInfoMap, tmin, tmax, tmid);
             AddTrajParams(problem, trajs, tidx, paramInfoMap, tmin, tmax, tmid);
         }
-        // Add the extrinsic params
-        problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
-        problem.AddParameterBlock(P_Lx_Ly.data(), 3);
-        paramInfoMap.insert(make_pair(R_Lx_Ly.data(), ParamInfo(R_Lx_Ly.data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
-        paramInfoMap.insert(make_pair(P_Lx_Ly.data(), ParamInfo(P_Lx_Ly.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+
+        // Only add extrinsic if there are multiple trajectories
+        if (trajs.size() != 0)
+        {   
+            // Add the extrinsic params
+            problem.AddParameterBlock(R_Lx_Ly.data(), 4, new GPSO3dLocalParameterization());
+            problem.AddParameterBlock(P_Lx_Ly.data(), 3);
+            paramInfoMap.insert(make_pair(R_Lx_Ly.data(), ParamInfo(R_Lx_Ly.data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
+            paramInfoMap.insert(make_pair(P_Lx_Ly.data(), ParamInfo(P_Lx_Ly.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+        }
 
         // Sanity check
         for(auto &param_ : paramInfoMap)
@@ -1066,15 +1071,18 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     // if(optnum == -1 || do_marginalization)
         optnum++;
 
+    static double tstart = tmin;
+
     printf(KGRN
-           "GPX Opt #%4d.%2d.%2d: CeresIter: %d. Tbd: %.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f, %.3f, %.3f. Fixes: %f, %f.\n"
+           "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
            "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
            "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
            "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
            RESET,
            optnum, inner_iter, outer_iter,
-           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(), tmin, tmid, tmax, fix_time_begin, fix_time_end,
+           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
+           tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
            factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
            summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
            summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final,
