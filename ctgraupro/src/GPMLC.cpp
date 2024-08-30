@@ -188,7 +188,7 @@ void GPMLC::AddLidarFactors(
 }
 
 void GPMLC::AddGPExtrinsicFactors(
-    ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy,
+    ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy, SO3d &R_Lx_Ly, Vec3 &P_Lx_Ly,
     map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
     double tmin, double tmax)
 {
@@ -293,13 +293,13 @@ void GPMLC::AddGPExtrinsicFactors(
                 factorMeta.coupled_params.back().push_back(paramInfoMap[trajy->getKnotAcc(idx).data()]);
             }
 
-            factor_param_blocks.push_back(R_Lx_Ly[0].data());
-            factor_param_blocks.push_back(P_Lx_Ly[0].data());
-            factorMeta.coupled_params.back().push_back(paramInfoMap[R_Lx_Ly[0].data()]);
-            factorMeta.coupled_params.back().push_back(paramInfoMap[P_Lx_Ly[0].data()]);
+            factor_param_blocks.push_back(R_Lx_Ly.data());
+            factor_param_blocks.push_back(P_Lx_Ly.data());
+            factorMeta.coupled_params.back().push_back(paramInfoMap[R_Lx_Ly.data()]);
+            factorMeta.coupled_params.back().push_back(paramInfoMap[P_Lx_Ly.data()]);
 
-            ROS_ASSERT(paramInfoMap.find(R_Lx_Ly[0].data()) != paramInfoMap.end());
-            ROS_ASSERT(paramInfoMap.find(P_Lx_Ly[0].data()) != paramInfoMap.end());
+            ROS_ASSERT(paramInfoMap.find(R_Lx_Ly.data()) != paramInfoMap.end());
+            ROS_ASSERT(paramInfoMap.find(P_Lx_Ly.data()) != paramInfoMap.end());
             
             // Create the factors
             // MatrixXd InvCov = MatrixXd::Identity(STATE_DIM, STATE_DIM);
@@ -506,7 +506,7 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 
     for(auto &cpset : factorMetaGpx.coupled_params)
         for(auto &cp : cpset)
-            ROS_ASSERT(paramInfoMap.find(cp.address) != paramInfoMap.end());
+            ROS_ASSERT_MSG(paramInfoMap.find(cp.address) != paramInfoMap.end(), "%x", cp.address);
 
     for(auto &cpset : factorMetaPrior.coupled_params)
         for(auto &cp : cpset)
@@ -938,15 +938,13 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     {
         // Add the parameter blocks for rotation
         for(int tidx = 0; tidx < trajs.size(); tidx++)
-        {
             AddTrajParams(problem, trajs, tidx, paramInfoMap, tmin, tmax, tmid);
-            AddTrajParams(problem, trajs, tidx, paramInfoMap, tmin, tmax, tmid);
-        }
 
         // Only add extrinsic if there are multiple trajectories
         if (trajs.size() != 0)
             for(int lidx = 0; lidx < Nlidar; lidx++)
-                {   
+                {  
+                    printf("Adding %x, %x extrinsic params\n", R_Lx_Ly[lidx].data(), P_Lx_Ly[lidx].data());
                     // Add the extrinsic params
                     problem.AddParameterBlock(R_Lx_Ly[lidx].data(), 4, new GPSO3dLocalParameterization());
                     problem.AddParameterBlock(P_Lx_Ly[lidx].data(), 3);
@@ -1029,7 +1027,7 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     double cost_gpx_init = -1; double cost_gpx_final = -1;
     for(int tidxx = 0; tidxx < trajs.size(); tidxx++)
         for(int tidxy = tidxx+1; tidxy < trajs.size(); tidxy++)
-            AddGPExtrinsicFactors(problem, trajs[tidxx], trajs[tidxy], paramInfoMap, factorMetaGpx, tmin, tmax);
+            AddGPExtrinsicFactors(problem, trajs[tidxx], trajs[tidxy], R_Lx_Ly[tidxy], P_Lx_Ly[tidxy], paramInfoMap, factorMetaGpx, tmin, tmax);
 
     // Add the prior factor
     FactorMeta factorMetaPrior;

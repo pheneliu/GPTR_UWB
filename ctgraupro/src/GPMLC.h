@@ -444,7 +444,7 @@ public:
         double tmin, double tmax);
 
     void AddGPExtrinsicFactors(
-        ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy,
+        ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy, SO3d &R_Lx_Ly, Vec3 &P_Lx_Ly,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         double tmin, double tmax);
 
