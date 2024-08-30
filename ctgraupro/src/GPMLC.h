@@ -469,7 +469,7 @@ public:
         double tmin, double tmax, double tmid,
         const vector<deque<vector<LidarCoef>>> &cloudCoef,
         bool do_marginalization,
-        myTf<double> &T_B_Li_gndtr);
+        vector<myTf<double>> &T_B_Li_gndtr);
 
     SE3d GetExtrinsics(int lidx);
 

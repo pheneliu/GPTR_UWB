@@ -919,11 +919,11 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
                      double tmin, double tmax, double tmid,
                      const vector<deque<vector<LidarCoef>>> &cloudCoef,
                      bool do_marginalization,
-                     myTf<double> &T_B_Li_gndtr)
+                     vector<myTf<double>> &T_B_Li_gndtr)
 {
     TicToc tt_build;
 
-    int Nlidar = 0;
+    int Nlidar = trajs.size();
 
     // Ceres problem
     ceres::Problem problem;
@@ -944,10 +944,10 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
             AddTrajParams(problem, trajs, tidx, paramInfoMap, tmin, tmax, tmid);
 
         // Only add extrinsic if there are multiple trajectories
-        if (trajs.size() != 0)
-            for(int lidx = 0; lidx < Nlidar; lidx++)
+        if (trajs.size() > 1)
+            for(int lidx = 1; lidx < Nlidar; lidx++)
                 {  
-                    printf("Adding %x, %x extrinsic params\n", R_Lx_Ly[lidx].data(), P_Lx_Ly[lidx].data());
+                    // printf("Adding %x, %x extrinsic params\n", R_Lx_Ly[lidx].data(), P_Lx_Ly[lidx].data());
                     // Add the extrinsic params
                     problem.AddParameterBlock(R_Lx_Ly[lidx].data(), 4, new GPSO3dLocalParameterization());
                     problem.AddParameterBlock(P_Lx_Ly[lidx].data(), 3);
@@ -989,7 +989,7 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
         //             default:
         //                 printf("Unrecognized param block! %d, %d, %d\n", tidx, kidx, sidx);
         //                 break;
-        //         }
+        //         }T_err
         //     }
         //     else
         //     {
@@ -1061,10 +1061,15 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 
     tt_slv.Toc();
 
-    myTf<double> T_L0_Li(R_Lx_Ly[0].unit_quaternion(), P_Lx_Ly[0]);
-    myTf T_err_1 = T_B_Li_gndtr.inverse()*T_L0_Li;
-    myTf T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr;
-    MatrixXd T_err(6, 1); T_err << T_err_1.pos, T_err_2.pos;
+    vector<myTf<double>> T_L0_Li(Nlidar);
+    vector<double> T_err(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        T_L0_Li[lidx] = myTf(R_Lx_Ly[lidx].unit_quaternion(), P_Lx_Ly[lidx]);
+        myTf T_err_1 = T_B_Li_gndtr[lidx].inverse()*T_L0_Li[lidx];
+        myTf T_err_2 = T_L0_Li[lidx].inverse()*T_B_Li_gndtr[lidx];
+        T_err[lidx] = sqrt(T_err_1.pos.norm()*T_err_1.pos.norm() + T_err_2.pos.norm()*T_err_2.pos.norm());
+    }
 
     static int debug_check = 0;
     debug_check++;
@@ -1075,21 +1080,30 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 
     static double tstart = tmin;
 
-    printf(KGRN
-           "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
-           "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
-           "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-           "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-           "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f, %.3f, %.3f\n\n"
-           RESET,
-           optnum, inner_iter, outer_iter,
-           summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
-           tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
-           factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
-           summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
-           summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final,
-           T_L0_Li.pos.x(), T_L0_Li.pos.y(), T_L0_Li.pos.z(),
-           T_L0_Li.yaw(), T_L0_Li.pitch(), T_L0_Li.roll(), T_err_1.pos.norm(), T_err_2.pos.norm(), T_err.norm());
+    string report_opt =
+        myprintf(KGRN
+              "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
+              "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
+              "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
+              "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
+              RESET,
+              optnum, inner_iter, outer_iter,
+              summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
+              tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
+              factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
+              summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
+              summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final);
+    
+    string report_xtrs = "";
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        report_xtrs += 
+            myprintf(KGRN
+                   "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f.\n"
+                   RESET,
+                   T_L0_Li[lidx].pos.x(), T_L0_Li[lidx].pos.y(), T_L0_Li[lidx].pos.z(),
+                   T_L0_Li[lidx].yaw(),   T_L0_Li[lidx].pitch(), T_L0_Li[lidx].roll(), T_err[lidx]);
+    
+    cout << report_opt + report_xtrs << endl;
 }
 
 SE3d GPMLC::GetExtrinsics(int lidx)

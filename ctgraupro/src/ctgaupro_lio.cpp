@@ -773,7 +773,7 @@ int main(int argc, char **argv)
 
                 // Optimize
                 if(!VIZ_ONLY)
-                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr[1]);
+                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr);
 
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
