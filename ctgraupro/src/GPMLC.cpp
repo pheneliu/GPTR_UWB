@@ -230,10 +230,13 @@ void GPMLC::AddGPExtrinsicFactors(
             double ss = uss.second;
             double sf = usf.second;
 
-            if(paramInfoMap.find(trajx->getKnotSO3(umins).data()) == paramInfoMap.end()   ||
-               paramInfoMap.find(trajx->getKnotSO3(umins+1).data()) == paramInfoMap.end() ||
-               paramInfoMap.find(trajx->getKnotSO3(uminf).data()) == paramInfoMap.end()   ||
-               paramInfoMap.find(trajx->getKnotSO3(uminf+1).data()) == paramInfoMap.end())
+            if(paramInfoMap.find(trajx->getKnotSO3(umins).data()) == paramInfoMap.end()    ||
+               paramInfoMap.find(trajx->getKnotSO3(umins+1).data()) == paramInfoMap.end()  ||
+               paramInfoMap.find(trajx->getKnotSO3(uminf).data()) == paramInfoMap.end()    ||
+               paramInfoMap.find(trajx->getKnotSO3(uminf+1).data()) == paramInfoMap.end() ||
+               paramInfoMap.find(R_Lx_Ly.data()) == paramInfoMap.end() ||
+               paramInfoMap.find(P_Lx_Ly.data()) == paramInfoMap.end()
+              )
                continue;
 
             // Add the parameter blocks
