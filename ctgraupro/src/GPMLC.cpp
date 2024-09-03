@@ -1001,6 +1001,13 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
         // }
     }
 
+
+    // Sample the trajectories before optimization
+    vector <GPState<double>> gpX0;
+    for(auto &traj : trajs)
+        gpX0.push_back(traj->getStateAt(tmax));
+
+    // Calculating the downsampling rate for lidar factors
     vector<int> lidar_factor_ds(trajs.size(), 0);
     vector<int> total_lidar_factors(trajs.size(), 0);
     for(int tidx = 0; tidx < trajs.size(); tidx++)
@@ -1071,6 +1078,11 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
         T_err[lidx] = sqrt(T_err_1.pos.norm()*T_err_1.pos.norm() + T_err_2.pos.norm()*T_err_2.pos.norm());
     }
 
+    // Sample the trajectories before optimization
+    vector <GPState<double>> gpXt;
+    for(auto &traj : trajs)
+        gpXt.push_back(traj->getStateAt(tmax));
+
     static int debug_check = 0;
     debug_check++;
 
@@ -1093,17 +1105,32 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
               factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
               summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
               summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final);
+
+    string report_state = "";
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        report_state += 
+        myprintf(KGRN "Traj%2d. YPR: %4.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
+                       "        YPR: %4.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
+                 RESET,
+                 lidx, gpX0[lidx].yaw(), gpX0[lidx].pitch(), gpX0[lidx].roll(), gpX0[lidx].O.norm(), gpX0[lidx].S.norm(),
+                       gpX0[lidx].P.x(), gpX0[lidx].P.y(),   gpX0[lidx].P.z(),  gpX0[lidx].V.norm(), gpX0[lidx].A.norm(),
+                       gpXt[lidx].yaw(), gpXt[lidx].pitch(), gpXt[lidx].roll(), gpXt[lidx].O.norm(), gpXt[lidx].S.norm(),
+                       gpXt[lidx].P.x(), gpXt[lidx].P.y(),   gpXt[lidx].P.z(),  gpXt[lidx].V.norm(), gpXt[lidx].A.norm());
+    }
+
     
     string report_xtrs = "";
     for(int lidx = 0; lidx < Nlidar; lidx++)
         report_xtrs += 
             myprintf(KGRN
-                   "T_L0_Li. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f.\n"
+                   "T_L0_L%d. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f.\n"
                    RESET,
+                   lidx,
                    T_L0_Li[lidx].pos.x(), T_L0_Li[lidx].pos.y(), T_L0_Li[lidx].pos.z(),
                    T_L0_Li[lidx].yaw(),   T_L0_Li[lidx].pitch(), T_L0_Li[lidx].roll(), T_err[lidx]);
     
-    cout << report_opt + report_xtrs << endl;
+    cout << report_opt + report_state + report_xtrs << endl;
 }
 
 SE3d GPMLC::GetExtrinsics(int lidx)
