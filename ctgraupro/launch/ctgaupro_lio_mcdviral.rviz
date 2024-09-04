@@ -615,7 +615,7 @@ Visualization Manager:
       Marker Topic: /ctgaupro/extr_marker
       Name: Marker
       Namespaces:
-        lines: true
+        {}
       Queue Size: 1
       Value: true
   Enabled: true
@@ -646,7 +646,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 28.928321838378906
+      Distance: 35.15476989746094
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -654,17 +654,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 100.7847671508789
-        Y: 61.305381774902344
-        Z: -4.928898488287814e-05
+        X: 99.2557373046875
+        Y: 47.83001708984375
+        Z: -4.919164348393679e-05
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.040202174335718155
+      Pitch: 0.10979790985584259
       Target Frame: body
-      Yaw: 5.644972324371338
+      Yaw: 1.16678786277771
     Saved: ~
 Window Geometry:
   Displays:
@@ -682,5 +682,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1920
-  X: 0
+  X: 3840
   Y: 0

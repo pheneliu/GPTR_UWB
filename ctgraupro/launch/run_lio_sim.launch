@@ -21,7 +21,7 @@
         <!-- <param name="SKIPPED_TIME"     value="197.5"/> -->
         <param name="VIZ_ONLY"        value="0"/>
         
-        <param name="lidar_topic"     value="['/lidar_0/points_livox']" type="yaml" />
+        <param name="lidar_topic"     value="['/lidar_0/points_livox', '/lidar_1/points_livox']" type="yaml" />
         <param name="lidar_type"      value="['livox', 'livox']" type="yaml" />
         <param name="stamp_time"      value="['start', 'start']" type="yaml" />
         <!-- Set to 1 to load the search for previous logs and redo -->

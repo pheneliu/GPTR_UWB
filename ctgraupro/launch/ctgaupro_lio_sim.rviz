@@ -5,10 +5,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Priormap1
-        - /Lidar01
+        - /Lidar01/GPCtrlPoints1
         - /Lidar01/Odom01/Shape1
-        - /Lidar11
+        - /Lidar11/GPCtrlPoints1
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
       Splitter Ratio: 0.6441176533699036
@@ -526,7 +525,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 0; 255; 32
+          Color: 5; 197; 14
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -612,10 +611,10 @@ Visualization Manager:
       Name: Lidar1
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /ctgaupro/extr_marker
+      Marker Topic: /lidar_1/extr_marker
       Name: Marker
       Namespaces:
-        {}
+        lines: true
       Queue Size: 1
       Value: true
   Enabled: true
@@ -646,7 +645,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 6.337989807128906
+      Distance: 2.843780517578125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -654,17 +653,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.3028911352157593
-        Y: 0.25409820675849915
-        Z: 0
+        X: 0.535111665725708
+        Y: 0.009357869625091553
+        Z: -4.76837158203125e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.20539842545986176
+      Pitch: 0.40539833903312683
       Target Frame: body
-      Yaw: 2.4053966999053955
+      Yaw: 4.215388774871826
     Saved: ~
 Window Geometry:
   Displays:

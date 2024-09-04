@@ -1313,12 +1313,18 @@ public:
     
     double startTime()
     {
-        return data.front().t;
+        if (data.size() == 0)
+            return -1;
+        else
+            return data.front().t;
     }
 
     double finalTime()
     {
-        return data.back().t;
+        if (data.size() == 0)
+            return -1;
+        else
+            return data.back().t;
     }
 
     deque<ImuSample> data;

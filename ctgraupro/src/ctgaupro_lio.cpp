@@ -60,6 +60,9 @@ int MAX_CLOUDS = -1;
 // Time to skip the estimation
 double SKIPPED_TIME = 0.0;
 
+// Get the imu topics
+vector<string> imu_topic = {""};
+
 // Get the lidar topics
 vector<string> lidar_topic = {"/lidar_0/points"};
 
@@ -353,6 +356,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
     nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
     
+    nh_ptr->getParam("imu_topic", imu_topic);
     nh_ptr->getParam("lidar_topic", lidar_topic);
     nh_ptr->getParam("lidar_type", lidar_type);
     nh_ptr->getParam("stamp_time", stamp_time);
@@ -360,6 +364,7 @@ int main(int argc, char **argv)
 
     // Determine the number of lidar
     int Nlidar = lidar_topic.size();
+    int Nimu = imu_topic.size();
 
     // Get the leaf size for prior map
     nh_ptr->getParam("pmap_leaf_size", pmap_leaf_size);
@@ -385,6 +390,11 @@ int main(int argc, char **argv)
     for(int lidx = 0; lidx < Nlidar; lidx++)
         printf("Type: %s.\tDs: %f. Topic %s.\n", lidar_type[lidx].c_str(), cloud_ds[lidx], lidar_topic[lidx].c_str());
     printf("Maximum number of clouds: %d\n", MAX_CLOUDS);
+
+    printf("IMU info: \n");
+    int imuCount = 0;
+    for(int iidx = 0; iidx < Nimu; iidx++)
+        printf("Topic %s.\n", imu_topic[iidx].c_str());
 
     // Get the initial position of the lidars
     vector<double> xyzypr_W_L0(Nlidar*6, 0.0);
@@ -453,17 +463,24 @@ int main(int argc, char **argv)
  
     /* #region Load the data ----------------------------------------------------------------------------------------*/
 
-    // Converting the topic to index
+    map<string, int> imutopicidx;
+    for(int iidx = 0; iidx < Nimu; iidx++)
+        imutopicidx[imu_topic[iidx]] = iidx;
+
+    // Converting the topics to index
     map<string, int> pctopicidx;
-    for(int idx = 0; idx < Nlidar; idx++)
-        pctopicidx[lidar_topic[idx]] = idx;
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        pctopicidx[lidar_topic[lidx]] = lidx;
 
     // Storage of the pointclouds
+    vector<vector<RosImuPtr>> imus(Nimu);
     vector<vector<CloudXYZITPtr>> clouds(Nlidar);
     vector<vector<ros::Time>> cloudstamp(Nlidar);
     vector<tf2_msgs::TFMessage> gndtr;
 
     vector<string> queried_topics = lidar_topic;
+    for(auto &topic : imu_topic)
+        queried_topics.push_back(topic);
     queried_topics.push_back("/tf");
 
     // Load the bag file
@@ -476,7 +493,8 @@ int main(int argc, char **argv)
     {
         sensor_msgs::PointCloud2::ConstPtr pcMsgOuster = m.instantiate<sensor_msgs::PointCloud2>();
         livox_ros_driver::CustomMsg::ConstPtr pcMsgLivox = m.instantiate<livox_ros_driver::CustomMsg>();
-        tf2_msgs::TFMessage::ConstPtr gndtrMsg = m.instantiate<tf2_msgs::TFMessage>();;
+        tf2_msgs::TFMessage::ConstPtr gndtrMsg = m.instantiate<tf2_msgs::TFMessage>();
+        RosImuPtr imuMsg = m.instantiate<sensor_msgs::Imu>();
 
         CloudXYZITPtr cloud(new CloudXYZIT());
         ros::Time stamp;
@@ -569,6 +587,12 @@ int main(int argc, char **argv)
             NpointDS = cloud->size();
         }
 
+        // Extract the imu data
+        int iidx = imutopicidx.find(topic) == imutopicidx.end() ? -1 : imutopicidx[topic];
+        if(imuMsg != nullptr && iidx >= 0 && iidx < Nimu)
+            imus[iidx].push_back(imuMsg);
+        
+        // Save the pointcloud if it has data
         if (cloud->size() != 0)
         {
             clouds[lidx].push_back(cloud);
@@ -587,6 +611,7 @@ int main(int argc, char **argv)
                            cloudstamp[lidx].back().toSec(), clouds[lidx].back()->points.front().t);
         }
 
+        // Check if pointcloud is sufficient
         if (MAX_CLOUDS > 0 && clouds.front().size() >= MAX_CLOUDS)
             break;
     }
@@ -667,7 +692,43 @@ int main(int argc, char **argv)
     }
 
     /* #endregion Split the pointcloud by time ----------------------------------------------------------------------*/
- 
+
+    /* #region Split the imu by cloud time --------------------------------------------------------------------------*/
+
+    vector<vector<ImuSequence>> imusx(Nimu);
+    for(int iidx = 0; iidx < Nimu; iidx++)
+    {
+        printf("Split imu %d\n", iidx);
+        imusx[iidx].resize(cloudsx[0].size());
+        
+        // #pragma omp parallel num_threads(MAX_THREADS)
+        for(int isidx = 0; isidx < imus[iidx].size(); isidx++)
+        {
+            ImuSample imu(imus[iidx][isidx]);
+            for(int cidx = 0; cidx < cloudsx[0].size(); cidx++)
+            {                
+                if(imu.t > cloudsx[0][cidx]->points.back().t)
+                    continue;
+                else if(cloudsx[0][cidx]->points.front().t <= imu.t && imu.t < cloudsx[0][cidx]->points.back().t)
+                    imusx[iidx][cidx].push_back(imu);
+            }
+        }
+    }
+
+    // // Report the distribution
+    // for(int iidx = 0; iidx < Nimu; iidx++)
+    // {
+    //     for(int cidx = 0; cidx < cloudsx[0].size(); cidx++)
+    //     {
+    //         printf("IMU %2d Sequence %4d, sample %3d. ImuItv: [%.3f %.3f]. CloudItv. [%.3f %.3f].\n",
+    //                 iidx, cidx, imusx[iidx][cidx].size(),
+    //                 imusx[iidx][cidx].startTime(), imusx[iidx][cidx].finalTime(),
+    //                 cloudsx[0][cidx]->points.front().t, cloudsx[0][cidx]->points.back().t);
+    //     }
+    // }
+    
+    /* #endregion Split the imu by cloud time -----------------------------------------------------------------------*/
+  
     /* #region Create the LOAM modules ------------------------------------------------------------------------------*/
 
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);

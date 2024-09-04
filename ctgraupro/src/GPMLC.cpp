@@ -41,6 +41,13 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
         problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
 
+        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 0, -1.0);
+        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 1, -1.0);
+        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 2, -1.0);
+        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 0,  1.0);
+        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 1,  1.0);
+        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 2,  1.0);
+        
         // Log down the information of the params
         paramInfoMap.insert(make_pair(traj->getKnotSO3(kidx).data(), ParamInfo(traj->getKnotSO3(kidx).data(), ParamType::SO3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 0)));
         paramInfoMap.insert(make_pair(traj->getKnotOmg(kidx).data(), ParamInfo(traj->getKnotOmg(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 1)));
@@ -1035,9 +1042,19 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     // Add the extrinsics factors
     FactorMeta factorMetaGpx;
     double cost_gpx_init = -1; double cost_gpx_final = -1;
-    for(int tidxx = 0; tidxx < trajs.size(); tidxx++)
-        for(int tidxy = tidxx+1; tidxy < trajs.size(); tidxy++)
-            AddGPExtrinsicFactors(problem, trajs[tidxx], trajs[tidxy], R_Lx_Ly[tidxy], P_Lx_Ly[tidxy], paramInfoMap, factorMetaGpx, tmin, tmax);
+
+    // Check if each trajectory is sufficiently long
+    auto pose_tmin = trajs[0]->pose(tmin);
+    auto pose_tmax = trajs[0]->pose(tmax);
+    auto trans = (pose_tmin.inverse()*pose_tmax).translation();
+    static bool traj_sufficient_length = false;
+    if (trans.norm() > 0.2)
+        traj_sufficient_length = true;
+
+    if(traj_sufficient_length)
+        for(int tidxx = 0; tidxx < trajs.size(); tidxx++)
+            for(int tidxy = tidxx+1; tidxy < trajs.size(); tidxy++)
+                AddGPExtrinsicFactors(problem, trajs[tidxx], trajs[tidxy], R_Lx_Ly[tidxy], P_Lx_Ly[tidxy], paramInfoMap, factorMetaGpx, tmin, tmax);
 
     // Add the prior factor
     FactorMeta factorMetaPrior;
@@ -1094,25 +1111,23 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
 
     string report_opt =
         myprintf(KGRN
-              "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
-              "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
-              "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-              "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-              RESET,
-              optnum, inner_iter, outer_iter,
-              summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
-              tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
-              factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
-              summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
-              summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final);
+                "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
+                "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
+                "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
+                "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n" RESET,
+                optnum, inner_iter, outer_iter,
+                summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
+                tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
+                factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
+                summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
+                summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final);
 
     string report_state = "";
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         report_state += 
-        myprintf(KGRN "Traj%2d. YPR: %4.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
-                       "        YPR: %4.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
-                 RESET,
+        myprintf(KGRN "Traj%2d. YPR: %8.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
+                       "        YPR: %8.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n" RESET,
                  lidx, gpX0[lidx].yaw(), gpX0[lidx].pitch(), gpX0[lidx].roll(), gpX0[lidx].O.norm(), gpX0[lidx].S.norm(),
                        gpX0[lidx].P.x(), gpX0[lidx].P.y(),   gpX0[lidx].P.z(),  gpX0[lidx].V.norm(), gpX0[lidx].A.norm(),
                        gpXt[lidx].yaw(), gpXt[lidx].pitch(), gpXt[lidx].roll(), gpXt[lidx].O.norm(), gpXt[lidx].S.norm(),
@@ -1124,11 +1139,9 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     for(int lidx = 0; lidx < Nlidar; lidx++)
         report_xtrs += 
             myprintf(KGRN
-                   "T_L0_L%d. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f.\n"
-                   RESET,
-                   lidx,
-                   T_L0_Li[lidx].pos.x(), T_L0_Li[lidx].pos.y(), T_L0_Li[lidx].pos.z(),
-                   T_L0_Li[lidx].yaw(),   T_L0_Li[lidx].pitch(), T_L0_Li[lidx].roll(), T_err[lidx]);
+                     "T_L0_L%d. XYZ: %7.3f, %7.3f, %7.3f. YPR: %7.3f, %7.3f, %7.3f. Error: %.3f.\n" RESET,
+                     lidx, T_L0_Li[lidx].pos.x(), T_L0_Li[lidx].pos.y(), T_L0_Li[lidx].pos.z(),
+                           T_L0_Li[lidx].yaw(),   T_L0_Li[lidx].pitch(), T_L0_Li[lidx].roll(), T_err[lidx]);
     
     cout << report_opt + report_state + report_xtrs << endl;
 }

@@ -17,16 +17,23 @@
         <!-- Total number of clouds loaded -->
         <param name="MAX_CLOUDS"      value="-1" />
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="0.0"/>
+        <param name="SKIPPED_TIME"    value="177.3"/>
         <!-- <param name="SKIPPED_TIME"    value="197.5"/> -->
         <param name="VIZ_ONLY"        value="0"/>
         
-        <param name="lidar_topic"     value="['/os_cloud_node/points', '/livox/lidar']" type="yaml" />
+        <!-- Lidar topics and their settings -->
+        <param name="lidar_topic"     value="['/os_cloud_node/points']" type="yaml" />
         <param name="lidar_type"      value="['ouster', 'livox']" type="yaml" />
         <param name="stamp_time"      value="['end', 'start']" type="yaml" />
+
+        <!-- Imu topics and their settings -->
+        <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" />
+
         <!-- Set to 1 to load the search for previous logs and redo -->
         <param name="resume_from_log" value="[1, 1]" type="yaml"/>
         <!-- Initial pose of each lidars-->
+        <!-- <param name="xyzypr_W_L0"     value="[ 62.03, 119.61, 7.69, -134, 3, 1,
+                                               62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/> -->
         <param name="xyzypr_W_L0"     value="[ 62.03, 119.61, 7.69, -134, 3, 1,
                                                62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
         <!-- Groundtruth for evaluation-->
@@ -35,7 +42,7 @@
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size"  value="0.15"   />
-        <param name="cloud_ds"        value="[1.6, 0.1]" type="yaml" />
+        <param name="cloud_ds"        value="[0.8, 0.1]" type="yaml" />
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.02204"/>
@@ -52,8 +59,8 @@
         <param name="lidar_weight"   value="100.0"  />
 
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="100.0"    />
-        <param name="mpSigmaP"       value="100.0"    />
+        <param name="mpSigmaR"       value="1.0"    />
+        <param name="mpSigmaP"       value="1.0"    />
 
         <!-- Loss function threshold -->
         <param name="ld_loss_thres"  value="1.0"    />
@@ -67,9 +74,9 @@
         <param name="max_lidarcoefs" value="2000"   />
         <param name="XTRZ_DENSITY"   value="1"      />
         <param name="min_planarity"  value="0.5"    />
-        <param name="max_plane_dis"  value="0.5"    />
+        <param name="max_plane_dis"  value="1.0"    />
         <param name="max_outer_iter" value="3"      />
-        <param name="max_inner_iter" value="3"      />
+        <param name="max_inner_iter" value="10"      />
         <param name="fix_time_begin" value="0.0"    />
         <param name="fix_time_end"   value="0.0"    />
 
