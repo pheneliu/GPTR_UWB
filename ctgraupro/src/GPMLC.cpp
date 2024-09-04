@@ -74,10 +74,11 @@ void GPMLC::AddTrajParams(
     }
 }
 
+// Add the motion prior factors
 void GPMLC::AddMP2KFactors(
-        ceres::Problem &problem, GaussianProcessPtr &traj,
-        map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
-        double tmin, double tmax)
+    ceres::Problem &problem, GaussianProcessPtr &traj,
+    map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
+    double tmin, double tmax)
 {
     // Add the GP factors based on knot difference
     for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
@@ -124,11 +125,11 @@ void GPMLC::AddMP2KFactors(
 
 // Add lidar factors
 void GPMLC::AddLidarFactors(
-        ceres::Problem &problem, GaussianProcessPtr &traj,
-        int ds_rate,
-        map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
-        const deque<vector<LidarCoef>> &cloudCoef,
-        double tmin, double tmax)
+    ceres::Problem &problem, GaussianProcessPtr &traj,
+    int ds_rate,
+    map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
+    const deque<vector<LidarCoef>> &cloudCoef,
+    double tmin, double tmax)
 {
     for (auto &Coef : cloudCoef)
     {
@@ -190,6 +191,7 @@ void GPMLC::AddLidarFactors(
     }
 }
 
+// Add the cross-sliding window extrinsics
 void GPMLC::AddGPExtrinsicFactors(
     ceres::Problem &problem, GaussianProcessPtr &trajx, GaussianProcessPtr &trajy, SO3d &R_Lx_Ly, Vec3 &P_Lx_Ly,
     map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
@@ -326,7 +328,8 @@ void GPMLC::AddGPExtrinsicFactors(
     }
 }
 
-void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, FactorMeta &factorMeta, double tmin, double tmax)
+void GPMLC::AddPriorFactor(
+    ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, FactorMeta &factorMeta, double tmin, double tmax)
 {
     // Check if kept states are still in the param list
     bool kept_state_present = true;
@@ -495,10 +498,11 @@ void GPMLC::AddPriorFactor(ceres::Problem &problem, vector<GaussianProcessPtr> &
         printf(KYEL "All kept params in marginalization missing. Please check\n" RESET);
 }
 
-void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
-                        double tmin, double tmax, double tmid,
-                        map<double*, ParamInfo> &paramInfoMap,
-                        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior)
+void GPMLC::Marginalize(
+    ceres::Problem &problem, vector<GaussianProcessPtr> &trajs,
+    double tmin, double tmax, double tmid,
+    map<double*, ParamInfo> &paramInfoMap,
+    FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior)
 {
 
     // Insanity check to keep track of all the params
@@ -918,11 +922,12 @@ void GPMLC::Marginalize(ceres::Problem &problem, vector<GaussianProcessPtr> &tra
 }
 
 // Prototype
-void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
-                     double tmin, double tmax, double tmid,
-                     const vector<deque<vector<LidarCoef>>> &cloudCoef,
-                     bool do_marginalization,
-                     vector<myTf<double>> &T_B_Li_gndtr)
+void GPMLC::Evaluate(
+    int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
+    double tmin, double tmax, double tmid,
+    const vector<deque<vector<LidarCoef>>> &cloudCoef,
+    bool do_marginalization,
+    vector<myTf<double>> &T_B_Li_gndtr)
 {
     TicToc tt_build;
 

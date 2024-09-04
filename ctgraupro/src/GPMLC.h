@@ -461,12 +461,6 @@ public:
         map<double*, ParamInfo> &paramInfo,
         FactorMeta &factorMetaMp2k, FactorMeta &factorMetaLidar, FactorMeta &factorMetaGpx, FactorMeta &factorMetaPrior);
 
-    // void GPMLC::FixTrajParams(
-    //     ceres::Problem &problem,
-    //     vector<GaussianProcessPtr> &trajs,
-    //     map<double*, ParamInfo> &paramInfoMap,
-    //     double tmin, double tmax, double tmid);
-
     void Evaluate(
         int inner_iter, int outer_iter, vector<GaussianProcessPtr> &trajs,
         double tmin, double tmax, double tmid,
