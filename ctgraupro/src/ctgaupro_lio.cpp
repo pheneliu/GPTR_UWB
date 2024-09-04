@@ -95,8 +95,10 @@ bool VIZ_ONLY = false;
 
 double t_shift = 0.0;
 int max_outer_iter = 3;
-int max_inner_iter = 2;
-
+int min_inner_iter = 3;
+int max_inner_iter = 5;
+int conv_thres = 3;
+double conv_dX_thres = 0.1;
 
 vector<myTf<double>> T_B_Li_gndtr;
 
@@ -380,6 +382,9 @@ int main(int argc, char **argv)
     nh_ptr->getParam("t_shift", t_shift);
     nh_ptr->getParam("max_outer_iter", max_outer_iter);
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
+    nh_ptr->getParam("min_inner_iter", min_inner_iter);
+    nh_ptr->getParam("conv_thres", conv_thres);
+    nh_ptr->getParam("conv_dX_thres", conv_dX_thres);
 
     // Location to save the logs
     nh_ptr->getParam("log_dir", log_dir);
@@ -770,7 +775,6 @@ int main(int argc, char **argv)
 
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
-        int SW_CLOUDSTEP = 1;
         for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
         {
             if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
@@ -793,6 +797,11 @@ int main(int argc, char **argv)
                 while(trajs[lidx]->getMaxTime() < tmax)
                     trajs[lidx]->extendOneKnot();
             }
+
+            // Estimation change
+            Matrix<double, STATE_DIM, 1> dX; dX.setZero();
+            int convergence_count = 0;
+            bool converged = false;
 
             // Deskew, Associate, Estimate, repeat max_inner_iter times
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
@@ -833,19 +842,9 @@ int main(int argc, char **argv)
                     }
                 }
 
-                // Extract the knots value
-                vector<GPState<double>> X0;
-                auto GetStateEst = [](GaussianProcessPtr &traj, vector<GPState<double>> &X, double tmin, double tmax) -> void
-                {
-
-                };
-                
-                for(int lidx = 0; lidx < Nlidar; lidx++)
-                    GetStateEst(trajs[lidx], X0, tmin, tmax);
-
                 // Optimize
                 if(!VIZ_ONLY)
-                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1, T_B_Li_gndtr);
+                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1 || converged, dX, T_B_Li_gndtr);
 
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
@@ -929,8 +928,24 @@ int main(int argc, char **argv)
                         marker_pub[lidx]->publish(line_strip);
                     }
                 }
+
+                if (converged)
+                    break;
+
+                // Checking the convergence
+                if (dX.block<3, 1>(9, 0).norm() < conv_dX_thres)  // If position change is below 10cm, increment
+                    convergence_count += 1;
+                else
+                    convergence_count = 0;
+
+                // Set the flag when convergence has been acheived, one more iteration will be run with marginalization
+                if(convergence_count >= conv_thres && inner_iter >= min_inner_iter)
+                {
+                    // printf("Convergent. Slide window.\n");
+                    converged = true;
+                }
+                // printf("CC: %d. Norm: %f\n", convergence_count, dX.block<3, 1>(9, 0).norm());
             }
-        
         }
 
         // Reset the marginalization factor
