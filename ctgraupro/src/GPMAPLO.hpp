@@ -246,7 +246,6 @@ public:
                     Coef_[pidx].f = Vector3d(pointRaw.x, pointRaw.y, pointRaw.z);
                     Coef_[pidx].finW = Vector3d(pointInW.x, pointInW.y, pointInW.z);
                     Coef_[pidx].fdsk = Vector3d(pointInB.x, pointInB.y, pointInB.z);
-                    Coef_[pidx].plnrty *= lidar_weight;
                 }
             }
 

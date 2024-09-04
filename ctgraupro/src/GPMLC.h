@@ -408,6 +408,9 @@ protected:
     double fix_time_begin = -1;
     double fix_time_end = -1;
 
+    double lidar_weight = 1.0;    
+    double mp_loss_thres = -1.0;
+
     int max_lidarcoefs = 4000;
 
     deque<int> kidx_marg;
@@ -431,11 +434,6 @@ public:
         ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, int &tidx,
         map<double*, ParamInfo> &paramInfo, double tmin, double tmax, double tmid);
 
-    // void FixFirstKnot(
-    //     ceres::Problem &problem,
-    //     vector<GaussianProcessPtr> &trajs, int &tidx,
-    //     double tmin, double tmax, double tmid);
-    
     void AddMP2KFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,

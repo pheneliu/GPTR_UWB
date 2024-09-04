@@ -9,7 +9,11 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
 {
     nh->getParam("fix_time_begin", fix_time_begin);
     nh->getParam("fix_time_end", fix_time_end);
+
     nh->getParam("max_lidarcoefs", max_lidarcoefs);
+
+    nh->getParam("lidar_weight", lidar_weight);
+    nh->getParam("mp_loss_thres", mp_loss_thres);
 };
 
 // Add parameters
@@ -28,10 +32,10 @@ void GPMLC::AddTrajParams(
     // Create local parameterization for so3
     ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
 
-    for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+    for (int kidx = kidxmin; kidx <= kidxmax; kidx++)
     {
-        if (kidx < kidxmin || kidx > kidxmax)
-            continue;
+        // if (kidx < kidxmin || kidx > kidxmax)
+        //     continue;
 
         problem.AddParameterBlock(traj->getKnotSO3(kidx).data(), 4, so3parameterization);
         problem.AddParameterBlock(traj->getKnotOmg(kidx).data(), 3);
@@ -70,38 +74,6 @@ void GPMLC::AddTrajParams(
     }
 }
 
-// void GPMLC::FixFirstKnot(
-//     ceres::Problem &problem,
-//     vector<GaussianProcessPtr> &trajs, int &tidx,
-//     double tmin, double tmax, double tmid)
-// {
-//     GaussianProcessPtr &traj = trajs[tidx];
-
-//     auto usmin = traj->computeTimeIndex(tmin);
-//     auto usmax = traj->computeTimeIndex(tmax);
-
-//     int kidxmin = usmin.first;
-//     int kidxmax = usmax.first+1;
-
-//     // Create local parameterization for so3
-//     ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
-
-//     for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
-//     {
-//         if (kidx < kidxmin || kidx > kidxmax)
-//             continue;
-
-//         problem.SetParameterBlockConstant(traj->getKnotSO3(kidx).data());
-//         problem.SetParameterBlockConstant(traj->getKnotOmg(kidx).data());
-//         problem.SetParameterBlockConstant(traj->getKnotAlp(kidx).data());
-//         problem.SetParameterBlockConstant(traj->getKnotPos(kidx).data());
-//         problem.SetParameterBlockConstant(traj->getKnotVel(kidx).data());
-//         problem.SetParameterBlockConstant(traj->getKnotAcc(kidx).data());
-
-//         break;
-//     }
-// }
-
 void GPMLC::AddMP2KFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
         map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
@@ -136,8 +108,8 @@ void GPMLC::AddMP2KFactors(
         }
 
         // Create the factors
-        double mp_loss_thres = -1;
-        // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
+        // double mp_loss_thres = -1;
+        // nh->getParam("mp_loss_thres", mp_loss_thres);
         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
         ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(traj->getGPMixerPtr());
         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
@@ -203,7 +175,7 @@ void GPMLC::AddLidarFactors(
             
             double lidar_loss_thres = -1.0;
             ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
-            ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.f, coef.n, coef.plnrty, traj->getGPMixerPtr(), s);
+            ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.f, coef.n, lidar_weight*coef.plnrty, traj->getGPMixerPtr(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
 
             // Record the residual block
@@ -1000,52 +972,62 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
         //         FixFirstKnot(problem, trajs, tidx, tmin, tmax, tmid);
         // }    
 
-        // // Sanity check
-        // for(auto &param_ : paramInfoMap)
-        // {
-        //     ParamInfo param = param_.second;
+        // Sanity check
+        for(auto &param_ : paramInfoMap)
+        {
+            ParamInfo param = param_.second;
 
-        //     int tidx = param.tidx;
-        //     int kidx = param.kidx;
-        //     int sidx = param.sidx;
+            int tidx = param.tidx;
+            int kidx = param.kidx;
+            int sidx = param.sidx;
 
-        //     if(param.tidx != -1 && param.kidx != -1)
-        //     {
-        //         switch(sidx)
-        //         {
-        //             case 0:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotSO3(kidx).data());
-        //                 break;
-        //             case 1:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotOmg(kidx).data());
-        //                 break;
-        //             case 2:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotAlp(kidx).data());
-        //                 break;
-        //             case 3:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotPos(kidx).data());
-        //                 break;
-        //             case 4:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotVel(kidx).data());
-        //                 break;
-        //             case 5:
-        //                 ROS_ASSERT(param.address == trajs[tidx]->getKnotAcc(kidx).data());
-        //                 break;
-        //             default:
-        //                 printf("Unrecognized param block! %d, %d, %d\n", tidx, kidx, sidx);
-        //                 break;
-        //         }T_err
-        //     }
-        //     else
-        //     {
-        //         if(sidx == 0)
-        //             ROS_ASSERT(param.address == R_Lx_Ly.data());
-        //         if(sidx == 1)    
-        //             ROS_ASSERT(param.address == P_Lx_Ly.data());
-        //     }
-        // }
+            if(param.tidx != -1 && param.kidx != -1)
+            {
+                switch(sidx)
+                {
+                    case 0:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotSO3(kidx).data());
+                        break;
+                    case 1:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotOmg(kidx).data());
+                        break;
+                    case 2:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotAlp(kidx).data());
+                        break;
+                    case 3:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotPos(kidx).data());
+                        break;
+                    case 4:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotVel(kidx).data());
+                        break;
+                    case 5:
+                        ROS_ASSERT(param.address == trajs[tidx]->getKnotAcc(kidx).data());
+                        break;
+                    default:
+                        printf("Unrecognized param block! %d, %d, %d\n", tidx, kidx, sidx);
+                        break;
+                }
+            }
+            else
+            {
+                if(sidx == 0)
+                {
+                    bool found = false;
+                    for(int lidx = 0; lidx < Nlidar; lidx++)
+                        found = found || (param.address == R_Lx_Ly[lidx].data());
+                    ROS_ASSERT(found);    
+                }
+
+                if(sidx == 1)
+                {
+                    bool found = false;
+                    for(int lidx = 0; lidx < Nlidar; lidx++)
+                        found = found || (param.address == P_Lx_Ly[lidx].data());
+                    ROS_ASSERT(found);    
+                }
+            }
+        }
     }
-
 
     // Sample the trajectories before optimization
     vector <GPState<double>> gpX0;

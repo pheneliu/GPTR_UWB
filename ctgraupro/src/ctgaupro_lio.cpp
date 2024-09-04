@@ -598,7 +598,7 @@ int main(int argc, char **argv)
             clouds[lidx].push_back(cloud);
             cloudstamp[lidx].push_back(stamp);
 
-            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %5d / %5d. Topic: %s.\r",
+            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %6d / %6d. Topic: %s.\r",
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,
@@ -785,8 +785,8 @@ int main(int argc, char **argv)
 
             double tmin = cloudsx[0][SW_BEG]->points.front().t;     // Start time of the sliding window
             double tmax = cloudsx[0][SW_END]->points.back().t;      // End time of the sliding window
-            double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window,
-                                                                    // also determines the marginalization time limit
+            double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window, also determines the marginalization time limit
+
             // Extend the trajectories
             for(int lidx = 0; lidx < Nlidar; lidx++)
             {
@@ -807,6 +807,7 @@ int main(int argc, char **argv)
                 auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
                                                             CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
                 {
+                    // 
                     GaussianProcessPtr traj = gpmaplo->GetTraj();
 
                     // Deskew
@@ -831,6 +832,16 @@ int main(int argc, char **argv)
                         ProcessCloud(gpmaplo[lidx], swCloud[lidx][swIdx], swCloudUndi[lidx][swIdx], swCloudUndiInW[lidx][swIdx], swCloudCoef[lidx][swIdx]);
                     }
                 }
+
+                // Extract the knots value
+                vector<GPState<double>> X0;
+                auto GetStateEst = [](GaussianProcessPtr &traj, vector<GPState<double>> &X, double tmin, double tmax) -> void
+                {
+
+                };
+                
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                    GetStateEst(trajs[lidx], X0, tmin, tmax);
 
                 // Optimize
                 if(!VIZ_ONLY)
