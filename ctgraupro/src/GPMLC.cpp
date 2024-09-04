@@ -337,8 +337,8 @@ void GPMLC::AddGPExtrinsicFactors(
             
             // Create the factors
             // MatrixXd InvCov = MatrixXd::Identity(STATE_DIM, STATE_DIM);
-            // double mpSigmaR = 1.0;
-            // double mpSigmaP = 1.0;
+            // double mpSigGa = 1.0;
+            // double mpSigNu = 1.0;
             double mp_loss_thres = -1;
             // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
             ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);

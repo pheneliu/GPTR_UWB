@@ -75,8 +75,8 @@ private:
     double lidar_weight = 1.0;
     double ppSigmaR = 10;
     double ppSigmaP = 10;
-    double mpSigmaR = 10;
-    double mpSigmaP = 10;
+    double mpSigGa = 10;
+    double mpSigNu = 10;
     double smSigmaR = 10;
     double smSigmaP = 10;
 
@@ -138,8 +138,8 @@ public:
         nh_ptr->getParam("ppSigmaR", ppSigmaR);
         nh_ptr->getParam("ppSigmaP", ppSigmaP);
         // Weight for the motion prior
-        nh_ptr->getParam("mpSigmaR", mpSigmaR);
-        nh_ptr->getParam("mpSigmaP", mpSigmaP);
+        nh_ptr->getParam("mpSigGa", mpSigGa);
+        nh_ptr->getParam("mpSigNu", mpSigNu);
         // Weight for the smoothness factor
         nh_ptr->getParam("smSigmaR", smSigmaR);
         nh_ptr->getParam("smSigmaP", smSigmaP);
@@ -157,12 +157,12 @@ public:
         mySolver = GNSolverPtr(new GNSolver(nh_ptr, LIDX));
 
         // Some report to confirm the params are set
-        printf("Window size: %2d. Fixes: %.3f, %.3f. DK: %.3f, %2d. lidar_weight: %.3f. ppSigma: %.3f, %.3f. mpSigmaR: %.3f, %.3f\n",
-                WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigmaR, mpSigmaP);
+        printf("Window size: %2d. Fixes: %.3f, %.3f. DK: %.3f, %2d. lidar_weight: %.3f. ppSigma: %.3f, %.3f. mpSigGa: %.3f, %.3f\n",
+                WINDOW_SIZE, fixed_start, fixed_end, tshift, DK, lidar_weight, ppSigmaR, ppSigmaP, mpSigGa, mpSigNu);
         // printf("GPMAPLO subscribing to %s\n\n", cloudSegTopic.c_str());
 
-        Matrix3d SigGa = Vector3d(mpSigmaR, mpSigmaR, mpSigmaR).asDiagonal();
-        Matrix3d SigNu = Vector3d(mpSigmaP, mpSigmaP, mpSigmaP).asDiagonal();
+        Matrix3d SigGa = Vector3d(mpSigGa, mpSigGa, mpSigGa).asDiagonal();
+        Matrix3d SigNu = Vector3d(mpSigNu, mpSigNu, mpSigNu).asDiagonal();
 
         traj = GaussianProcessPtr(new GaussianProcess(deltaT, SigGa, SigNu, true));
         traj->setStartTime(t0);
@@ -241,11 +241,12 @@ public:
                 // Fit the plane
                 if(Util::fitPlane(nbrPoints, min_planarity, max_plane_dis, Coef_[pidx].n, Coef_[pidx].plnrty))
                 {
-                    ROS_ASSERT(tpoint >= 0);
+                    // ROS_ASSERT(tpoint >= 0);
                     Coef_[pidx].t = tpoint;
-                    Coef_[pidx].f    = Vector3d(pointRaw.x, pointRaw.y, pointRaw.z);
+                    Coef_[pidx].f = Vector3d(pointRaw.x, pointRaw.y, pointRaw.z);
                     Coef_[pidx].finW = Vector3d(pointInW.x, pointInW.y, pointInW.z);
                     Coef_[pidx].fdsk = Vector3d(pointInB.x, pointInB.y, pointInB.z);
+                    Coef_[pidx].plnrty *= lidar_weight;
                 }
             }
 

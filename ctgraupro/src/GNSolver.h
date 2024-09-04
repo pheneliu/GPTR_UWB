@@ -37,8 +37,8 @@ private:
     GNSolverReport report;
 
     // Weight for the motion prior factors
-    double mpSigmaR = 1.0;
-    double mpSigmaP = 1.0;
+    double mpSigGa = 1.0;
+    double mpSigNu = 1.0;
 
     // Solver parameters
     int max_gniter = 3;

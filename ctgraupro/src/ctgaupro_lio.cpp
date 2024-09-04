@@ -598,7 +598,7 @@ int main(int argc, char **argv)
             clouds[lidx].push_back(cloud);
             cloudstamp[lidx].push_back(stamp);
 
-            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %d. Cloud size: %d / %d. Topic: %s.\r",
+            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %5d / %5d. Topic: %s.\r",
                     lidx,
                     cloudstamp[lidx].back().toSec(),
                     clouds[lidx].back()->points.front().t,
@@ -919,6 +919,7 @@ int main(int argc, char **argv)
                     }
                 }
             }
+        
         }
 
         // Reset the marginalization factor

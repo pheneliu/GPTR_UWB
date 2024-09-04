@@ -52,8 +52,8 @@
         <param name="lidar_weight"    value="5.0"    />
 
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"        value="1.0"    />
-        <param name="mpSigmaP"        value="1.0"    />
+        <param name="mpSigGa"        value="1.0"    />
+        <param name="mpSigNu"        value="1.0"    />
 
         <!-- Loss function threshold -->
         <param name="ld_loss_thres"   value="1.0"    />

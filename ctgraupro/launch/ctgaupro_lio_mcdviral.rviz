@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Lidar01
         - /Lidar01/Lidar0InW1
+        - /Lidar01/AssocCloud01
         - /Lidar01/Odom01/Shape1
         - /Lidar11
         - /Lidar11/Odom11/Shape1
@@ -59,7 +60,7 @@ Visualization Manager:
       Queue Size: 1
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.10000000149011612
+      Size (m): 0.05000000074505806
       Style: Flat Squares
       Topic: /priormap_viz
       Unreliable: false
@@ -107,8 +108,8 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.20000000298023224
-          Style: Spheres
+          Size (m): 0.10000000149011612
+          Style: Boxes
           Topic: /lidar_0/cloud_inW
           Unreliable: false
           Use Fixed Frame: true
@@ -179,10 +180,10 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 245; 121; 0
+          Color: 29; 72; 255
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: false
+          Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -191,13 +192,13 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.05000000074505806
+          Size (m): 0.20000000298023224
           Style: Spheres
           Topic: /lidar_0/assoc_cloud
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: false
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -646,7 +647,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 35.15476989746094
+      Distance: 22.220779418945312
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -654,17 +655,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 99.2557373046875
-        Y: 47.83001708984375
-        Z: -4.919164348393679e-05
+        X: 104.60308074951172
+        Y: 55.71730422973633
+        Z: -5.2342202252475545e-05
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.10979790985584259
+      Pitch: 0.2447979748249054
       Target Frame: body
-      Yaw: 1.16678786277771
+      Yaw: 1.463596224784851
     Saved: ~
 Window Geometry:
   Displays:

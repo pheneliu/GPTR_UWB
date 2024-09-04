@@ -4,20 +4,31 @@
 
     <arg name="autorun" default="false" />
 
+    <!-- Bag file -->
+    <!-- <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_01_lidars.bag"/> -->
+    <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
+
+    <!-- Initial pose in each sequence -->
+    <arg name="xyzypr_W_L0" value="[ 49.27, 107.37, 7.62, -41,  0, 0,
+                                     49.27, 107.37, 7.62, -41,  0, 0 ]" if="$(eval 'ntu_day_01' in lidar_bag_file)"/>
+    <arg name="xyzypr_W_L0" value="[ 62.03, 119.61, 7.69, -134, 3, 1,
+                                     62.03, 119.57, 7.69, -134, 3, 1 ]" if="$(eval 'ntu_day_02' in lidar_bag_file)"/>
+                                     
+
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled_cropped.pcd" />
+        <param name="priormap_file"   value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled.pcd" />
 
         <!-- Location of bag file -->
-        <param name="lidar_bag_file"  value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
-        
+        <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
+
         <!-- Total number of clouds loaded -->
         <param name="MAX_CLOUDS"      value="-1" />
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="177.3"/>
+        <param name="SKIPPED_TIME"    value="177" />
         <!-- <param name="SKIPPED_TIME"    value="197.5"/> -->
         <param name="VIZ_ONLY"        value="0"/>
         
@@ -27,15 +38,14 @@
         <param name="stamp_time"      value="['end', 'start']" type="yaml" />
 
         <!-- Imu topics and their settings -->
-        <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" />
+        <!-- <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" /> -->
 
         <!-- Set to 1 to load the search for previous logs and redo -->
-        <param name="resume_from_log" value="[1, 1]" type="yaml"/>
+        <param name="resume_from_log" value="[1, 0]" type="yaml"/>
+
         <!-- Initial pose of each lidars-->
-        <!-- <param name="xyzypr_W_L0"     value="[ 62.03, 119.61, 7.69, -134, 3, 1,
-                                               62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/> -->
-        <param name="xyzypr_W_L0"     value="[ 62.03, 119.61, 7.69, -134, 3, 1,
-                                               62.03, 119.57, 7.69, -134, 3, 1 ]" type="yaml"/>
+        <param name="xyzypr_W_L0"     value="$(arg xyzypr_W_L0)" type="yaml"/>
+
         <!-- Groundtruth for evaluation-->
         <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0, 0,
                                                0, 0, 0, 0, 0, 0 ]" type="yaml"/>
@@ -56,11 +66,11 @@
         
         <param name="ds_size"        value="0.1"    />
         <param name="lidar_ds_rate"  value="1"      />
-        <param name="lidar_weight"   value="100.0"  />
+        <param name="lidar_weight"   value="10.0"  />
 
         <!-- Motion prior factors -->
-        <param name="mpSigmaR"       value="1.0"    />
-        <param name="mpSigmaP"       value="1.0"    />
+        <param name="mpSigGa"       value="100.0"    />
+        <param name="mpSigNu"       value="100.0"    />
 
         <!-- Loss function threshold -->
         <param name="ld_loss_thres"  value="1.0"    />
@@ -69,12 +79,12 @@
         <param name="sm_loss_thres"  value="-1.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"    value="6"      />
+        <param name="SW_CLOUDNUM"    value="4"      />
         <param name="SW_CLOUDSTEP"   value="1"      />
         <param name="max_lidarcoefs" value="2000"   />
         <param name="XTRZ_DENSITY"   value="1"      />
         <param name="min_planarity"  value="0.5"    />
-        <param name="max_plane_dis"  value="1.0"    />
+        <param name="max_plane_dis"  value="0.5"    />
         <param name="max_outer_iter" value="3"      />
         <param name="max_inner_iter" value="10"      />
         <param name="fix_time_begin" value="0.0"    />
