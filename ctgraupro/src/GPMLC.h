@@ -430,6 +430,11 @@ public:
     void AddTrajParams(
         ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, int &tidx,
         map<double*, ParamInfo> &paramInfo, double tmin, double tmax, double tmid);
+
+    // void FixFirstKnot(
+    //     ceres::Problem &problem,
+    //     vector<GaussianProcessPtr> &trajs, int &tidx,
+    //     double tmin, double tmax, double tmid);
     
     void AddMP2KFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,

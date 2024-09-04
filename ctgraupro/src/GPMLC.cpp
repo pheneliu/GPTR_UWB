@@ -13,10 +13,9 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
 };
 
 // Add parameters
-void GPMLC::AddTrajParams(ceres::Problem &problem,
-                          vector<GaussianProcessPtr> &trajs, int &tidx,
-                          map<double*, ParamInfo> &paramInfoMap,
-                          double tmin, double tmax, double tmid)
+void GPMLC::AddTrajParams(
+    ceres::Problem &problem, vector<GaussianProcessPtr> &trajs, int &tidx,
+    map<double*, ParamInfo> &paramInfo, double tmin, double tmax, double tmid)
 {
     GaussianProcessPtr &traj = trajs[tidx];
 
@@ -40,13 +39,6 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
         problem.AddParameterBlock(traj->getKnotPos(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
-
-        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 0, -1.0);
-        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 1, -1.0);
-        // problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 2, -1.0);
-        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 0,  1.0);
-        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 1,  1.0);
-        // problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 2,  1.0);
         
         // Log down the information of the params
         paramInfoMap.insert(make_pair(traj->getKnotSO3(kidx).data(), ParamInfo(traj->getKnotSO3(kidx).data(), ParamType::SO3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 0)));
@@ -77,6 +69,38 @@ void GPMLC::AddTrajParams(ceres::Problem &problem,
         }
     }
 }
+
+// void GPMLC::FixFirstKnot(
+//     ceres::Problem &problem,
+//     vector<GaussianProcessPtr> &trajs, int &tidx,
+//     double tmin, double tmax, double tmid)
+// {
+//     GaussianProcessPtr &traj = trajs[tidx];
+
+//     auto usmin = traj->computeTimeIndex(tmin);
+//     auto usmax = traj->computeTimeIndex(tmax);
+
+//     int kidxmin = usmin.first;
+//     int kidxmax = usmax.first+1;
+
+//     // Create local parameterization for so3
+//     ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
+
+//     for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+//     {
+//         if (kidx < kidxmin || kidx > kidxmax)
+//             continue;
+
+//         problem.SetParameterBlockConstant(traj->getKnotSO3(kidx).data());
+//         problem.SetParameterBlockConstant(traj->getKnotOmg(kidx).data());
+//         problem.SetParameterBlockConstant(traj->getKnotAlp(kidx).data());
+//         problem.SetParameterBlockConstant(traj->getKnotPos(kidx).data());
+//         problem.SetParameterBlockConstant(traj->getKnotVel(kidx).data());
+//         problem.SetParameterBlockConstant(traj->getKnotAcc(kidx).data());
+
+//         break;
+//     }
+// }
 
 void GPMLC::AddMP2KFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj,
@@ -942,6 +966,8 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     options.num_threads = MAX_THREADS;
     options.max_num_iterations = 50;
 
+    static bool traj_sufficient_length = false;
+
     // Documenting the parameter blocks
     paramInfoMap.clear();
     // Add the parameter blocks
@@ -961,6 +987,18 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
                     paramInfoMap.insert(make_pair(R_Lx_Ly[lidx].data(), ParamInfo(R_Lx_Ly[lidx].data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 0)));
                     paramInfoMap.insert(make_pair(P_Lx_Ly[lidx].data(), ParamInfo(P_Lx_Ly[lidx].data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
                 }
+
+        auto pose_tmin = trajs[0]->pose(tmin);
+        auto pose_tmax = trajs[0]->pose(tmax);
+        auto trans = (pose_tmin.inverse()*pose_tmax).translation();
+        if (trans.norm() > 0.2)
+            traj_sufficient_length = true;
+        // else
+        // {       
+        //     // Fix the knot for the first optimization
+        //     for(int tidx = 0; tidx < trajs.size(); tidx++)
+        //         FixFirstKnot(problem, trajs, tidx, tmin, tmax, tmid);
+        // }    
 
         // // Sanity check
         // for(auto &param_ : paramInfoMap)
@@ -1044,13 +1082,6 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     double cost_gpx_init = -1; double cost_gpx_final = -1;
 
     // Check if each trajectory is sufficiently long
-    auto pose_tmin = trajs[0]->pose(tmin);
-    auto pose_tmax = trajs[0]->pose(tmax);
-    auto trans = (pose_tmin.inverse()*pose_tmax).translation();
-    static bool traj_sufficient_length = false;
-    if (trans.norm() > 0.2)
-        traj_sufficient_length = true;
-
     if(traj_sufficient_length)
         for(int tidxx = 0; tidxx < trajs.size(); tidxx++)
             for(int tidxy = tidxx+1; tidxy < trajs.size(); tidxy++)
@@ -1126,12 +1157,12 @@ void GPMLC::Evaluate(int inner_iter, int outer_iter, vector<GaussianProcessPtr> 
     for(int lidx = 0; lidx < Nlidar; lidx++)
     {
         report_state += 
-        myprintf(KGRN "Traj%2d. YPR: %8.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n"
-                       "        YPR: %8.0f, %4.0f, %4.0f. O: %6.3f. S: %6.3f. XYZ: %7.3f, %7.3f, %7.3f. V: %6.3f. A: %6.3f.\n" RESET,
-                 lidx, gpX0[lidx].yaw(), gpX0[lidx].pitch(), gpX0[lidx].roll(), gpX0[lidx].O.norm(), gpX0[lidx].S.norm(),
-                       gpX0[lidx].P.x(), gpX0[lidx].P.y(),   gpX0[lidx].P.z(),  gpX0[lidx].V.norm(), gpX0[lidx].A.norm(),
-                       gpXt[lidx].yaw(), gpXt[lidx].pitch(), gpXt[lidx].roll(), gpXt[lidx].O.norm(), gpXt[lidx].S.norm(),
-                       gpXt[lidx].P.x(), gpXt[lidx].P.y(),   gpXt[lidx].P.z(),  gpXt[lidx].V.norm(), gpXt[lidx].A.norm());
+        myprintf(KGRN "Traj%2d. YPR: %8.0f, %4.0f, %4.0f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. XYZ: %7.3f, %7.3f, %7.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n"
+                       "        YPR: %8.0f, %4.0f, %4.0f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. XYZ: %7.3f, %7.3f, %7.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n" RESET,
+                 lidx, gpX0[lidx].yaw(), gpX0[lidx].pitch(), gpX0[lidx].roll(), gpX0[lidx].O.norm(), gpX0[lidx].O.cwiseAbs().maxCoeff(), gpX0[lidx].S.norm(), gpX0[lidx].S.cwiseAbs().maxCoeff(),
+                       gpX0[lidx].P.x(), gpX0[lidx].P.y(),   gpX0[lidx].P.z(),  gpX0[lidx].V.norm(), gpX0[lidx].V.cwiseAbs().maxCoeff(), gpX0[lidx].A.norm(), gpX0[lidx].A.cwiseAbs().maxCoeff(),
+                       gpXt[lidx].yaw(), gpXt[lidx].pitch(), gpXt[lidx].roll(), gpXt[lidx].O.norm(), gpXt[lidx].O.cwiseAbs().maxCoeff(), gpXt[lidx].S.norm(), gpXt[lidx].S.cwiseAbs().maxCoeff(),
+                       gpXt[lidx].P.x(), gpXt[lidx].P.y(),   gpXt[lidx].P.z(),  gpXt[lidx].V.norm(), gpXt[lidx].V.cwiseAbs().maxCoeff(), gpXt[lidx].A.norm(), gpXt[lidx].A.cwiseAbs().maxCoeff());
     }
 
     

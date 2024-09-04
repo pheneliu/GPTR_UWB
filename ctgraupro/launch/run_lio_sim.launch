@@ -27,8 +27,8 @@
         <!-- Set to 1 to load the search for previous logs and redo -->
         <param name="resume_from_log" value="[0, 0]" type="yaml"/>
         <!-- Initial pose of each lidars-->
-        <param name="xyzypr_W_L0"     value="[ 0, 0, 0.7,  045, 45, 0,
-                                               0, 0, 0.5, -135, 00, 0 ]" type="yaml"/>
+        <param name="xyzypr_W_L0"     value="[ 0,    0,   0.7,  045, 45, 0,
+                                              -0.3, -0.3, 0.5, -135, 00, 0 ]" type="yaml"/>
         <!-- Groundtruth for evaluation-->
         <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0, 0,
                                               -0.1767767, 0, -0.53033009, 180, 45, 0 ]" type="yaml"/>
