@@ -816,6 +816,7 @@ int main(int argc, char **argv)
             // Deskew, Associate, Estimate, repeat max_inner_iter times
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
+                TicToc tt_inner_loop;
 
                 // Create buffers for lidar coefficients
                 vector<deque<CloudXYZITPtr>> swCloud(Nlidar, deque<CloudXYZITPtr>(SW_CLOUDNUM_EFF));
@@ -872,7 +873,7 @@ int main(int argc, char **argv)
 
                     string report_opt =
                         myprintf("%s"
-                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
+                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Tinner: %f.\n"
                                  "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
                                  "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
                                  "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
@@ -880,7 +881,7 @@ int main(int argc, char **argv)
                                  do_marginalization ? "" : KGRN,
                                  optnum, inner_iter, outer_iter,
                                  report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"],
-                                 tstart, tmin - tstart, tmid - tstart, tmax - tstart, 0.0, 0.0,
+                                 tstart, tmin - tstart, tmid - tstart, tmax - tstart, tt_inner_loop.Toc(),
                                  report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
                                  report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
                                  report.costs["JK"], report.costs["MP2KK"], report.costs["GPXTRZK"], report.costs["LIDARK"], report.costs["PRIORK"]);

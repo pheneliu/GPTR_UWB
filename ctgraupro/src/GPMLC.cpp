@@ -1067,7 +1067,7 @@ void GPMLC::Evaluate(
     double cost_gpx_init = -1; double cost_gpx_final = -1;
 
     // Check if each trajectory is sufficiently long
-    if(traj_sufficient_length)
+    // if(traj_sufficient_length)
         for(int tidxx = 0; tidxx < trajs.size(); tidxx++)
             for(int tidxy = tidxx+1; tidxy < trajs.size(); tidxy++)
                 AddGPExtrinsicFactors(problem, trajs[tidxx], trajs[tidxy], R_Lx_Ly[tidxy], P_Lx_Ly[tidxy], paramInfoMap, factorMetaGpx, tmin, tmax);
