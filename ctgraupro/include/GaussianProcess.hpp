@@ -1351,6 +1351,10 @@ public:
             return o;    
         };
 
+        double dt_inLog;
+        double t0_inLog;
+        GPMixerPtr gpm_inLog;
+
         // Get the first line for specification
         if (file.is_open())
         {
@@ -1395,9 +1399,9 @@ public:
             printf("SigGa: \n");
             cout << logSigGa << endl;
 
-            dt = logDt;
-            t0 = logMinTime;
-            gpm = GPMixerPtr(new GPMixer(logDt, logSigGa, logSigNu));
+            dt_inLog = logDt;
+            t0_inLog = logMinTime;
+            gpm_inLog = GPMixerPtr(new GPMixer(logDt, logSigGa, logSigNu));
 
             if (logkeepCov == keepCov)
                 printf(KYEL "Covariance tracking is disabled\n" RESET);
@@ -1455,22 +1459,53 @@ public:
         //         exit(-1);
         // }
         
-        // Clear the knots
-        R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear(); C.clear();
-
-        // Set the knot values
-        for(int ridx = 0; ridx < traj.rows(); ridx++)
+        if(dt == 0 || dt_inLog == dt)
         {
+            printf("dt has not been set. Use log's dt %f.\n", dt_inLog);
+            
+            // Clear the knots
+            R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear(); C.clear();
 
-            VectorXd X = traj.row(ridx);
-            R.push_back(SO3d(Quaternd(X(4), X(1), X(2), X(3))));
-            O.push_back(Vec3(X(5),  X(6),  X(7)));
-            S.push_back(Vec3(X(8),  X(9),  X(10)));
-            P.push_back(Vec3(X(11), X(12), X(13)));
-            V.push_back(Vec3(X(14), X(15), X(16)));
-            A.push_back(Vec3(X(17), X(18), X(19)));
+            // Set the knot values
+            for(int ridx = 0; ridx < traj.rows(); ridx++)
+            {
 
-            // C.push_back(CovMZero);
+                VectorXd X = traj.row(ridx);
+                R.push_back(SO3d(Quaternd(X(4), X(1), X(2), X(3))));
+                O.push_back(Vec3(X(5),  X(6),  X(7)));
+                S.push_back(Vec3(X(8),  X(9),  X(10)));
+                P.push_back(Vec3(X(11), X(12), X(13)));
+                V.push_back(Vec3(X(14), X(15), X(16)));
+                A.push_back(Vec3(X(17), X(18), X(19)));
+
+                // C.push_back(CovMZero);
+            }
+        }
+        else
+        {
+            printf(KYEL "Logged GPCT is has different knot length. Chosen: %f. Log: %f.\n" RESET, dt, dt_inLog);
+            
+            // Create a trajectory
+            GaussianProcess trajLog(dt_inLog, gpm_inLog->getSigGa(), gpm_inLog->getSigNu());
+            trajLog.setStartTime(t0_inLog);
+
+            // Create the trajectory
+            for(int ridx = 0; ridx < traj.rows(); ridx++)
+            {
+                VectorXd X = traj.row(ridx);
+                trajLog.extendOneKnot(GPState<double>(ridx*dt_inLog+t0_inLog, SO3d(Quaternd(X(4), X(1), X(2), X(3))),
+                                                                              Vec3(X(5),  X(6),  X(7)),
+                                                                              Vec3(X(8),  X(9),  X(10)),
+                                                                              Vec3(X(11), X(12), X(13)),
+                                                                              Vec3(X(14), X(15), X(16)),
+                                                                              Vec3(X(17), X(18), X(19))));
+            }
+
+            // Sample the log trajectory to initialize current trajectory
+            t0 = t0_inLog;
+            R.clear(); O.clear(); S.clear(); P.clear(); V.clear(); A.clear(); C.clear();
+            for(double ts = t0; ts < trajLog.getMaxTime() - trajLog.getDt(); ts += dt)
+                extendOneKnot(trajLog.getStateAt(ts));
         }
 
         return true;
