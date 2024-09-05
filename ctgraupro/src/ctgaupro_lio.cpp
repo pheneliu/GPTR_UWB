@@ -1029,13 +1029,17 @@ int main(int argc, char **argv)
                     break;
 
                 // Checking the convergence
-                if (dX.block<3, 1>(9, 0).norm() < conv_dX_thres)  // If position change is below 10cm, increment
+                double dP = dX.block<3, 1>( 9, 0).norm();
+                double dV = dX.block<3, 1>(12, 0).norm();
+                double dA = dX.block<3, 1>(12, 0).norm();
+
+                if (dP < conv_dX_thres)  // If position change is below 10cm, increment
                     convergence_count += 1;
                 else
                     convergence_count = 0;
 
                 // Set the flag when convergence has been acheived, one more iteration will be run with marginalization
-                if(convergence_count >= conv_thres && inner_iter >= min_inner_iter)
+                if(convergence_count >= conv_thres && inner_iter >= min_inner_iter && dV < 0.5 && dA < 0.5)
                 {
                     // printf("Convergent. Slide window.\n");
                     converged = true;

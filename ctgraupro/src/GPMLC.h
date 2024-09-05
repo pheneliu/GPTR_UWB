@@ -420,8 +420,14 @@ protected:
     double fix_time_begin = -1;
     double fix_time_end = -1;
 
-    double lidar_weight = 1.0;    
+    double lidar_weight = 1.0;
     double mp_loss_thres = -1.0;
+    
+    double max_omg = 20.0;
+    double max_alp = 10.0;
+    
+    double max_vel = 10.0;
+    double max_acc = 2.0;
 
     double xtSigGa = 1.0;
     double xtSigNu = 1.0;

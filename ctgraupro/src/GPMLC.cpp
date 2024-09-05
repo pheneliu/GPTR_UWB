@@ -15,6 +15,12 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
     nh->getParam("lidar_weight", lidar_weight);
     nh->getParam("mp_loss_thres", mp_loss_thres);
 
+    nh->getParam("max_omg", max_omg);
+    nh->getParam("max_alp", max_alp);
+
+    nh->getParam("max_vel", max_vel);
+    nh->getParam("max_acc", max_acc);
+
     nh->getParam("xtSigGa", xtSigGa);
     nh->getParam("xtSigNu", xtSigNu);
 };
@@ -46,6 +52,46 @@ void GPMLC::AddTrajParams(
         problem.AddParameterBlock(traj->getKnotPos(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
+
+        if (max_omg > 0)
+        {
+            problem.SetParameterLowerBound(traj->getKnotOmg(kidx).data(), 0, -max_omg);
+            problem.SetParameterLowerBound(traj->getKnotOmg(kidx).data(), 1, -max_omg);
+            problem.SetParameterLowerBound(traj->getKnotOmg(kidx).data(), 2, -max_omg);
+            problem.SetParameterUpperBound(traj->getKnotOmg(kidx).data(), 0,  max_omg);
+            problem.SetParameterUpperBound(traj->getKnotOmg(kidx).data(), 1,  max_omg);
+            problem.SetParameterUpperBound(traj->getKnotOmg(kidx).data(), 2,  max_omg);
+        }
+
+        if (max_alp > 0)
+        {
+            problem.SetParameterLowerBound(traj->getKnotAlp(kidx).data(), 0, -max_alp);
+            problem.SetParameterLowerBound(traj->getKnotAlp(kidx).data(), 1, -max_alp);
+            problem.SetParameterLowerBound(traj->getKnotAlp(kidx).data(), 2, -max_alp);
+            problem.SetParameterUpperBound(traj->getKnotAlp(kidx).data(), 0,  max_alp);
+            problem.SetParameterUpperBound(traj->getKnotAlp(kidx).data(), 1,  max_alp);
+            problem.SetParameterUpperBound(traj->getKnotAlp(kidx).data(), 2,  max_alp);
+        }
+
+        if (max_vel > 0)
+        {
+            problem.SetParameterLowerBound(traj->getKnotVel(kidx).data(), 0, -max_vel);
+            problem.SetParameterLowerBound(traj->getKnotVel(kidx).data(), 1, -max_vel);
+            problem.SetParameterLowerBound(traj->getKnotVel(kidx).data(), 2, -max_vel);
+            problem.SetParameterUpperBound(traj->getKnotVel(kidx).data(), 0,  max_vel);
+            problem.SetParameterUpperBound(traj->getKnotVel(kidx).data(), 1,  max_vel);
+            problem.SetParameterUpperBound(traj->getKnotVel(kidx).data(), 2,  max_vel);
+        }
+
+        if (max_acc > 0)
+        {
+            problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 0, -max_acc);
+            problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 1, -max_acc);
+            problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 2, -max_acc);
+            problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 0,  max_acc);
+            problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 1,  max_acc);
+            problem.SetParameterUpperBound(traj->getKnotAcc(kidx).data(), 2,  max_acc);
+        }
         
         // Log down the information of the params
         paramInfoMap.insert(make_pair(traj->getKnotSO3(kidx).data(), ParamInfo(traj->getKnotSO3(kidx).data(), ParamType::SO3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 0)));
