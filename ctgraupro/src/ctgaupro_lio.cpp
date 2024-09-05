@@ -816,11 +816,13 @@ int main(int argc, char **argv)
             // Deskew, Associate, Estimate, repeat max_inner_iter times
             for(int inner_iter = 0; inner_iter < max_inner_iter; inner_iter++)
             {
+
                 // Create buffers for lidar coefficients
                 vector<deque<CloudXYZITPtr>> swCloud(Nlidar, deque<CloudXYZITPtr>(SW_CLOUDNUM_EFF));
                 vector<deque<CloudXYZIPtr >> swCloudUndi(Nlidar, deque<CloudXYZIPtr>(SW_CLOUDNUM_EFF));
                 vector<deque<CloudXYZIPtr >> swCloudUndiInW(Nlidar, deque<CloudXYZIPtr>(SW_CLOUDNUM_EFF));
                 vector<deque<vector<LidarCoef>>> swCloudCoef(Nlidar, deque<vector<LidarCoef>>(SW_CLOUDNUM_EFF));
+
 
                 // Deskew, Transform and Associate
                 auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
@@ -841,7 +843,6 @@ int main(int argc, char **argv)
                     // Associate
                     gpmaplo->Associate(traj, kdTreeMap, priormap, cloudRaw, cloudUndi, cloudUndiInW, cloudCoeff);
                 };
-
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
                     for(int idx = SW_BEG; idx < SW_END; idx++)
@@ -852,10 +853,92 @@ int main(int argc, char **argv)
                     }
                 }
 
+                // Prepare a report
+                static OptReport report;
+                
+
                 // Optimize
                 if(!VIZ_ONLY)
-                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1 || converged, dX, T_B_Li_gndtr);
+                    gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1 || converged, report);
 
+
+                // Make the report
+                if(!VIZ_ONLY)
+                {
+                    static double tstart = tmin;
+                    bool do_marginalization = inner_iter >= max_inner_iter - 1 || converged;
+                    static int optnum = -1;
+                    optnum++;
+
+                    string report_opt =
+                        myprintf("%s"
+                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
+                                 "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
+                                 "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
+                                 "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
+                                 RESET,
+                                 do_marginalization ? "" : KGRN,
+                                 optnum, inner_iter, outer_iter,
+                                 report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"],
+                                 tstart, tmin - tstart, tmid - tstart, tmax - tstart, 0.0, 0.0,
+                                 report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
+                                 report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
+                                 report.costs["JK"], report.costs["MP2KK"], report.costs["GPXTRZK"], report.costs["LIDARK"], report.costs["PRIORK"]);
+
+                    string report_state = "";
+                    for(int lidx = 0; lidx < Nlidar; lidx++)
+                    {
+                        Matrix<double, STATE_DIM, 1> dX = report.Xt[lidx].boxminus(report.X0[lidx]);
+                        
+                        report_state +=
+                        myprintf("%s"
+                                 "Traj%2d. YPR: %4.0f, %4.0f, %4.0f. XYZ: %7.3f, %7.3f, %7.3f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n"
+                                  " AftOp: YPR: %4.0f, %4.0f, %4.0f. XYZ: %7.3f, %7.3f, %7.3f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n"
+                                  " DX:   |dR|: %5.2f. |dO|: %5.2f, |dS|: %5.2f, |dP| %5.2f. |dV|: %5.2f, |dA|: %5.2f.\n"
+                                 RESET,
+                                 do_marginalization ? "" : KGRN,
+                                 lidx, report.X0[lidx].yaw(), report.X0[lidx].pitch(), report.X0[lidx].roll(),
+                                       report.X0[lidx].P.x(), report.X0[lidx].P.y(),   report.X0[lidx].P.z(),
+                                       report.X0[lidx].O.norm(), report.X0[lidx].O.cwiseAbs().maxCoeff(),
+                                       report.X0[lidx].S.norm(), report.X0[lidx].S.cwiseAbs().maxCoeff(),
+                                       report.X0[lidx].V.norm(), report.X0[lidx].V.cwiseAbs().maxCoeff(),
+                                       report.X0[lidx].A.norm(), report.X0[lidx].A.cwiseAbs().maxCoeff(),
+                                       report.Xt[lidx].yaw(), report.Xt[lidx].pitch(), report.Xt[lidx].roll(),
+                                       report.Xt[lidx].P.x(), report.Xt[lidx].P.y(),   report.Xt[lidx].P.z(),
+                                       report.Xt[lidx].O.norm(), report.Xt[lidx].O.cwiseAbs().maxCoeff(),
+                                       report.Xt[lidx].S.norm(), report.Xt[lidx].S.cwiseAbs().maxCoeff(),
+                                       report.Xt[lidx].V.norm(), report.Xt[lidx].V.cwiseAbs().maxCoeff(),
+                                       report.Xt[lidx].A.norm(), report.Xt[lidx].A.cwiseAbs().maxCoeff(),
+                                       dX.block<3, 1>(0, 0).norm(), dX.block<3, 1>(03, 0).norm(), dX.block<3, 1>(06, 0).norm(), 
+                                       dX.block<3, 1>(9, 0).norm(), dX.block<3, 1>(12, 0).norm(), dX.block<3, 1>(15, 0).norm());
+                    }
+                    
+                    string report_xtrs = "";
+                    for(int lidx = 0; lidx < Nlidar; lidx++)
+                    {
+                        SE3d T_L0_Li = gpmlc->GetExtrinsics(lidx);
+                        myTf tf_L0_Li(T_L0_Li);
+
+                        double T_err;
+                        SE3d T_err_1 = T_B_Li_gndtr[lidx].getSE3().inverse()*T_L0_Li;
+                        SE3d T_err_2 = T_L0_Li.inverse()*T_B_Li_gndtr[lidx].getSE3();
+                        T_err = sqrt(T_err_1.translation().norm()*T_err_1.translation().norm()
+                                     + T_err_2.translation().norm()*T_err_2.translation().norm());
+
+                        report_xtrs += 
+                            myprintf("%s"
+                                     "T_L0_L%d. YPR: %4.0f, %4.0f, %4.0f. XYZ: %6.2f, %6.2f, %6.2f. Error: %.3f.\n"
+                                     RESET,
+                                     do_marginalization ? "" : KGRN,
+                                     lidx, tf_L0_Li.yaw(),   tf_L0_Li.pitch(), tf_L0_Li.roll(),
+                                           tf_L0_Li.pos.x(), tf_L0_Li.pos.y(), tf_L0_Li.pos.z(), T_err);
+                    }
+
+                    cout << report_opt + report_state + report_xtrs << endl;
+                }
+
+
+                // Log down the extrinsic estimate
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
                     if (inner_iter == max_inner_iter - 1)
@@ -874,6 +957,7 @@ int main(int argc, char **argv)
                         extrinsic_poses[lidx].push_back(pose);
                     }
                 }
+
 
                 // Visualize the result on each trajectory
                 {
@@ -938,7 +1022,8 @@ int main(int argc, char **argv)
                         marker_pub[lidx]->publish(line_strip);
                     }
                 }
-
+                
+                
                 if (converged)
                     break;
 

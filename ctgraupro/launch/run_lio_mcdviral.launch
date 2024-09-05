@@ -28,7 +28,7 @@
         <!-- Total number of clouds loaded -->
         <param name="MAX_CLOUDS"      value="-1" />
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="204" />
+        <param name="SKIPPED_TIME"    value="177" />
         <!-- <param name="SKIPPED_TIME"    value="197.5"/> -->
         <param name="VIZ_ONLY"        value="0"/>
         

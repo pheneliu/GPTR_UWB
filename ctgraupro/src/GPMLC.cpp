@@ -925,8 +925,7 @@ void GPMLC::Evaluate(
     double tmin, double tmax, double tmid,
     const vector<deque<vector<LidarCoef>>> &cloudCoef,
     bool do_marginalization,
-    Matrix<double, STATE_DIM, 1> &dX,
-    vector<myTf<double>> &T_B_Li_gndtr)
+    OptReport &report)
 {
     TicToc tt_build;
 
@@ -1102,77 +1101,31 @@ void GPMLC::Evaluate(
 
     tt_slv.Toc();
 
-    vector<myTf<double>> T_L0_Li(Nlidar);
-    vector<double> T_err(Nlidar);
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        T_L0_Li[lidx] = myTf(R_Lx_Ly[lidx].unit_quaternion(), P_Lx_Ly[lidx]);
-        myTf T_err_1 = T_B_Li_gndtr[lidx].inverse()*T_L0_Li[lidx];
-        myTf T_err_2 = T_L0_Li[lidx].inverse()*T_B_Li_gndtr[lidx];
-        T_err[lidx] = sqrt(T_err_1.pos.norm()*T_err_1.pos.norm() + T_err_2.pos.norm()*T_err_2.pos.norm());
-    }
-
     // Sample the trajectories before optimization
     vector <GPState<double>> gpXt;
     for(auto &traj : trajs)
         gpXt.push_back(traj->getStateAt(tmax));
 
-    // Change in the state estimate
-    dX = gpXt.front().boxminus(gpX0.front());
-
-    static int debug_check = 0;
-    debug_check++;
-
-    static int optnum = -1;
-    // if(optnum == -1 || do_marginalization)
-        optnum++;
-
-    static double tstart = tmin;
-
-    string report_opt =
-        myprintf("%s"
-                "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Fixes: %f, %f.\n"
-                "Factor: MP2K: %d, Cross: %d. Ldr: %d.\n"
-                "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-                "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
-                RESET,
-                do_marginalization ? "" : KGRN,
-                optnum, inner_iter, outer_iter,
-                summary.iterations.size(), tt_build.GetLastStop(), tt_slv.GetLastStop(),
-                tstart, tmin - tstart, tmid - tstart, tmax - tstart, fix_time_begin, fix_time_end,
-                factorMetaMp2k.size(), factorMetaGpx.size(), factorMetaLidar.size(),
-                summary.initial_cost, cost_mp2k_init, cost_gpx_init, cost_lidar_init, cost_prior_init,
-                summary.final_cost, cost_mp2k_final, cost_gpx_final, cost_lidar_final, cost_prior_final);
-
-    string report_state = "";
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        report_state += 
-        myprintf("%s"
-                "Traj%2d. YPR: %4.0f, %4.0f, %4.0f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. XYZ: %7.3f, %7.3f, %7.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n"
-                 " AftOp: YPR: %4.0f, %4.0f, %4.0f. |O|: %6.3f, %6.3f. |S|: %6.3f, %6.3f. XYZ: %7.3f, %7.3f, %7.3f. |V|: %6.3f, %6.3f. |A|: %6.3f, %6.3f.\n"
-                 " DX:   |dR|: %5.2f. |dO|: %5.2f, |dS|: %5.2f, |dP| %5.2f. |dV|: %5.2f, |dA|: %5.2f.\n"
-                 RESET,
-                 do_marginalization ? "" : KGRN,
-                 lidx, gpX0[lidx].yaw(), gpX0[lidx].pitch(), gpX0[lidx].roll(), gpX0[lidx].O.norm(), gpX0[lidx].O.cwiseAbs().maxCoeff(), gpX0[lidx].S.norm(), gpX0[lidx].S.cwiseAbs().maxCoeff(),
-                       gpX0[lidx].P.x(), gpX0[lidx].P.y(),   gpX0[lidx].P.z(),  gpX0[lidx].V.norm(), gpX0[lidx].V.cwiseAbs().maxCoeff(), gpX0[lidx].A.norm(), gpX0[lidx].A.cwiseAbs().maxCoeff(),
-                       gpXt[lidx].yaw(), gpXt[lidx].pitch(), gpXt[lidx].roll(), gpXt[lidx].O.norm(), gpXt[lidx].O.cwiseAbs().maxCoeff(), gpXt[lidx].S.norm(), gpXt[lidx].S.cwiseAbs().maxCoeff(),
-                       gpXt[lidx].P.x(), gpXt[lidx].P.y(),   gpXt[lidx].P.z(),  gpXt[lidx].V.norm(), gpXt[lidx].V.cwiseAbs().maxCoeff(), gpXt[lidx].A.norm(), gpXt[lidx].A.cwiseAbs().maxCoeff(),
-                       dX.block<3, 1>(0, 0).norm(), dX.block<3, 1>(03, 0).norm(), dX.block<3, 1>(06, 0).norm(), 
-                       dX.block<3, 1>(9, 0).norm(), dX.block<3, 1>(12, 0).norm(), dX.block<3, 1>(15, 0).norm());
-    }
-    
-    string report_xtrs = "";
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-        report_xtrs += 
-            myprintf("%s"
-                     "T_L0_L%d. YPR: %4.0f, %4.0f, %4.0f. XYZ: %6.2f, %6.2f, %6.2f. Error: %.3f.\n"
-                     RESET,
-                     do_marginalization ? "" : KGRN,
-                     lidx, T_L0_Li[lidx].yaw(),   T_L0_Li[lidx].pitch(), T_L0_Li[lidx].roll(),
-                           T_L0_Li[lidx].pos.x(), T_L0_Li[lidx].pos.y(), T_L0_Li[lidx].pos.z(), T_err[lidx]);
-    
-    cout << report_opt + report_state + report_xtrs << endl;
+    // Put information to the report
+    report.ceres_iterations  = summary.iterations.size();
+    report.tictocs["t_ceres_build"] = tt_build.GetLastStop();
+    report.tictocs["t_ceres_solve"] = tt_slv.GetLastStop();
+    report.factors["MP2K"]   = factorMetaMp2k.size();
+    report.factors["GPXTRZ"] = factorMetaGpx.size();
+    report.factors["LIDAR"]  = factorMetaLidar.size();
+    report.factors["PRIOR"]  = factorMetaPrior.size();
+    report.costs["J0"]       = summary.initial_cost;
+    report.costs["JK"]       = summary.final_cost;
+    report.costs["MP2K0"]    = cost_mp2k_init;
+    report.costs["MP2KK"]    = cost_mp2k_final;
+    report.costs["GPXTRZ0"]  = cost_gpx_init;
+    report.costs["GPXTRZK"]  = cost_gpx_final;
+    report.costs["LIDAR0"]   = cost_lidar_init;
+    report.costs["LIDARK"]   = cost_lidar_final;
+    report.costs["PRIOR0"]   = cost_prior_init;
+    report.costs["PRIORK"]   = cost_prior_final;
+    report.X0 = gpX0;
+    report.Xt = gpXt;
 }
 
 SE3d GPMLC::GetExtrinsics(int lidx)

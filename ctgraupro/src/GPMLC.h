@@ -17,6 +17,18 @@
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 
+struct OptReport
+{
+    int ceres_iterations = -1;
+    map<string, double> tictocs;
+
+    map<string, int> factors;
+    map<string, double> costs;
+
+    vector<GPState<double>> X0;
+    vector<GPState<double>> Xt;
+};
+
 enum class ParamType
 {
     SO3, RV3, UNKNOWN
@@ -469,8 +481,7 @@ public:
         double tmin, double tmax, double tmid,
         const vector<deque<vector<LidarCoef>>> &cloudCoef,
         bool do_marginalization,
-        Matrix<double, STATE_DIM, 1> &dX,
-        vector<myTf<double>> &T_B_Li_gndtr);
+        OptReport &report);
 
     SE3d GetExtrinsics(int lidx);
 
