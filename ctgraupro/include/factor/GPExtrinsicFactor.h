@@ -48,7 +48,7 @@ public:
         sqrtW.block<3, 3>(9, 9) = Vector3d(wP, wP, wP).asDiagonal();
     }
 
-    GPExtrinsicFactor(MatrixXd InvCov_, GPMixerPtr gpms_, GPMixerPtr gpmf_, double ss_, double sf_)
+    GPExtrinsicFactor(GPMixerPtr gpmx, GPMixerPtr gpms_, GPMixerPtr gpmf_, double sx_, double ss_, double sf_)
     :   Dts         (gpms_->getDt()  ),
         Dtf         (gpmf_->getDt()  ),
         gpms        (gpms_           ),
@@ -74,14 +74,42 @@ public:
         mutable_parameter_block_sizes()->push_back(3);
         
         // Find the square root info
-        // sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(InvCov_.block<RES_DIM, RES_DIM>(0, 0)).matrixL().transpose();
-        // cout << "InvCov_\n" << InvCov_ << endl;
+        MatrixXd Cov(RES_DIM, RES_DIM); Cov.setZero();
+        Cov.block<9, 9>(0, 0) += gpmx->Qga(sx_, 3);
+        Cov.block<9, 9>(9, 9) += gpmx->Qnu(sx_, 3);
+        sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(Cov.inverse()/1e6).matrixL().transpose();
+        // cout << "InvQ\n" << Cov.inverse() << endl;
+    }
 
+    GPExtrinsicFactor(GPMixerPtr gpms_, GPMixerPtr gpmf_, double ss_, double sf_)
+    :   Dts         (gpms_->getDt()  ),
+        Dtf         (gpmf_->getDt()  ),
+        gpms        (gpms_           ),
+        gpmf        (gpmf_           ),
+        ss          (ss_             ),
+        sf          (sf_             )
+    {
+        set_num_residuals(RES_DIM);
+
+        // Add the knots
+        for(int j = 0; j < 4; j++)
+        {
+            mutable_parameter_block_sizes()->push_back(4);
+            mutable_parameter_block_sizes()->push_back(3);
+            mutable_parameter_block_sizes()->push_back(3);
+            mutable_parameter_block_sizes()->push_back(3);
+            mutable_parameter_block_sizes()->push_back(3);
+            mutable_parameter_block_sizes()->push_back(3);
+        }
+
+        // Add the extrinsics
+        mutable_parameter_block_sizes()->push_back(4);
+        mutable_parameter_block_sizes()->push_back(3);
+        
         MatrixXd Cov(RES_DIM, RES_DIM); Cov.setZero();
         Cov.block<9, 9>(0, 0) += gpms_->Qga(ss, 3) + gpms_->Qga(sf, 3);
         Cov.block<9, 9>(9, 9) += gpms_->Qnu(ss, 3) + gpms_->Qnu(sf, 3);
         sqrtW = Eigen::LLT<Matrix<double, RES_DIM, RES_DIM>>(Cov.inverse()/1e6).matrixL().transpose();
-        // cout << "InvQ\n" << Cov.inverse() << endl;
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const

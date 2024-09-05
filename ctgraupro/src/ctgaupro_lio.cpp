@@ -248,46 +248,50 @@ void getInitPose(int lidx,
     return;
 }
 
-void syncLidar(const vector<CloudXYZITPtr> &cloudbuf1, const vector<CloudXYZITPtr> &cloudbuf2, vector<CloudXYZITPtr> &cloud21)
+void syncLidar(const vector<CloudXYZITPtr> &cloudbufi, const vector<CloudXYZITPtr> &cloudbufj, vector<CloudXYZITPtr> &cloudji)
 {
-    int Ncloud1 = cloudbuf1.size();
-    int Ncloud2 = cloudbuf2.size();
+    int Ncloudi = cloudbufi.size();
+    int Ncloudj = cloudbufj.size();
 
-    int last_cloud2 = 0;
-    for(int cidx1 = 0; cidx1 < Ncloud1; cidx1++)
+    int last_cloud_j = 0;
+    for(int cidxi = 0; cidxi < Ncloudi; cidxi++)
     {
         // Create a cloud
-        cloud21.push_back(CloudXYZITPtr(new CloudXYZIT()));
+        cloudji.push_back(CloudXYZITPtr(new CloudXYZIT()));
 
-        const CloudXYZITPtr &cloud1 = cloudbuf1[cidx1];
-        CloudXYZITPtr &cloudx = cloud21.back();
+        const CloudXYZITPtr &cloudi = cloudbufi[cidxi];
+        CloudXYZITPtr &cloudx = cloudji.back();
 
-        // *cloudx = *cloud1;
+        // *cloudx = *cloudi;
         
-        for(int cidx2 = last_cloud2; cidx2 < Ncloud2; cidx2++)
+        for(int cidxj = last_cloud_j; cidxj < Ncloudj; cidxj++)
         {
-            const CloudXYZITPtr &cloud2 = cloudbuf2[cidx2];
+            const CloudXYZITPtr &cloudj = cloudbufj[cidxj];
 
-            double t1f = cloud1->points.front().t;
-            double t1b = cloud1->points.back().t;
-            double t2f = cloud2->points.front().t;
-            double t2b = cloud2->points.back().t;
+            double tif = cloudi->points.front().t;
+            double tib = cloudi->points.back().t;
+            double tjf = cloudj->points.front().t;
+            double tjb = cloudj->points.back().t;
             
-            if (t2f > t1b)
+            if (tjf > tib)
                 break;
             
-            if (t2b < t1f)
+            if (tjb < tif)
                 continue;
 
-            // Now there is overlap, extract the points in the cloud1 interval
-            ROS_ASSERT((t2f >= t1f && t2f <= t1b) || (t2b >= t1f && t2b <= t1b));
-            // Insert points to the cloudx
-            for(auto &point : cloud2->points)
-                if(point.t >= t1f && point.t <= t1b)
-                    cloudx->push_back(point);
-            last_cloud2 = cidx2;
+            // Now there is overlap, extract the points in the cloudi interval
+            // ROS_ASSERT_MSG((tif <= tjf && tjf <= tib) || (tif <= tjb && tjb <= tib),
+            //                "cidxi: %d. tif: %f. tib: %f. tjf: %f. tjb: %f\n",
+            //                 cidxi, tif, tib, tjf, tjb);
 
-            // printf("Cloud2 %d is split. Cloudx of Cloud1 %d now has %d points\n", last_cloud2, cidx1, cloudx->size());
+            // Insert points to the cloudx
+            for(auto &point : cloudj->points)
+                if(point.t >= tif && point.t <= tib)
+                    cloudx->push_back(point);
+            
+            last_cloud_j = cidxj;
+
+            // printf("cloudj %d is split. Cloudx of cloudi %d now has %d points\n", last_cloudj, cidx1, cloudx->size());
         }
     }
 }
@@ -603,12 +607,18 @@ int main(int argc, char **argv)
             clouds[lidx].push_back(cloud);
             cloudstamp[lidx].push_back(stamp);
 
-            printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %6d / %6d. Topic: %s.\r",
-                    lidx,
-                    cloudstamp[lidx].back().toSec(),
-                    clouds[lidx].back()->points.front().t,
-                    clouds[lidx].size(), NpointRaw, NpointDS, lidar_topic[lidx].c_str());
-            cout << endl;
+            static vector<int> count(Nlidar, 0);
+
+            if (count[lidx] == 0 || clouds[lidx].size() - count[lidx] >= 100)
+            {
+                printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %6d / %6d. Topic: %s.\r",
+                        lidx,
+                        cloudstamp[lidx].back().toSec(),
+                        clouds[lidx].back()->points.front().t,
+                        clouds[lidx].size(), NpointRaw, NpointDS, lidar_topic[lidx].c_str());
+                cout << endl;
+                count[lidx] = clouds[lidx].size();
+            }
 
             // Confirm the time correctness
             ROS_ASSERT_MSG(fabs(cloudstamp[lidx].back().toSec() - clouds[lidx].back()->points.front().t) < 1e-9,

@@ -14,6 +14,9 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
 
     nh->getParam("lidar_weight", lidar_weight);
     nh->getParam("mp_loss_thres", mp_loss_thres);
+
+    nh->getParam("xtSigGa", xtSigGa);
+    nh->getParam("xtSigNu", xtSigNu);
 };
 
 // Add parameters
@@ -109,8 +112,6 @@ void GPMLC::AddMP2KFactors(
         }
 
         // Create the factors
-        // double mp_loss_thres = -1;
-        // nh->getParam("mp_loss_thres", mp_loss_thres);
         ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
         ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactor(traj->getGPMixerPtr());
         auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
@@ -199,6 +200,8 @@ void GPMLC::AddGPExtrinsicFactors(
 {
     GPMixerPtr gpmx = trajx->getGPMixerPtr();
     GPMixerPtr gpmy = trajy->getGPMixerPtr();
+
+    GPMixerPtr gpmextr(new GPMixer(gpmx->getDt(), (xtSigGa*Vec3(1.0, 1.0, 1.0)).asDiagonal(), (xtSigNu*Vec3(1.0, 1.0, 1.0)).asDiagonal()));
 
     int XTRZ_DENSITY = 1;
     nh->getParam("XTRZ_DENSITY", XTRZ_DENSITY);
@@ -310,14 +313,9 @@ void GPMLC::AddGPExtrinsicFactors(
             ROS_ASSERT(paramInfoMap.find(P_Lx_Ly.data()) != paramInfoMap.end());
             
             // Create the factors
-            // MatrixXd InvCov = MatrixXd::Identity(STATE_DIM, STATE_DIM);
-            // double mpSigGa = 1.0;
-            // double mpSigNu = 1.0;
-            double mp_loss_thres = -1;
-            // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
-            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
-            ceres::CostFunction *cost_function = new GPExtrinsicFactor(MatrixXd::Identity(STATE_DIM, STATE_DIM), gpmx, gpmy, ss, sf);
-            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+            // ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::CostFunction *cost_function = new GPExtrinsicFactor(gpmextr, gpmx, gpmy, 1.0, ss, sf);
+            auto res_block = problem.AddResidualBlock(cost_function, NULL, factor_param_blocks);
 
             // Save the residual block
             factorMeta.res.push_back(res_block);

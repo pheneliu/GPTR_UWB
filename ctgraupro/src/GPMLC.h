@@ -411,6 +411,9 @@ protected:
     double lidar_weight = 1.0;    
     double mp_loss_thres = -1.0;
 
+    double xtSigGa = 1.0;
+    double xtSigNu = 1.0;
+
     int max_lidarcoefs = 4000;
 
     deque<int> kidx_marg;
