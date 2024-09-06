@@ -57,7 +57,7 @@
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size"  value="0.15"   />
-        <param name="cloud_ds"        value="[0.8, 0.1]" type="yaml" />
+        <param name="cloud_ds"        value="[1.6, 0.1]" type="yaml" />
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"         value="0.025"/>
@@ -96,15 +96,15 @@
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"    value="20"     />
         <param name="SW_CLOUDSTEP"   value="2"      />
-        <param name="max_lidarcoefs" value="4000"   />
+        <param name="max_lidarcoefs" value="2000"   />
         <param name="XTRZ_DENSITY"   value="1"      />
         <param name="min_planarity"  value="0.5"    />
         <param name="max_plane_dis"  value="0.5"    />
         
         <param name="max_outer_iter" value="3"      />
-        <param name="min_inner_iter" value="5"     />
+        <param name="min_inner_iter" value="3"     />
         <param name="max_inner_iter" value="40"     />
-        <param name="conv_thres"     value="4"      />
+        <param name="conv_thres"     value="3"      />
         <param name="conv_dX_thres"  value="0.1"    />
         
         <param name="fix_time_begin" value="0.0"    />

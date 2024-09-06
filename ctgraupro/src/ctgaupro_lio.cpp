@@ -750,17 +750,11 @@ int main(int argc, char **argv)
     for(int lidx = 0; lidx < Nlidar; lidx++)
         splitCloud(TSTART, TFINAL, deltaT, clouds[lidx], cloudsx[lidx]);
 
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-    {
-        for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
-            printf("cloud[%2d][%6d]: %d points\n", cidx, lidx, cloudsx[lidx][cidx]->size());
-    }
-    
-    // cloudsx[0] = clouds[0];
-    // for(int lidx = 1; lidx < Nlidar; lidx++)
+    // // Report the counts
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
     // {
-    //     printf("Split cloud %d by cloud 0 intervals\n", lidx);
-    //     syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
+    //     for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
+    //         printf("cloud[%2d][%6d]: %d points\n", cidx, lidx, cloudsx[lidx][cidx]->size());
     // }
 
     // Clear the clouds data to free memory
