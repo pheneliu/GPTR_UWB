@@ -260,7 +260,6 @@ public:
                     Coef.push_back(coef);
                     Coef.back().ptIdx = totalFeature;
                     totalFeature++;
-
                 }
             }
         }
@@ -298,7 +297,10 @@ public:
         {
             CloudPosePtr trajCP = CloudPosePtr(new CloudPose());
             for(int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+            {
                 trajCP->points.push_back(myTf(traj->getKnotPose(kidx)).Pose6D(traj->getKnotTime(kidx)));
+                trajCP->points.back().intensity = (tmax - trajCP->points.back().t) < 0.1 ? 1.0 : 0.0;
+            }
 
             // Publish global trajectory
             Util::publishCloud(trajPub, *trajCP, ros::Time::now(), "world");

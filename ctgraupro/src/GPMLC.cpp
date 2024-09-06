@@ -53,7 +53,7 @@ void GPMLC::AddTrajParams(
         problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
         problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
 
-        if (max_omg > 0)
+        if (max_omg > 0 && kidx == kidxmax)
         {
             problem.SetParameterLowerBound(traj->getKnotOmg(kidx).data(), 0, -max_omg);
             problem.SetParameterLowerBound(traj->getKnotOmg(kidx).data(), 1, -max_omg);
@@ -63,7 +63,7 @@ void GPMLC::AddTrajParams(
             problem.SetParameterUpperBound(traj->getKnotOmg(kidx).data(), 2,  max_omg);
         }
 
-        if (max_alp > 0)
+        if (max_alp > 0 && kidx == kidxmax)
         {
             problem.SetParameterLowerBound(traj->getKnotAlp(kidx).data(), 0, -max_alp);
             problem.SetParameterLowerBound(traj->getKnotAlp(kidx).data(), 1, -max_alp);
@@ -73,7 +73,7 @@ void GPMLC::AddTrajParams(
             problem.SetParameterUpperBound(traj->getKnotAlp(kidx).data(), 2,  max_alp);
         }
 
-        if (max_vel > 0)
+        if (max_vel > 0 && kidx == kidxmax)
         {
             problem.SetParameterLowerBound(traj->getKnotVel(kidx).data(), 0, -max_vel);
             problem.SetParameterLowerBound(traj->getKnotVel(kidx).data(), 1, -max_vel);
@@ -83,7 +83,7 @@ void GPMLC::AddTrajParams(
             problem.SetParameterUpperBound(traj->getKnotVel(kidx).data(), 2,  max_vel);
         }
 
-        if (max_acc > 0)
+        if (max_acc > 0 && kidx == kidxmax)
         {
             problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 0, -max_acc);
             problem.SetParameterLowerBound(traj->getKnotAcc(kidx).data(), 1, -max_acc);

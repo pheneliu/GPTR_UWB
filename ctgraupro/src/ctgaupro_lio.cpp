@@ -699,11 +699,76 @@ int main(int argc, char **argv)
  
     /* #region Split the pointcloud by time -------------------------------------------------------------------------*/
     
-    vector<vector<CloudXYZITPtr>> cloudsx(Nlidar); cloudsx[0] = clouds[0];
-    for(int lidx = 1; lidx < Nlidar; lidx++)
+    // Split the secondary point clouds by the primary pointcloud
+    double TSTART = clouds.front().front()->points.front().t;
+    double TFINAL = clouds.front().back()->points.back().t;
+
+    auto tcloudStart = [&TSTART, &deltaT](int cidx) -> double
     {
-        printf("Split cloud %d\n", lidx);
-        syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
+        return TSTART + cidx*deltaT;
+    };
+
+    auto tcloudFinal = [&TSTART, &deltaT](int cidx) -> double
+    {
+        return TSTART + cidx*deltaT + deltaT;
+    };
+
+    auto splitCloud = [&tcloudStart, &tcloudFinal, &tcloudFinal](double tstart, double tfinal, double dt, vector<CloudXYZITPtr> &cloudsIn, vector<CloudXYZITPtr> &cloudsOut) -> void
+    {
+
+        // Create clouds in cloudsOut
+        cloudsOut.clear();
+        while(true)
+        {
+            cloudsOut.push_back(CloudXYZITPtr(new CloudXYZIT()));
+            if (tcloudFinal(cloudsOut.size()-1) >= tfinal)
+                break;
+        }
+
+        // Extract points from cloudsIn to cloudsOut
+        for(auto &cloud : cloudsIn)
+        {
+            for(auto &point : cloud->points)
+            {
+                if (point.t < tstart || point.t >= tfinal)
+                    continue;
+
+                // Find the cloudOut index
+                int cidx = int(std::floor((point.t - tstart)/dt));
+                ROS_ASSERT_MSG(tcloudStart(cidx) <= point.t && point.t <= tcloudFinal(cidx),
+                               "point.t: %f. cidx: %d. dt: %f. tcoutstart: %f. tcoutfinal: %f",
+                                point.t, cidx, dt, tcloudStart(cidx), tcloudFinal(cidx));
+                ROS_ASSERT_MSG(cidx < cloudsOut.size(), "%d, %d, %f, %f, %f\n", cidx, cloudsOut.size(), point.t, tstart, tfinal);
+                // ROS_ASSERT_MSG(coutidx < cloudsOut.size(), "%d %d. %f, %f, %f\n", coutidx, cloudsOut.size(), point.t, tfinal, tstart + cloudsOut.size()*dt);
+                cloudsOut[cidx]->push_back(point);
+            }
+        }
+
+    };
+
+    vector<vector<CloudXYZITPtr>> cloudsx(Nlidar);
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+        splitCloud(TSTART, TFINAL, deltaT, clouds[lidx], cloudsx[lidx]);
+
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
+            printf("cloud[%2d][%6d]: %d points\n", cidx, lidx, cloudsx[lidx][cidx]->size());
+    }
+    
+    // cloudsx[0] = clouds[0];
+    // for(int lidx = 1; lidx < Nlidar; lidx++)
+    // {
+    //     printf("Split cloud %d by cloud 0 intervals\n", lidx);
+    //     syncLidar(clouds[0], clouds[lidx], cloudsx[lidx]);
+    // }
+
+    // Clear the clouds data to free memory
+    for(auto &cs : clouds)
+    {
+        for(auto &c : cs)
+            c->clear();
+        cs.clear();
     }
 
     /* #endregion Split the pointcloud by time ----------------------------------------------------------------------*/
@@ -721,10 +786,10 @@ int main(int argc, char **argv)
         {
             ImuSample imu(imus[iidx][isidx]);
             for(int cidx = 0; cidx < cloudsx[0].size(); cidx++)
-            {                
-                if(imu.t > cloudsx[0][cidx]->points.back().t)
+            {
+                if(imu.t > tcloudFinal(cidx))
                     continue;
-                else if(cloudsx[0][cidx]->points.front().t <= imu.t && imu.t < cloudsx[0][cidx]->points.back().t)
+                else if(tcloudStart(cidx) <= imu.t && imu.t < tcloudFinal(cidx))
                     imusx[iidx][cidx].push_back(imu);
             }
         }
@@ -749,7 +814,7 @@ int main(int argc, char **argv)
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         // Create the gpmaplo objects
-        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), cloudsx[lidx].front()->points.front().t, lidx));
+        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), TSTART, lidx));
 
     // If there is a log, load them up
     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -778,7 +843,7 @@ int main(int argc, char **argv)
         trajs.push_back(lo->GetTraj());
 
     vector<vector<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
- 
+
     /* #endregion Create the LOAM modules ---------------------------------------------------------------------------*/
  
     /* #region Do optimization with inter-trajectory factors --------------------------------------------------------*/
@@ -797,9 +862,9 @@ int main(int argc, char **argv)
             // The effective length of the sliding window by the number of point clouds
             int SW_CLOUDNUM_EFF = SW_END - SW_BEG;
 
-            double tmin = cloudsx[0][SW_BEG]->points.front().t;     // Start time of the sliding window
-            double tmax = cloudsx[0][SW_END]->points.back().t;      // End time of the sliding window
-            double tmid = cloudsx[0][SW_MID]->points.front().t;     // Next start time of the sliding window, also determines the marginalization time limit
+            double tmin = tcloudStart(SW_BEG);     // Start time of the sliding window
+            double tmax = tcloudFinal(SW_END);     // End time of the sliding window
+            double tmid = tcloudStart(SW_MID);     // Next start time of the sliding window, also determines the marginalization time limit
 
             // Extend the trajectories
             for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -851,6 +916,9 @@ int main(int argc, char **argv)
                         int swIdx = idx - SW_BEG;
                         swCloud[lidx][swIdx] = uniformDownsample<PointXYZIT>(cloudsx[lidx][idx], cloud_ds[lidx]);
                         ProcessCloud(gpmaplo[lidx], swCloud[lidx][swIdx], swCloudUndi[lidx][swIdx], swCloudUndiInW[lidx][swIdx], swCloudCoef[lidx][swIdx]);
+
+                        // for(auto &coef : swCloudCoef[lidx][swIdx])
+                        //     coef.plnrty *= (swIdx + 1);
                     }
                 }
 
@@ -866,7 +934,7 @@ int main(int argc, char **argv)
                 // Make the report
                 if(!VIZ_ONLY)
                 {
-                    static double tstart = tmin;
+                    static double tstart = cloudsx[0][0]->points.front().t;
                     bool do_marginalization = inner_iter >= max_inner_iter - 1 || converged;
                     static int optnum = -1;
                     optnum++;
@@ -889,7 +957,7 @@ int main(int argc, char **argv)
                     string report_state = "";
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
-                        Matrix<double, STATE_DIM, 1> dX = report.Xt[lidx].boxminus(report.X0[lidx]);
+                        dX = report.Xt[lidx].boxminus(report.X0[lidx]);
                         
                         report_state +=
                         myprintf("%s"
@@ -1024,7 +1092,7 @@ int main(int argc, char **argv)
                     }
                 }
                 
-                
+
                 if (converged)
                     break;
 
@@ -1039,7 +1107,7 @@ int main(int argc, char **argv)
                     convergence_count = 0;
 
                 // Set the flag when convergence has been acheived, one more iteration will be run with marginalization
-                if(convergence_count >= conv_thres && inner_iter >= min_inner_iter && dV < 0.5 && dA < 0.5)
+                if(convergence_count >= conv_thres && (inner_iter >= min_inner_iter && dV < 0.5 && dA < 0.5))
                 {
                     // printf("Convergent. Slide window.\n");
                     converged = true;
