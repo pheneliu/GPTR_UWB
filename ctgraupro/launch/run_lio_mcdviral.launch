@@ -5,15 +5,23 @@
     <arg name="autorun" default="false" />
 
     <!-- Bag file -->
-    <!-- <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_01_lidars.bag"/> -->
-    <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" />
+    <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_01_lidars.bag"/>
+    <!-- <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" /> -->
 
     <!-- Initial pose in each sequence -->
     <arg name="xyzypr_W_L0" value="[ 49.27, 107.37, 7.62, -41,  0, 0,
                                      49.27, 107.37, 7.62, -41,  0, 0 ]" if="$(eval 'ntu_day_01' in lidar_bag_file)"/>
     <arg name="xyzypr_W_L0" value="[ 62.03, 119.61, 7.69, -134, 3, 1,
                                      62.03, 119.57, 7.69, -134, 3, 1 ]" if="$(eval 'ntu_day_02' in lidar_bag_file)"/>
-                                     
+
+    <!-- Initial start time of each sequence -->
+    <arg name="skipped_time" value="3"     if="$(eval 'ntu_day_01' in lidar_bag_file)"/>
+    <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/>
+    <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
+    <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
+    <!-- <arg name="skipped_time" value="177.5" if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
+    <!-- <arg name="skipped_time" value="203.0" if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
+        
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
@@ -29,12 +37,9 @@
         <param name="MAX_CLOUDS"      value="-1" />
         
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="14.0" />
-        <!-- <param name="SKIPPED_TIME"    value="33.0" /> -->
-        <!-- <param name="SKIPPED_TIME"    value="42.0" /> -->
-        <!-- <param name="SKIPPED_TIME"    value="177.5"/> -->
-        <!-- <param name="SKIPPED_TIME"    value="203.0"/> -->
+        <param name="SKIPPED_TIME"    value="$(arg skipped_time)" />
 
+        <!-- Set to '1' to skip optimization -->
         <param name="VIZ_ONLY"        value="0"/>
         
         <!-- Lidar topics and their settings -->
@@ -101,10 +106,10 @@
         <param name="min_planarity"  value="0.5"    />
         <param name="max_plane_dis"  value="0.5"    />
         
-        <param name="max_outer_iter" value="3"      />
+        <param name="max_outer_iter" value="1"      />
         <param name="min_inner_iter" value="3"     />
         <param name="max_inner_iter" value="40"     />
-        <param name="conv_thres"     value="3"      />
+        <param name="conv_thres"     value="2"      />
         <param name="conv_dX_thres"  value="0.1"    />
         
         <param name="fix_time_begin" value="0.0"    />
