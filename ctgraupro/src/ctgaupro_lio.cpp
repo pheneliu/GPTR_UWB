@@ -59,6 +59,7 @@ int MAX_CLOUDS = -1;
 
 // Time to skip the estimation
 double SKIPPED_TIME = 0.0;
+bool RECURRENT_SKIP = false;
 
 // Get the imu topics
 vector<string> imu_topic = {""};
@@ -363,6 +364,7 @@ int main(int argc, char **argv)
     
     nh_ptr->getParam("MAX_CLOUDS", MAX_CLOUDS);
     nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
+    RECURRENT_SKIP = Util::GetBoolParam(nh_ptr, "RECURRENT_SKIP", false);
     
     nh_ptr->getParam("imu_topic", imu_topic);
     nh_ptr->getParam("lidar_topic", lidar_topic);
@@ -859,8 +861,8 @@ int main(int argc, char **argv)
 
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
-        // Last step that was logged
-        int last_logged_cidx = -1;
+        // Last time that was logged
+        double last_logged_time = -1;
 
         // Check if loam has diverged
         bool loam_diverges = false;
@@ -868,8 +870,21 @@ int main(int argc, char **argv)
         // Slide the window
         for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
         {
-            if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
-                continue;
+            // Check the skipping condition
+            {
+                double tcloudNow = cloudsx.front()[cidx]->points.front().t;
+                double tcloudStart = cloudsx.front().front()->points.front().t;
+                double tcloudSinceStart = tcloudNow - tcloudStart;
+
+                if (RECURRENT_SKIP || outer_iter == 0)
+                {
+                    if (tcloudSinceStart < SKIPPED_TIME)
+                    {
+                        printf("tcloudSinceStart %f. SKIPPED_TIME: %f. SKIPPING.\n", tcloudSinceStart, SKIPPED_TIME);
+                        continue;
+                    }
+                }
+            }
 
             int SW_BEG = cidx;
             int SW_END = min(cidx + SW_CLOUDNUM, int(cloudsx[0].size())-1);
@@ -965,15 +980,16 @@ int main(int argc, char **argv)
 
                     string report_opt =
                         myprintf("%s"
-                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. TFIN: + %f. Tinner: %f. Trun: %f.\n"
+                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tinner: %.3f.\n"
+                                 "TSTART: %.3f. TFIN: + %.3f. Tmin-Tmid-Tmax: +[%.3f, %.3f, %.3f]. Trun: %.3f.\n"
                                  "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
                                  "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
                                  "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
                                  RESET,
                                  do_marginalization ? "" : KGRN,
                                  optnum, inner_iter, outer_iter,
-                                 report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"],
-                                 TSTART, tmin - TSTART, tmid - TSTART, tmax - TSTART, TFINAL - TSTART, tt_inner_loop.Toc(), (ros::Time::now() - programstart).toSec(),
+                                 report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"], tt_inner_loop.Toc(),
+                                 TSTART, TFINAL - TSTART, tmin - TSTART, tmid - TSTART, tmax - TSTART, (ros::Time::now() - programstart).toSec(),
                                  report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
                                  report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
                                  report.costs["JK"], report.costs["MP2KK"], report.costs["GPXTRZK"], report.costs["LIDARK"], report.costs["PRIORK"]);
@@ -1148,11 +1164,15 @@ int main(int argc, char **argv)
                     break;
 
                 // Checking the convergence
+                double dR = dX.block<3, 1>( 0, 0).norm();
                 double dP = dX.block<3, 1>( 9, 0).norm();
                 double dV = dX.block<3, 1>(12, 0).norm();
                 double dA = dX.block<3, 1>(12, 0).norm();
 
-                if (dP < conv_dX_thres)  // If position change is below 10cm, increment
+                // Calculate the percentage change in lidar cost
+                double dJLidarPerc = fabs(report.costs["LIDAR0"] - report.costs["LIDARK"])/report.costs["LIDAR0"]*100;
+
+                if (dP < conv_dX_thres && dJLidarPerc < 5.0 )  // If position change is below 10cm, increment
                     convergence_count += 1;
                 else
                     convergence_count = 0;
@@ -1167,13 +1187,14 @@ int main(int argc, char **argv)
 
             }
 
-            // Log the result
-            if(cidx % 100 == 0 && cidx > last_logged_cidx)
+            // Log the result every 10 seconds
+            double log_period = 10;
+            if((int(floor(tcloudStart(cidx) - TSTART)) % int(log_period) == 0 && tcloudStart(cidx) - last_logged_time >= 10.0) || last_logged_time == -1)
             {
-                last_logged_cidx = cidx;
+                last_logged_time = tcloudStart(cidx);
 
                 // Create directories if they do not exist
-                string output_dir = log_dir + myprintf("/run_%02d/cidx_%04d/", outer_iter, cidx);
+                string output_dir = log_dir + myprintf("/run_%02d/time_%04.0f/", outer_iter, tcloudStart(cidx)-TSTART);
                 std::filesystem::create_directories(output_dir);
 
                 // Save the trajectory and estimation result
