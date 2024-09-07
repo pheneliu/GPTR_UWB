@@ -5,9 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Lidar01
         - /Lidar01/Odom01/Shape1
-        - /Lidar11
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
       Splitter Ratio: 0.6441176533699036
@@ -645,7 +643,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 19.821453094482422
+      Distance: 12.227083206176758
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -653,17 +651,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 2.337756633758545
-        Y: -6.127045631408691
-        Z: -3
+        X: 2.1433017253875732
+        Y: 1.216878890991211
+        Z: -2.999998092651367
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.21520334482192993
+      Pitch: -0.12520432472229004
       Target Frame: lidar_0
-      Yaw: 0.30359941720962524
+      Yaw: 6.120534896850586
     Saved: ~
 Window Geometry:
   Displays:

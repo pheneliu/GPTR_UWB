@@ -1143,7 +1143,10 @@ void GPMLC::Evaluate(
 
     // Determine the factors to remove
     if (do_marginalization)
+    {
         Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
+        report.marginalization_done = true;
+    }
 
     tt_slv.Toc();
 

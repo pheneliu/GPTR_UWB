@@ -27,6 +27,8 @@ struct OptReport
 
     vector<GPState<double>> X0;
     vector<GPState<double>> Xt;
+
+    bool marginalization_done = false;
 };
 
 enum class ParamType
