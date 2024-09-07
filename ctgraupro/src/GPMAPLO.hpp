@@ -268,6 +268,10 @@ public:
     void Deskew(GaussianProcessPtr &traj, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudDeskewedInB)
     {
         int Npoints = cloudRaw->size();
+
+        if (Npoints == 0)
+            return;
+
         cloudDeskewedInB->resize(Npoints);
 
         SE3d T_Be_W = traj->pose(cloudRaw->points.back().t).inverse();

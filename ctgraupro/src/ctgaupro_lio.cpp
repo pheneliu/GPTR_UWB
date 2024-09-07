@@ -348,6 +348,8 @@ int main(int argc, char **argv)
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR); // Suppress warnings by pcl load
 
     printf(KGRN "Multi-Lidar Coupled Motion Estimation Started.\n" RESET);
+
+    ros::Time programstart = ros::Time::now();
  
     /* #region Read parameters --------------------------------------------------------------------------------------*/
 
@@ -750,12 +752,25 @@ int main(int argc, char **argv)
     for(int lidx = 0; lidx < Nlidar; lidx++)
         splitCloud(TSTART, TFINAL, deltaT, clouds[lidx], cloudsx[lidx]);
 
-    // // Report the counts
-    // for(int lidx = 0; lidx < Nlidar; lidx++)
-    // {
-    //     for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
-    //         printf("cloud[%2d][%6d]: %d points\n", cidx, lidx, cloudsx[lidx][cidx]->size());
-    // }
+    // Check for empty cloud and fill in place holders
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
+        {
+            // ROS_ASSERT_MSG(cloudsx[lidx][cidx]->size() != 0, "%d", cloudsx[lidx][cidx]->size());
+            if(cloudsx[lidx][cidx]->size() == 0)
+            {
+                printf(KYEL "cloud[%2d][%6d] is empty with %d points.\n" RESET, cidx, lidx, cloudsx[lidx][cidx]->size());
+
+                PointXYZIT p;
+                p.x = 0; p.y = 0; p.z = 0; p.intensity = 0;
+                cloudsx[lidx][cidx]->push_back(p);
+                cloudsx[lidx][cidx]->push_back(p);
+                cloudsx[lidx][cidx]->points.front().t = tcloudStart(cidx);
+                cloudsx[lidx][cidx]->points.back().t = tcloudFinal(cidx);
+            }
+        }
+    }
 
     // Clear the clouds data to free memory
     for(auto &cs : clouds)
@@ -844,6 +859,13 @@ int main(int argc, char **argv)
 
     for(int outer_iter = 0; outer_iter < max_outer_iter; outer_iter++)
     {
+        // Last step that was logged
+        int last_logged_cidx = -1;
+
+        // Check if loam has diverged
+        bool loam_diverges = false;
+
+        // Slide the window
         for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
         {
             if ((cloudsx[0][cidx]->points.front().t - cloudsx.front().front()->points.front().t) < SKIPPED_TIME)
@@ -888,8 +910,8 @@ int main(int argc, char **argv)
                 auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
                                                             CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
                 {
-                    // 
-                    GaussianProcessPtr traj = gpmaplo->GetTraj();
+                    // Get the trajectory
+                    GaussianProcessPtr &traj = gpmaplo->GetTraj();
 
                     // Deskew
                     cloudUndi = CloudXYZIPtr(new CloudXYZI());
@@ -903,6 +925,7 @@ int main(int argc, char **argv)
                     // Associate
                     gpmaplo->Associate(traj, kdTreeMap, priormap, cloudRaw, cloudUndi, cloudUndiInW, cloudCoeff);
                 };
+
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
                     for(int idx = SW_BEG; idx < SW_END; idx++)
@@ -925,17 +948,24 @@ int main(int argc, char **argv)
                     gpmlc->Evaluate(inner_iter, outer_iter, trajs, tmin, tmax, tmid, swCloudCoef, inner_iter >= max_inner_iter - 1 || converged, report);
 
 
+                // Exit if divergent
+                if (report.ceres_iterations != -1)
+                    if (report.factors["LIDAR"] == 0)
+                    {
+                        loam_diverges = true;
+                        printf(KRED"LOAM DIVERGES!" RESET);
+                    }
+
                 // Make the report
-                if(!VIZ_ONLY)
+                if(report.ceres_iterations != -1)
                 {
-                    static double tstart = cloudsx[0][0]->points.front().t;
                     bool do_marginalization = inner_iter >= max_inner_iter - 1 || converged;
                     static int optnum = -1;
                     optnum++;
 
                     string report_opt =
                         myprintf("%s"
-                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. Tinner: %f.\n"
+                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tmin-Tmid-Tmax: %.3f + [%.3f, %.3f, %.3f]. TFIN: + %f. Tinner: %f. Trun: %f.\n"
                                  "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
                                  "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
                                  "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
@@ -943,7 +973,7 @@ int main(int argc, char **argv)
                                  do_marginalization ? "" : KGRN,
                                  optnum, inner_iter, outer_iter,
                                  report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"],
-                                 tstart, tmin - tstart, tmid - tstart, tmax - tstart, tt_inner_loop.Toc(),
+                                 TSTART, tmin - TSTART, tmid - TSTART, tmax - TSTART, TFINAL - TSTART, tt_inner_loop.Toc(), (ros::Time::now() - programstart).toSec(),
                                  report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
                                  report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
                                  report.costs["JK"], report.costs["MP2KK"], report.costs["GPXTRZK"], report.costs["LIDARK"], report.costs["PRIORK"]);
@@ -975,7 +1005,7 @@ int main(int argc, char **argv)
                                        dX.block<3, 1>(0, 0).norm(), dX.block<3, 1>(03, 0).norm(), dX.block<3, 1>(06, 0).norm(), 
                                        dX.block<3, 1>(9, 0).norm(), dX.block<3, 1>(12, 0).norm(), dX.block<3, 1>(15, 0).norm());
                     }
-                    
+
                     string report_xtrs = "";
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
@@ -1004,7 +1034,7 @@ int main(int argc, char **argv)
                 // Log down the extrinsic estimate
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
-                    if (inner_iter == max_inner_iter - 1)
+                    if (inner_iter >= max_inner_iter - 1 || converged)
                     {
                         SE3d se3 = gpmlc->GetExtrinsics(lidx);
                         geometry_msgs::PoseStamped pose;
@@ -1112,7 +1142,7 @@ int main(int argc, char **argv)
                         marker_pub[lidx]->publish(line_strip);
                     }
                 }
-                
+
 
                 if (converged)
                     break;
@@ -1134,58 +1164,71 @@ int main(int argc, char **argv)
                     converged = true;
                 }
                 // printf("CC: %d. Norm: %f\n", convergence_count, dX.block<3, 1>(9, 0).norm());
+
             }
+
+            // Log the result
+            if(cidx % 100 == 0 && cidx > last_logged_cidx)
+            {
+                last_logged_cidx = cidx;
+
+                // Create directories if they do not exist
+                string output_dir = log_dir + myprintf("/run_%02d/cidx_%04d/", outer_iter, cidx);
+                std::filesystem::create_directories(output_dir);
+
+                // Save the trajectory and estimation result
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                {
+                    // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
+                    printf("Exporting trajectory logs to %s.\n", output_dir.c_str());
+                    gpmaplo[lidx]->GetTraj()->saveTrajectory(output_dir, lidx, gndtr_ts[lidx]);
+                }
+
+                // Log the extrinsics
+                string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
+                std::ofstream xts_logfile;
+                xts_logfile.open(xts_log); // Open the file for writing
+                xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
+                xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
+                for(auto &pose : extrinsic_poses[1])
+                {
+                    xts_logfile << pose.header.stamp.toSec() << ","
+                                << pose.pose.position.x << ","
+                                << pose.pose.position.y << ","
+                                << pose.pose.position.z << ","
+                                << pose.pose.orientation.x << ","
+                                << pose.pose.orientation.y << ","
+                                << pose.pose.orientation.z << ","
+                                << pose.pose.orientation.w << "," << endl;
+                }
+                xts_logfile.close();
+            }
+
+            if (loam_diverges)
+                break;
         }
+
+        if (loam_diverges)
+            break;
 
         // Reset the marginalization factor
         gpmlc->Reset();
-
-        // Log the result
-
-        // Create directories if they do not exist
-        string output_dir = log_dir + myprintf("/run_%02d/", outer_iter);
-        std::filesystem::create_directories(output_dir);
-
-        // Save the trajectory and estimation result
-        for(int lidx = 0; lidx < Nlidar; lidx++)
-        {
-            // string log_file = log_dir + myprintf("/gptraj_%d.csv", lidx);
-            printf("Exporting trajectory logs to %s.\n", output_dir.c_str());
-            gpmaplo[lidx]->GetTraj()->saveTrajectory(output_dir, lidx, gndtr_ts[lidx]);
-        }
-
-        // Log the extrinsics
-        string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
-        std::ofstream xts_logfile;
-        xts_logfile.open(xts_log); // Open the file for writing
-        xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
-        xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
-        for(auto &pose : extrinsic_poses[1])
-        {
-            xts_logfile << pose.header.stamp.toSec() << ","
-                        << pose.pose.position.x << ","
-                        << pose.pose.position.y << ","
-                        << pose.pose.position.z << ","
-                        << pose.pose.orientation.x << ","
-                        << pose.pose.orientation.y << ","
-                        << pose.pose.orientation.z << ","
-                        << pose.pose.orientation.w << "," << endl;
-        }
-        xts_logfile.close();
     }
 
     /* #endregion Do optimization with inter-trajectory factors -----------------------------------------------------*/
  
     /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
 
-    vector<ros::Publisher> poseSamplePub(Nlidar);
-    for(int lidx = 0; lidx < Nlidar; lidx++)
-        poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
+    // vector<ros::Publisher> poseSamplePub(Nlidar);
+    // for(int lidx = 0; lidx < Nlidar; lidx++)
+    //     poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
 
-    // Loop in waiting
-    ros::Rate rate(0.2);
-    while(ros::ok())
-        rate.sleep();
+    // // Loop in waiting
+    // ros::Rate rate(0.2);
+    // while(ros::ok())
+    //     rate.sleep();
+
+    exit(0);
 
     /* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
  

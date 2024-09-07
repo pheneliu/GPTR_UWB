@@ -4,31 +4,38 @@
 
     <arg name="autorun" default="false" />
 
+    <!-- Sequence -->
+    <!-- <arg name="sequence" default="ntu_day_01"/> -->
+    <!-- <arg name="sequence" default="ntu_day_02"/> -->
+    <arg name="sequence" default="ntu_day_10"/>
+
     <!-- Bag file -->
-    <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_01_lidars.bag"/>
-    <!-- <arg name="lidar_bag_file" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_day_02_lidars.bag" /> -->
+    <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/mcd_$(arg sequence)_lidars.bag"/>
+                                     
+    <!-- Initial start time of each sequence -->
+    <arg name="skipped_time" value="4"     if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in sequence)"/>
+    <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
+    <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in sequence)"/> -->
+    <!-- <arg name="skipped_time" value="177.5" if="$(eval 'ntu_day_02' in sequence)"/> -->
+    <!-- <arg name="skipped_time" value="203.0" if="$(eval 'ntu_day_02' in sequence)"/> -->
+    <arg name="skipped_time" value="1"    if="$(eval 'ntu_day_10' in sequence)"/>
 
     <!-- Initial pose in each sequence -->
     <arg name="xyzypr_W_L0" value="[ 49.27, 107.37, 7.62, -41,  0, 0,
-                                     49.27, 107.37, 7.62, -41,  0, 0 ]" if="$(eval 'ntu_day_01' in lidar_bag_file)"/>
+                                     49.27, 107.37, 7.62, -41,  0, 0 ]" if="$(eval 'ntu_day_01' in sequence)"/>
     <arg name="xyzypr_W_L0" value="[ 62.03, 119.61, 7.69, -134, 3, 1,
-                                     62.03, 119.57, 7.69, -134, 3, 1 ]" if="$(eval 'ntu_day_02' in lidar_bag_file)"/>
+                                     62.03, 119.57, 7.69, -134, 3, 1 ]" if="$(eval 'ntu_day_02' in sequence)"/>
+    <arg name="xyzypr_W_L0" value="[ 39.49, 23.48,  6.54,  36,  3, 1,
+                                     39.49, 23.48,  6.54,  36,  3, 1 ]" if="$(eval 'ntu_day_10' in sequence)"/>
 
-    <!-- Initial start time of each sequence -->
-    <arg name="skipped_time" value="3"     if="$(eval 'ntu_day_01' in lidar_bag_file)"/>
-    <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/>
-    <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
-    <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
-    <!-- <arg name="skipped_time" value="177.5" if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
-    <!-- <arg name="skipped_time" value="203.0" if="$(eval 'ntu_day_02' in lidar_bag_file)"/> -->
-        
     <!-- Multi-lidar motion estimation node -->
-    <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
+    <node required="true" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/scripts/mcd_ntu_priormap_downsampled.pcd" />
+        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/ctgaupro/mcd_ntu_priormap_downsampled.pcd" />
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
@@ -65,17 +72,8 @@
         <param name="cloud_ds"        value="[1.6, 0.1]" type="yaml" />
         
         <!-- GN MAP optimization params -->
-        <param name="deltaT"         value="0.025"/>
-
-        <param name="WINDOW_SIZE"    value="5"      />
-        <param name="use_ceres"      value="0"      />
-        <param name="max_gniter"     value="3"      />
-        <param name="lambda"         value="0.1"    />
-        <param name="dxmax"          value="0.5"    />
-        <param name="fixed_start"    value="-0.001" />
-        <param name="fixed_end"      value="-0.001" />
+        <param name="deltaT"         value="0.02204"/>
         
-        <!-- <param name="ds_size"        value="0.1"    /> -->
         <param name="lidar_ds_rate"  value="8"      />
         <param name="lidar_weight"   value="10.0"   />
 
@@ -88,7 +86,7 @@
         <param name="xtSigNu"        value="1.0"    />
 
         <!-- Loss function threshold -->
-        <param name="ld_loss_thres"  value="-1.0"    />
+        <param name="ld_loss_thres"  value="-1.0"   />
         <param name="pp_loss_thres"  value="-1.0"   />
         <param name="mp_loss_thres"  value="-1.0"   />
         <param name="sm_loss_thres"  value="-1.0"   />
@@ -107,16 +105,16 @@
         <param name="max_plane_dis"  value="0.5"    />
         
         <param name="max_outer_iter" value="1"      />
-        <param name="min_inner_iter" value="3"     />
+        <param name="min_inner_iter" value="10"      />
         <param name="max_inner_iter" value="40"     />
-        <param name="conv_thres"     value="2"      />
+        <param name="conv_thres"     value="5"      />
         <param name="conv_dX_thres"  value="0.1"    />
         
         <param name="fix_time_begin" value="0.0"    />
         <param name="fix_time_end"   value="0.0"    />
 
         <!-- Log dir -->
-        <param name="log_dir" value="/home/tmn/ros_ws/dev_ws/src/ctgaupro/log/lio/exp_mcdviral"/>
+        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/logs/lio/exp_mcdviral_$(arg sequence)"/>
 
     </node>
 
