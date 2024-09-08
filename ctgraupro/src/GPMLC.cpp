@@ -10,6 +10,8 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
     nh->getParam("fix_time_begin", fix_time_begin);
     nh->getParam("fix_time_end", fix_time_end);
 
+    nh->getParam("max_ceres_iter", max_ceres_iter);
+
     nh->getParam("max_lidarcoefs", max_lidarcoefs);
 
     nh->getParam("lidar_weight", lidar_weight);
@@ -985,7 +987,7 @@ void GPMLC::Evaluate(
     // Set up the ceres problem
     options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.num_threads = MAX_THREADS;
-    options.max_num_iterations = 50;
+    options.max_num_iterations = max_ceres_iter;
 
     static bool traj_sufficient_length = false;
 

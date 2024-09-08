@@ -104,6 +104,7 @@ vector<double> conv_dX_thres = {0.05, 0.2, 1.0, 0.05, 0.2, 1.0};
 vector<myTf<double>> T_B_Li_gndtr;
 
 string log_dir = "/home/tmn/logs";
+double log_period = 10;
 
 // Mutex for the node handle
 mutex nh_mtx;
@@ -396,6 +397,7 @@ int main(int argc, char **argv)
 
     // Location to save the logs
     nh_ptr->getParam("log_dir", log_dir);
+    nh_ptr->getParam("log_period", log_period);
 
     // Some notifications
     printf("Get bag at %s and prior map at %s.\n", lidar_bag_file.c_str(), priormap_file.c_str());

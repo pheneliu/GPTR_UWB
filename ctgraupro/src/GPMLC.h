@@ -421,6 +421,8 @@ protected:
 
     double fix_time_begin = -1;
     double fix_time_end = -1;
+    
+    int max_ceres_iter = 50;
 
     double lidar_weight = 1.0;
     double mp_loss_thres = -1.0;
