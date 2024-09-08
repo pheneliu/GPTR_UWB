@@ -1019,30 +1019,31 @@ int main(int argc, char **argv)
                         odomPub[lidx]->publish(odomMsg[lidx]);
 
                         // Publish a tf at the last inner iterations
-                        static tf2_ros::TransformBroadcaster br;
-                        if(converged)
+                        static tf2_ros::TransformBroadcaster br;   // Define a TransformStamped message
+                        geometry_msgs::TransformStamped transformStamped;
+                        
+                        // Populate the transform message
+                        static double last_tmax = -1;
+                        transformStamped.header.stamp    = ros::Time(tmax);
+                        transformStamped.header.frame_id = "world";
+                        transformStamped.child_frame_id  = myprintf("lidar_%d", lidx);
+
+                        // Set the translation values
+                        transformStamped.transform.translation.x = odomMsg[lidx].pose.pose.position.x;
+                        transformStamped.transform.translation.y = odomMsg[lidx].pose.pose.position.y;
+                        transformStamped.transform.translation.z = odomMsg[lidx].pose.pose.position.z;
+
+                        // Set the rotation as a quaternion (identity quaternion in this example)
+                        transformStamped.transform.rotation.x = odomMsg[lidx].pose.pose.orientation.x;
+                        transformStamped.transform.rotation.y = odomMsg[lidx].pose.pose.orientation.y;
+                        transformStamped.transform.rotation.z = odomMsg[lidx].pose.pose.orientation.z;
+                        transformStamped.transform.rotation.w = odomMsg[lidx].pose.pose.orientation.w;
+
+                        // Broadcast the transform
+                        if (tmax != last_tmax)
                         {
-                            // Define a TransformStamped message
-                            geometry_msgs::TransformStamped transformStamped;
-                            
-                            // Populate the transform message
-                            transformStamped.header.stamp    = ros::Time(tmax);
-                            transformStamped.header.frame_id = "world";
-                            transformStamped.child_frame_id  = myprintf("lidar_%d", lidx);
-
-                            // Set the translation values
-                            transformStamped.transform.translation.x = odomMsg[lidx].pose.pose.position.x;
-                            transformStamped.transform.translation.y = odomMsg[lidx].pose.pose.position.y;
-                            transformStamped.transform.translation.z = odomMsg[lidx].pose.pose.position.z;
-
-                            // Set the rotation as a quaternion (identity quaternion in this example)
-                            transformStamped.transform.rotation.x = odomMsg[lidx].pose.pose.orientation.x;
-                            transformStamped.transform.rotation.y = odomMsg[lidx].pose.pose.orientation.y;
-                            transformStamped.transform.rotation.z = odomMsg[lidx].pose.pose.orientation.z;
-                            transformStamped.transform.rotation.w = odomMsg[lidx].pose.pose.orientation.w;
-
-                            // Broadcast the transform
                             br.sendTransform(transformStamped);
+                            last_tmax = tmax;
                         }
 
                         if (lidx == 0)
