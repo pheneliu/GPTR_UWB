@@ -1131,17 +1131,17 @@ void GPMLC::Evaluate(
     TicToc tt_slv;
 
     // Find the initial cost
-    Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
-    Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_init, problem);
-    Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
-    Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
+    // Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
+    // Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_init, problem);
+    // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
+    // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
     ceres::Solve(options, &problem, &summary);
 
-    Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
-    Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_final, problem);
-    Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
-    Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
+    // Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
+    // Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_final, problem);
+    // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
+    // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
 
     // Determine the factors to remove
     if (do_marginalization)

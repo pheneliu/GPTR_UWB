@@ -659,9 +659,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.12520432472229004
+      Pitch: 0.31979554891586304
       Target Frame: lidar_0
-      Yaw: 6.120534896850586
+      Yaw: 4.385533809661865
     Saved: ~
 Window Geometry:
   Displays:

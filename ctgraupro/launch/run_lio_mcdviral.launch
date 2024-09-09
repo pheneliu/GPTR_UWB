@@ -5,21 +5,21 @@
     <arg name="autorun" default="false" />
 
     <!-- Sequence -->
-    <!-- <arg name="sequence" default="ntu_day_01"/> -->
+    <arg name="sequence" default="ntu_day_01"/>
     <!-- <arg name="sequence" default="ntu_day_02"/> -->
-    <arg name="sequence" default="ntu_day_10"/>
+    <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
     <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/mcd_$(arg sequence)_lidars.bag"/>
                                      
     <!-- Initial start time of each sequence -->
-    <arg name="skipped_time" value="4"     if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="29"    if="$(eval 'ntu_day_01' in sequence)"/>
     <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="177.5" if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="203.0" if="$(eval 'ntu_day_02' in sequence)"/> -->
-    <arg name="skipped_time" value="88.0"   if="$(eval 'ntu_day_10' in sequence)"/>
+    <arg name="skipped_time" value="87.5"   if="$(eval 'ntu_day_10' in sequence)"/>
 
     <!-- Initial pose in each sequence -->
     <arg name="xyzypr_W_L0" value="[ 49.27, 107.37, 7.62, -41,  0, 0,
@@ -41,7 +41,7 @@
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
 
         <!-- Total number of clouds loaded -->
-        <param name="MAX_CLOUDS"      value="-1" />
+        <param name="MAX_CLOUDS"      value="400" />
         
         <!-- Time since first pointcloud to skip MAP Opt-->
         <param name="SKIPPED_TIME"    value="$(arg skipped_time)" />
@@ -79,8 +79,8 @@
         <param name="lidar_weight"   value="50.0"   />
 
         <!-- Motion prior factors -->
-        <param name="mpSigGa"        value="1.0"    />
-        <param name="mpSigNu"        value="1.0"    />
+        <param name="mpSigGa"        value="100.0"    />
+        <param name="mpSigNu"        value="100.0"    />
 
         <!-- Extrinsic factors -->
         <param name="xtSigGa"        value="1.0"    />
@@ -100,7 +100,7 @@
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"    value="20"     />
         <param name="SW_CLOUDSTEP"   value="1"      />
-        <param name="max_lidarcoefs" value="4000"   />
+        <param name="max_lidarcoefs" value="2000"   />
         <param name="XTRZ_DENSITY"   value="1"      />
         <param name="min_planarity"  value="0.5"    />
         <param name="max_plane_dis"  value="0.5"    />

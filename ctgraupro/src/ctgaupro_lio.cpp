@@ -903,7 +903,8 @@ int main(int argc, char **argv)
             for(int lidx = 0; lidx < Nlidar; lidx++)
             {
                 while(trajs[lidx]->getMaxTime() < tmax)
-                    trajs[lidx]->extendOneKnot();
+                    // trajs[lidx]->extendOneKnot();
+                    trajs[lidx]->extendOneKnot(trajs[lidx]->getKnot(trajs[lidx]->getNumKnots()-1));
             }
 
             // Estimation change
@@ -951,6 +952,7 @@ int main(int argc, char **argv)
                         swCloud[lidx][swIdx] = uniformDownsample<PointXYZIT>(cloudsx[lidx][idx], cloud_ds[lidx]);
                         ProcessCloud(gpmaplo[lidx], swCloud[lidx][swIdx], swCloudUndi[lidx][swIdx], swCloudUndiInW[lidx][swIdx], swCloudCoef[lidx][swIdx]);
 
+                        // printf("%f, %d, %d, %d, %d.\n", lidarWeightUpScale, idx, SW_END, SW_CLOUDSTEP, SW_CLOUDNUM);
                         // for(auto &coef : swCloudCoef[lidx][swIdx])
                         //     coef.plnrty *= (swIdx + 1);
                     }
@@ -1093,7 +1095,8 @@ int main(int argc, char **argv)
                         dX[lidx] = report.Xt[lidx].boxminus(report.X0[lidx]);
 
                     // Calculate the percentage change in lidar cost
-                    double dJLidarPerc = fabs(report.costs["LIDAR0"] - report.costs["LIDARK"])/report.costs["LIDAR0"]*100;
+                    // double dJLidarPerc = fabs(report.costs["LIDAR0"] - report.costs["LIDARK"])/report.costs["LIDAR0"]*100;
+                    double dJPerc = fabs(report.costs["J0"] - report.costs["JK"])/report.costs["J0"]*100;
 
                     // Check the dR, dP and other derivatives
                     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -1108,7 +1111,7 @@ int main(int argc, char **argv)
                     }
                     bool dXconv = dRconv && dOconv && dSconv && dPconv && dVconv && dAconv;
 
-                    if (dXconv && dJLidarPerc < 5.0)  // Increment the counter if all criterias are met
+                    if (dXconv && dJPerc < 5.0)  // Increment the counter if all criterias are met
                         convergence_count += 1;
                     else
                         convergence_count = 0;
@@ -1132,7 +1135,7 @@ int main(int argc, char **argv)
                     
                     string report_opt =
                         myprintf("%s"
-                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tinner: %.3f. Conv: %d, %d, %d, %d, %d, %d -> %d,\n"
+                                 "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tinner: %.3f. Conv: %d, %d, %d, %d, %d, %d. Count %d. dJ%: %f,\n"
                                  "TSTART: %.3f. TFIN: + %.3f. Tmin-Tmid-Tmax: +[%.3f, %.3f, %.3f]. Trun: %.3f.\n"
                                  "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
                                  "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
@@ -1141,7 +1144,7 @@ int main(int argc, char **argv)
                                  do_marginalization ? "" : KGRN,
                                  optnum, inner_iter, outer_iter,
                                  report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"], tt_inner_loop.Toc(),
-                                 dRconv, dOconv, dSconv, dPconv, dVconv, dAconv, convergence_count,
+                                 dRconv, dOconv, dSconv, dPconv, dVconv, dAconv, convergence_count, fabs(report.costs["J0"] - report.costs["JK"])/report.costs["J0"]*100,
                                  TSTART, TFINAL - TSTART, tmin - TSTART, tmid - TSTART, tmax - TSTART, (ros::Time::now() - programstart).toSec(),
                                  report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
                                  report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
@@ -1202,8 +1205,9 @@ int main(int argc, char **argv)
             }
 
             // Log the result every 10 seconds
-            double log_period = 10;
-            if((int(floor(tcloudStart(cidx) - TSTART)) % int(log_period) == 0 && tcloudStart(cidx) - last_logged_time >= 10.0) || last_logged_time == -1)
+            if((int(floor(tcloudStart(cidx) - TSTART)) % int(log_period) == 0
+                && tcloudStart(cidx) - last_logged_time >= 0.9*log_period)
+                || last_logged_time == -1)
             {
                 last_logged_time = tcloudStart(cidx);
 
