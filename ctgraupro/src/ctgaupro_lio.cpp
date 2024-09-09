@@ -100,6 +100,7 @@ int min_inner_iter = 3;
 int max_inner_iter = 5;
 int conv_thres = 3;
 vector<double> conv_dX_thres = {0.05, 0.2, 1.0, 0.05, 0.2, 1.0};
+vector<double> fast_osva_thres = {0.5, 3.0, 8.0, 5.0};
 
 vector<myTf<double>> T_B_Li_gndtr;
 
@@ -394,6 +395,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("min_inner_iter", min_inner_iter);
     nh_ptr->getParam("conv_thres", conv_thres);
     nh_ptr->getParam("conv_dX_thres", conv_dX_thres);
+    nh_ptr->getParam("fast_osva_thres", fast_osva_thres);
 
     // Location to save the logs
     nh_ptr->getParam("log_dir", log_dir);
@@ -869,8 +871,11 @@ int main(int argc, char **argv)
         // Check if loam has diverged
         bool loam_diverges = false;
 
-        // Slide the window
-        for(int cidx = outer_iter; cidx < cloudsx[0].size() - SW_CLOUDSTEP; cidx+= int(SW_CLOUDSTEP))
+        // Parameters controlling the slide
+        int cidx = outer_iter;
+        int SW_CLOUDSTEP_NOW = SW_CLOUDSTEP;
+        int SW_CLOUDSTEP_NXT = SW_CLOUDSTEP;
+        while(cidx < cloudsx[0].size() - SW_CLOUDSTEP)
         {
             // Check the skipping condition
             {
@@ -883,6 +888,11 @@ int main(int argc, char **argv)
                     if (tcloudSinceStart < SKIPPED_TIME)
                     {
                         printf("tcloudSinceStart %f. SKIPPED_TIME: %f. SKIPPING.\n", tcloudSinceStart, SKIPPED_TIME);
+                        
+                        SW_CLOUDSTEP_NXT = SW_CLOUDSTEP;
+                        cidx += SW_CLOUDSTEP_NOW;
+                        SW_CLOUDSTEP_NOW = SW_CLOUDSTEP_NXT;
+                        
                         continue;
                     }
                 }
@@ -890,7 +900,7 @@ int main(int argc, char **argv)
 
             int SW_BEG = cidx;
             int SW_END = min(cidx + SW_CLOUDNUM, int(cloudsx[0].size())-1);
-            int SW_MID = min(cidx + SW_CLOUDSTEP, int(cloudsx[0].size())-1);
+            int SW_MID = min(cidx + SW_CLOUDSTEP_NOW, int(cloudsx[0].size())-1);
 
             // The effective length of the sliding window by the number of point clouds
             int SW_CLOUDNUM_EFF = SW_END - SW_BEG;
@@ -903,8 +913,8 @@ int main(int argc, char **argv)
             for(int lidx = 0; lidx < Nlidar; lidx++)
             {
                 while(trajs[lidx]->getMaxTime() < tmax)
-                    // trajs[lidx]->extendOneKnot();
-                    trajs[lidx]->extendOneKnot(trajs[lidx]->getKnot(trajs[lidx]->getNumKnots()-1));
+                    trajs[lidx]->extendOneKnot();
+                    // trajs[lidx]->extendOneKnot(trajs[lidx]->getKnot(trajs[lidx]->getNumKnots()-1));
             }
 
             // Estimation change
@@ -1087,6 +1097,29 @@ int main(int argc, char **argv)
                 }
                 
 
+                // Check if the motion is fast to slow down the window sliding
+                bool fastMotion = false;
+                bool fastO = false; bool fastS = false; bool fastV = false; bool fastA = false;
+                // Check if we should reduce or increase the slide
+                for(int lidx = 0; lidx < Nlidar; lidx++)
+                {
+                    fastO = fastO || (fast_osva_thres[0] < 0 ? false : (trajs[lidx]->getKnotOmg(trajs[lidx]->getNumKnots()-1).norm() > fast_osva_thres[0]));
+                    fastS = fastS || (fast_osva_thres[1] < 0 ? false : (trajs[lidx]->getKnotAlp(trajs[lidx]->getNumKnots()-1).norm() > fast_osva_thres[1]));
+                    fastV = fastV || (fast_osva_thres[2] < 0 ? false : (trajs[lidx]->getKnotVel(trajs[lidx]->getNumKnots()-1).norm() > fast_osva_thres[2]));
+                    fastA = fastA || (fast_osva_thres[3] < 0 ? false : (trajs[lidx]->getKnotAcc(trajs[lidx]->getNumKnots()-1).norm() > fast_osva_thres[3]));
+                    // printf("OSVA: %f, %f, %f, %f\n",
+                    //         trajs[lidx]->getKnotOmg(trajs[lidx]->getNumKnots()-1).norm(),
+                    //         trajs[lidx]->getKnotAlp(trajs[lidx]->getNumKnots()-1).norm(),
+                    //         trajs[lidx]->getKnotVel(trajs[lidx]->getNumKnots()-1).norm(),
+                    //         trajs[lidx]->getKnotAcc(trajs[lidx]->getNumKnots()-1).norm());
+                }
+                fastMotion = fastO || fastS || fastV || fastA;
+                if(fastMotion)
+                    SW_CLOUDSTEP_NXT = 1;
+                else
+                    SW_CLOUDSTEP_NXT = SW_CLOUDSTEP;
+
+                
                 // Check the convergence criteria
                 bool dRconv = true, dOconv = true, dSconv = true, dPconv = true, dVconv = true, dAconv = true;
                 {
@@ -1124,8 +1157,7 @@ int main(int argc, char **argv)
                     }
                     // printf("CC: %d. Norm: %f\n", convergence_count, dX.block<3, 1>(9, 0).norm());
                 }
-
-
+    
                 // Make the report
                 if(report.ceres_iterations != -1)
                 {
@@ -1136,7 +1168,7 @@ int main(int argc, char **argv)
                     string report_opt =
                         myprintf("%s"
                                  "GPXOpt# %4d.%2d.%2d: CeresIter: %d. Tbd: %3.0f. Tslv: %.0f. Tinner: %.3f. Conv: %d, %d, %d, %d, %d, %d. Count %d. dJ%: %f,\n"
-                                 "TSTART: %.3f. TFIN: + %.3f. Tmin-Tmid-Tmax: +[%.3f, %.3f, %.3f]. Trun: %.3f.\n"
+                                 "TSTART: %.3f. TFIN: + %.3f. Tmin-Tmid-Tmax: +[%.3f, %.3f, %.3f]. Trun: %.3f. FAST_DERV: %d, %d, %d, %d. Slide: %d.\n"
                                  "Factor: MP2K: %3d, Cross: %4d. Ldr: %4d. MPri: %2d.\n"
                                  "J0: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
                                  "Jk: %12.3f. MP2k: %9.3f. Xtrs: %9.3f. LDR: %9.3f. MPri: %9.3f\n"
@@ -1146,6 +1178,7 @@ int main(int argc, char **argv)
                                  report.ceres_iterations, report.tictocs["t_ceres_build"], report.tictocs["t_ceres_solve"], tt_inner_loop.Toc(),
                                  dRconv, dOconv, dSconv, dPconv, dVconv, dAconv, convergence_count, fabs(report.costs["J0"] - report.costs["JK"])/report.costs["J0"]*100,
                                  TSTART, TFINAL - TSTART, tmin - TSTART, tmid - TSTART, tmax - TSTART, (ros::Time::now() - programstart).toSec(),
+                                 fastO, fastS, fastV, fastA, SW_CLOUDSTEP_NXT,
                                  report.factors["MP2K"], report.factors["GPXTRZ"], report.factors["LIDAR"], report.factors["PRIOR"],
                                  report.costs["J0"], report.costs["MP2K0"], report.costs["GPXTRZ0"], report.costs["LIDAR0"], report.costs["PRIOR0"],
                                  report.costs["JK"], report.costs["MP2KK"], report.costs["GPXTRZK"], report.costs["LIDARK"], report.costs["PRIORK"]);
@@ -1243,8 +1276,13 @@ int main(int argc, char **argv)
                 xts_logfile.close();
             }
 
+            // Exit if loam diverges
             if (loam_diverges)
                 break;
+
+            // Set the index for next step
+            cidx+= int(SW_CLOUDSTEP_NOW);
+            SW_CLOUDSTEP_NOW = SW_CLOUDSTEP_NXT;
         }
 
         if (loam_diverges)
