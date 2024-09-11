@@ -544,6 +544,13 @@ int main(int argc, char **argv)
 
         printf("Found %d pointclouds for %s topic\n", numClouds, lidar_topic[lidx].c_str());
 
+        // Generate random number to diversify downsampler
+        auto max_ds_it = std::max_element(cloud_ds.begin(), cloud_ds.end());
+        double max_ds = *max_ds_it;
+        std::random_device rd; 
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> offsetgen(-max_ds, max_ds);
+
         // Load the pcd files
         #pragma omp parallel for num_threads(MAX_THREADS)
         for(int cidx = 0; cidx < clouds[lidx].size(); cidx++)
@@ -580,7 +587,12 @@ int main(int argc, char **argv)
             PointOuster pf = cloudRaw->points.back();
 
             // Downsample the pointcloud
+            Vector3d offset(offsetgen(gen), offsetgen(gen), offsetgen(gen));
+            
+            // Transform all the points back to the original, downsample, then transform back
+            pcl::transformPointCloud(*cloudRaw, *cloudRaw, myTf<double>(Quaternf(1, 0, 0, 0),  offset).cast<float>().tfMat());
             cloudRaw = uniformDownsample<PointOuster>(cloudRaw, cloud_ds[lidx]);
+            pcl::transformPointCloud(*cloudRaw, *cloudRaw, myTf<double>(Quaternf(1, 0, 0, 0), -offset).cast<float>().tfMat());
 
             // Check if we should reinsert the first and last points
             if ( !(pb.x == cloudRaw->points.front().x
@@ -1037,7 +1049,8 @@ int main(int argc, char **argv)
             {
                 traj_curr_knots[lidx] = trajs[lidx]->getNumKnots();
                 while(trajs[lidx]->getMaxTime() < tmax)
-                    trajs[lidx]->extendOneKnot();
+                    // trajs[lidx]->extendOneKnot();
+                    trajs[lidx]->extendOneKnot(trajs[lidx]->getKnot(trajs[lidx]->getNumKnots()-1));
             }
 
             // Estimation change
@@ -1248,8 +1261,8 @@ int main(int argc, char **argv)
                 else
                     SW_CLOUDSTEP_NXT = SW_CLOUDSTEP;
 
-                if(fastR)
-                {
+                // if(fastR)
+                // {
                     // Constrain the pitch and roll to avoid losing track
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                         for(int kidx = traj_curr_knots[lidx]; kidx < trajs[lidx]->getNumKnots(); kidx++)
@@ -1278,7 +1291,7 @@ int main(int argc, char **argv)
                                 trajs[lidx]->getKnotAlp(kidx) *= 0;
                             }
                         }
-                }
+                // }
 
                 
                 // Check the convergence criteria
