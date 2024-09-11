@@ -13,7 +13,7 @@
     <arg name="lidar_bag_file" value="/home/tmn/DATASETS/ctgaupro/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
-    <arg name="skipped_time" value="379"   if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="429"   if="$(eval 'ntu_day_01' in sequence)"/>
     <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in sequence)"/> -->
@@ -87,7 +87,7 @@
         <param name="xtSigNu"         value="1.0"    />
 
         <!-- Loss function threshold -->
-        <param name="ld_loss_thres"   value="10.0"   />
+        <param name="ld_loss_thres"   value="-1.0"   />
         <param name="pp_loss_thres"   value="-1.0"   />
         <param name="mp_loss_thres"   value="10.0"   />
         <param name="xt_loss_thres"   value="10.0"   />
@@ -99,7 +99,7 @@
 
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"     />
-        <param name="SW_CLOUDSTEP"    value="4"      />
+        <param name="SW_CLOUDSTEP"    value="2"      />
         <param name="max_lidarcoefs"  value="2000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
