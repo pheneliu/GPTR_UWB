@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Lidar01/AssocCloud01
         - /Lidar01/Odom01/Shape1
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
@@ -95,7 +96,7 @@ Visualization Manager:
           Color: 58; 192; 255
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 114; 159; 207
           Min Color: 0; 0; 0
@@ -110,7 +111,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -123,7 +124,7 @@ Visualization Manager:
           Color: 252; 233; 79
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 252; 233; 79
           Min Color: 0; 0; 0
@@ -138,7 +139,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -151,7 +152,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: Intensity
           Decay Time: 0.30000001192092896
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -166,7 +167,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -177,12 +178,12 @@ Visualization Manager:
           Channel Name: intensity
           Class: rviz/PointCloud2
           Color: 29; 72; 255
-          Color Transformer: FlatColor
+          Color Transformer: Intensity
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
-          Max Color: 255; 255; 255
-          Min Color: 0; 0; 0
+          Max Color: 29; 72; 255
+          Min Color: 58; 192; 255
           Name: AssocCloud0
           Position Transformer: XYZ
           Queue Size: 1
@@ -643,7 +644,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 12.227083206176758
+      Distance: 12.55510139465332
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -651,17 +652,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 2.1433017253875732
-        Y: 1.216878890991211
-        Z: -2.999998092651367
+        X: 3.0516653060913086
+        Y: 3.0054149627685547
+        Z: -2.999999761581421
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.31979554891586304
+      Pitch: -0.15020500123500824
       Target Frame: lidar_0
-      Yaw: 4.385533809661865
+      Yaw: 4.888737201690674
     Saved: ~
 Window Geometry:
   Displays:

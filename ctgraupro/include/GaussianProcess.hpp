@@ -1112,6 +1112,35 @@ public:
         return SE3d(X.R, X.P);
     }
 
+    GPState<double> predictState(int steps)
+    {
+        SO3d Rc = R.back();
+        Vec3 Oc = O.back();
+        Vec3 Sc = S.back();
+        Vec3 Pc = P.back();
+        Vec3 Vc = V.back();
+        Vec3 Ac = A.back();
+        
+        for(int k = 0; k < steps; k++)
+        {
+            SO3d Rpred = Rc*SO3d::exp(dt*Oc + 0.5*dt*dt*Sc);
+            Vec3 Opred = Oc + dt*Sc;
+            Vec3 Spred = Sc;
+            Vec3 Ppred = Pc + dt*Vc + 0.5*dt*dt*Ac;
+            Vec3 Vpred = Vc + dt*Ac;
+            Vec3 Apred = Ac;
+
+            Rc = Rpred;
+            Oc = Opred;
+            Sc = Spred;
+            Pc = Ppred;
+            Vc = Vpred;
+            Ac = Apred;
+        }
+
+        return GPState<double>(getMaxTime() + steps*dt, Rc, Oc, Sc, Pc, Vc, Ac);
+    }
+
     inline SO3d &getKnotSO3(size_t kidx) { return R[kidx]; }
     inline Vec3 &getKnotOmg(size_t kidx) { return O[kidx]; }
     inline Vec3 &getKnotAlp(size_t kidx) { return S[kidx]; }

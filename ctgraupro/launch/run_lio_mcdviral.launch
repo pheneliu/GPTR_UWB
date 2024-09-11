@@ -10,10 +10,10 @@
     <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
-    <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/mcd_$(arg sequence)_lidars.bag"/>
+    <arg name="lidar_bag_file" value="/home/tmn/DATASETS/ctgaupro/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
-    <arg name="skipped_time" value="59"    if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="379"   if="$(eval 'ntu_day_01' in sequence)"/>
     <arg name="skipped_time" value="14"    if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in sequence)"/> -->
@@ -41,7 +41,7 @@
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
 
         <!-- Total number of clouds loaded -->
-        <param name="MAX_CLOUDS"      value="800" />
+        <param name="MAX_CLOUDS"      value="-1" />
         
         <!-- Time since first pointcloud to skip MAP Opt-->
         <param name="SKIPPED_TIME"    value="$(arg skipped_time)" />
@@ -83,37 +83,37 @@
         <param name="mpSigNu"         value="1.0"    />
 
         <!-- Extrinsic factors -->
-        <param name="xtSigGa"         value="1.0"    />
+        <param name="xtSigGa"         value="0.01"    />
         <param name="xtSigNu"         value="1.0"    />
 
         <!-- Loss function threshold -->
-        <param name="ld_loss_thres"   value="-1.0"   />
+        <param name="ld_loss_thres"   value="10.0"   />
         <param name="pp_loss_thres"   value="-1.0"   />
-        <param name="mp_loss_thres"   value="-1.0"   />
-        <param name="sm_loss_thres"   value="-1.0"   />
+        <param name="mp_loss_thres"   value="10.0"   />
+        <param name="xt_loss_thres"   value="10.0"   />
 
-        <param name="max_omg"         value="-20.0"  />
-        <param name="max_alp"         value="-10.0"  />
+        <param name="max_omg"         value="-20.0"   />
+        <param name="max_alp"         value="-40.0"   />
         <param name="max_vel"         value="-10.0"  />
         <param name="max_acc"         value="-5.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"     value="80"     />
-        <param name="SW_CLOUDSTEP"    value="20"      />
-        <param name="max_lidarcoefs"  value="4000"   />
+        <param name="SW_CLOUDNUM"     value="40"     />
+        <param name="SW_CLOUDSTEP"    value="4"      />
+        <param name="max_lidarcoefs"  value="2000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="min_inner_iter"  value="5"      />
+        <param name="min_inner_iter"  value="10"     />
         <param name="max_inner_iter"  value="40"     />
-        <param name="conv_thres"      value="3"      />
-        <param name="conv_dX_thres"   value="[0.05, 0.5, -1.0, 0.05, 0.5, 1.0]" type="yaml"/>
-        <param name="fast_osva_thres" value="[-0.5, 1.0, -8.0, 1.5]" type="yaml"/>
-        
-        <param name="fix_time_begin"  value="0.0"    />
+        <param name="conv_thres"      value="5"      />
+        <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0, 0.05, 0.5, 1.0 ]" type="yaml"/>
+        <param name="change_thres"    value="[ 15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
+
+        <param name="fix_time_begin"  value="0.25"    />
         <param name="fix_time_end"    value="0.0"    />
 
         <!-- Log dir -->

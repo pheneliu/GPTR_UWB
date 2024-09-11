@@ -15,7 +15,10 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
     nh->getParam("max_lidarcoefs", max_lidarcoefs);
 
     nh->getParam("lidar_weight", lidar_weight);
+    nh->getParam("ld_loss_thres", ld_loss_thres);
+    nh->getParam("xt_loss_thres", xt_loss_thres);
     nh->getParam("mp_loss_thres", mp_loss_thres);
+
 
     nh->getParam("max_omg", max_omg);
     nh->getParam("max_alp", max_alp);
@@ -180,8 +183,10 @@ void GPMLC::AddLidarFactors(
     const deque<vector<LidarCoef>> &cloudCoef,
     double tmin, double tmax)
 {
-    for (auto &Coef : cloudCoef)
+    for (int cidx = 0; cidx < cloudCoef.size(); cidx++)
     {
+        const vector<LidarCoef> &Coef = cloudCoef[cidx];
+
         for (auto &coef : Coef)
         {
             // Skip if lidar coef is not assigned
@@ -191,7 +196,7 @@ void GPMLC::AddLidarFactors(
                 continue;
 
             static int skip = 0; skip++;
-            if (skip % ds_rate != 0)
+            if (skip % ds_rate != 0 && cidx != cloudCoef.size()-1)
                 continue;
 
             auto   us = traj->computeTimeIndex(coef.t);
@@ -223,8 +228,8 @@ void GPMLC::AddLidarFactors(
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);
             }
             
-            double lidar_loss_thres = -1.0;
-            ceres::LossFunction *lidar_loss_function = lidar_loss_thres == -1 ? NULL : new ceres::HuberLoss(lidar_loss_thres);
+            // double lidar_loss_thres = -1.0;
+            ceres::LossFunction *lidar_loss_function = ld_loss_thres == -1 ? NULL : new ceres::HuberLoss(ld_loss_thres);
             ceres::CostFunction *cost_function = new GPPointToPlaneFactor(coef.f, coef.n, lidar_weight*coef.plnrty, traj->getGPMixerPtr(), s);
             auto res = problem.AddResidualBlock(cost_function, lidar_loss_function, factor_param_blocks);
 
@@ -361,7 +366,7 @@ void GPMLC::AddGPExtrinsicFactors(
             ROS_ASSERT(paramInfoMap.find(P_Lx_Ly.data()) != paramInfoMap.end());
             
             // Create the factors
-            // ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::LossFunction *xtz_loss_function = xt_loss_thres <= 0 ? NULL : new ceres::HuberLoss(xt_loss_thres);
             ceres::CostFunction *cost_function = new GPExtrinsicFactor(gpmextr, gpmx, gpmy, 1.0, ss, sf);
             auto res_block = problem.AddResidualBlock(cost_function, NULL, factor_param_blocks);
 
@@ -1002,7 +1007,7 @@ void GPMLC::Evaluate(
         // Only add extrinsic if there are multiple trajectories
         if (trajs.size() > 1)
             for(int lidx = 1; lidx < Nlidar; lidx++)
-                {  
+                {
                     // printf("Adding %x, %x extrinsic params\n", R_Lx_Ly[lidx].data(), P_Lx_Ly[lidx].data());
                     // Add the extrinsic params
                     problem.AddParameterBlock(R_Lx_Ly[lidx].data(), 4, new GPSO3dLocalParameterization());
