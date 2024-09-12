@@ -1414,7 +1414,8 @@ int main(int argc, char **argv)
             // Log the result every 10 seconds
             if((int(floor(tcloudStart(cidx) - TSTART)) % int(log_period) == 0
                 && tcloudStart(cidx) - last_logged_time >= 0.9*log_period)
-                || last_logged_time == -1)
+                || last_logged_time == -1
+                || (SW_END == cloudsx[0].size()-1 && converged))
             {
                 last_logged_time = tcloudStart(cidx);
 
