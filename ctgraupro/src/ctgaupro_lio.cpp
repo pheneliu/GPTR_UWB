@@ -102,6 +102,7 @@ int max_outer_iter = 3;
 int min_inner_iter = 3;
 int max_inner_iter = 5;
 int conv_thres = 3;
+double dJ_conv_thres = 5.0;
 vector<double> conv_dX_thres = {0.05, 0.2, 1.0, 0.05, 0.2, 1.0};
 vector<double> change_thres = {0.5, 3.0, 8.0, 5.0};
 
@@ -406,6 +407,7 @@ int main(int argc, char **argv)
     nh_ptr->getParam("max_inner_iter", max_inner_iter);
     nh_ptr->getParam("min_inner_iter", min_inner_iter);
     nh_ptr->getParam("conv_thres", conv_thres);
+    nh_ptr->getParam("dJ_conv_thres", dJ_conv_thres);
     nh_ptr->getParam("conv_dX_thres", conv_dX_thres);
     nh_ptr->getParam("change_thres", change_thres);
 
@@ -990,7 +992,7 @@ int main(int argc, char **argv)
     for(auto &lo : gpmaplo)
         trajs.push_back(lo->GetTraj());
 
-    vector<vector<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
+    vector<deque<geometry_msgs::PoseStamped>> extrinsic_poses(Nlidar);
 
     /* #endregion Create the LOAM modules ---------------------------------------------------------------------------*/
  
@@ -1119,24 +1121,26 @@ int main(int argc, char **argv)
                     printf(KRED"LOAM DIVERGES!" RESET);
                 }
 
+
                 // Log down the extrinsic estimate
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
-                    if (inner_iter >= max_inner_iter - 1 || converged)
-                    {
-                        SE3d se3 = gpmlc->GetExtrinsics(lidx);
-                        geometry_msgs::PoseStamped pose;
-                        pose.header.stamp = ros::Time(tmax);
-                        pose.header.frame_id = "lidar_0";
-                        pose.pose.position.x = se3.translation().x();
-                        pose.pose.position.y = se3.translation().y();
-                        pose.pose.position.z = se3.translation().z();
-                        pose.pose.orientation.x = se3.so3().unit_quaternion().x();
-                        pose.pose.orientation.y = se3.so3().unit_quaternion().y();
-                        pose.pose.orientation.z = se3.so3().unit_quaternion().z();
-                        pose.pose.orientation.w = se3.so3().unit_quaternion().w();
+                    SE3d se3 = gpmlc->GetExtrinsics(lidx);
+                    geometry_msgs::PoseStamped pose;
+                    pose.header.stamp = ros::Time(tmax);
+                    pose.header.frame_id = "lidar_0";
+                    pose.pose.position.x = se3.translation().x();
+                    pose.pose.position.y = se3.translation().y();
+                    pose.pose.position.z = se3.translation().z();
+                    pose.pose.orientation.x = se3.so3().unit_quaternion().x();
+                    pose.pose.orientation.y = se3.so3().unit_quaternion().y();
+                    pose.pose.orientation.z = se3.so3().unit_quaternion().z();
+                    pose.pose.orientation.w = se3.so3().unit_quaternion().w();
+
+                    if(extrinsic_poses[lidx].size() == 0)
                         extrinsic_poses[lidx].push_back(pose);
-                    }
+                    else if(extrinsic_poses[lidx].back().header.stamp.toSec() != tmax)
+                        extrinsic_poses[lidx].push_back(pose);
                 }
 
 
@@ -1318,7 +1322,7 @@ int main(int argc, char **argv)
                     }
                     bool dXconv = dRconv && dOconv && dSconv && dPconv && dVconv && dAconv;
 
-                    if (dXconv && dJPerc < 5.0)  // Increment the counter if all criterias are met
+                    if (dXconv && dJPerc < dJ_conv_thres)  // Increment the counter if all criterias are met
                         convergence_count += 1;
                     else
                         convergence_count = 0;
