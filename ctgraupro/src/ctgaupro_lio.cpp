@@ -1122,7 +1122,7 @@ int main(int argc, char **argv)
                 }
 
 
-                // Log down the extrinsic estimate
+                // Buffer the extrinsic estimate
                 for(int lidx = 0; lidx < Nlidar; lidx++)
                 {
                     SE3d se3 = gpmlc->GetExtrinsics(lidx);
@@ -1419,7 +1419,7 @@ int main(int argc, char **argv)
             if((int(floor(tcloudStart(cidx) - TSTART)) % int(log_period) == 0
                 && tcloudStart(cidx) - last_logged_time >= 0.9*log_period)
                 || last_logged_time == -1
-                || (SW_END == cloudsx[0].size()-1 && converged))
+                || (SW_END >= cloudsx[0].size() - SW_CLOUDSTEP))
             {
                 last_logged_time = tcloudStart(cidx);
 
