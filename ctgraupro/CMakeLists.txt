@@ -179,3 +179,9 @@ add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
 add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
+# visual-inertial calibration
+add_executable(${PROJECT_NAME}_gpvicalib src/GPVICalib.cpp src/GPMLC.cpp)
+add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpvicalib PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpvicalib ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
