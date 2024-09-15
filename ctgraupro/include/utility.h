@@ -1621,6 +1621,13 @@ struct TDOAData {
   TDOAData(double s, int idxA, int idxB, double r) : t(s), idA(idxA), idB(idxB), data(r) {};
 };
 
+struct CornerData {
+  const double t;         // Time stamp
+  const vector<int> id;
+  const vector<Eigen::Vector2d> proj;      // corner positions
+  CornerData(double s, vector<int> index, vector<Eigen::Vector2d> corner) : t(s), id(index), proj(corner) {};
+};
+
 struct IMUData {
   const double t;            // Time stamp
   const Eigen::Vector3d acc; // acceleration measurement

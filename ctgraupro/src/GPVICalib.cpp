@@ -27,18 +27,11 @@
 // Custom built utilities
 #include "utility.h"
 #include "GaussianProcess.hpp"
-#include "GPMUI.hpp"
+#include "GPMVICalib.hpp"
 
 using namespace std;
 
 boost::shared_ptr<ros::NodeHandle> nh_ptr;
-
-struct CornerData {
-  const double t;         // Time stamp
-  const vector<int> id;
-  const vector<Eigen::Vector2d> proj;      // corner positions
-  CornerData(double s, vector<int> index, vector<Eigen::Vector2d> corner) : t(s), id(index), proj(corner) {};
-};
 
 std::map<int, Eigen::Vector3d> getCornerPosition3D(const std::string& data_path)
 {
@@ -158,8 +151,8 @@ void getGT(const std::string &data_path, nav_msgs::Path &gt_path)
     std::cout << "loaded " << gt_path.poses.size() << " gt data" << std::endl;
 }
 
-typedef sensor_msgs::Imu  ImuMsg    ;
-typedef ImuMsg::ConstPtr  ImuMsgPtr ;
+// typedef sensor_msgs::Imu  ImuMsg    ;
+// typedef ImuMsg::ConstPtr  ImuMsgPtr ;
 // typedef cf_msgs::Tdoa     TdoaMsg   ;
 // typedef TdoaMsg::ConstPtr TdoaMsgPtr;
 // typedef cf_msgs::Tof      TofMsg    ;
@@ -218,17 +211,17 @@ struct CameraImuBuf
         return tmin;
     }
 
-    // double maxTime()
-    // {
-    //     double tmax = -std::numeric_limits<double>::infinity();
-    //     if (tdoaBuf.size() != 0 && fuse_tdoa)
-    //         tmax = max(tmax, tdoaBuf.back()->header.stamp.toSec());
-    //     if (tofBuf.size() != 0 && fuse_tof)
-    //         tmax = max(tmax, tofBuf.back()->header.stamp.toSec());
-    //     if (imuBuf.size() != 0 && fuse_imu)
-    //         tmax = max(tmax, imuBuf.back()->header.stamp.toSec());
-    //     return tmax;
-    // }
+    double maxTime()
+    {
+        double tmax = -std::numeric_limits<double>::infinity();
+        if (corner_data_cam0.size() != 0)
+            tmax = max(tmax, corner_data_cam0.back().t);
+        if (corner_data_cam1.size() != 0)
+            tmax = max(tmax, corner_data_cam1.back().t);
+        if (imu_data.size() != 0)
+            tmax = max(tmax, imu_data.back().t);
+        return tmax;
+    }
 
     // template<typename T>
     // void transferDataOneBuf(deque<T> &selfbuf, deque<T> &otherbuf, mutex &otherbufmtx, double tmax)
@@ -311,6 +304,7 @@ ros::Publisher gt_path_pub;
 ros::Publisher est_pub;
 ros::Publisher odom_pub;
 ros::Publisher knot_pub;
+ros::Publisher corner_pub;
 
 Eigen::Vector3d bg = Eigen::Vector3d::Zero();
 Eigen::Vector3d ba = Eigen::Vector3d::Zero();
@@ -319,15 +313,27 @@ const Eigen::Vector3d P_I_tag = Eigen::Vector3d(-0.012, 0.001, 0.091);
 bool if_save_traj;
 std::string traj_save_path;
 
-// void processData(GaussianProcessPtr traj, GPMUIPtr gpmui)
-// {
-//     // CameraImuBuf CIBuf;
+void publishCornerPos(std::map<int, Eigen::Vector3d> &corner_pos_3d)
+{
+    sensor_msgs::PointCloud2 corners_msg;
+    pcl::PointCloud<pcl::PointXYZ> pc_corners;
+    for (const auto& iter : corner_pos_3d) {
+        Eigen::Vector3d pos_i = iter.second;
+        pc_corners.points.push_back(pcl::PointXYZ(pos_i[0], pos_i[1], pos_i[2]));
+    }
+    pcl::toROSMsg(pc_corners, corners_msg);
+    corners_msg.header.stamp = ros::Time::now();
+    corners_msg.header.frame_id = "map";
+    corner_pub.publish(corners_msg);
+}
 
-//     // Loop and optimize
-//     // while(ros::ok())
-//     // {
-//         // Step 0: Check if there is data that can be admitted to the sw buffer
-//         double newMaxTime = traj->getMaxTime() + SLIDE_SIZE*gpDt;
+void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eigen::Vector3d> corner_pos_3d)
+{
+    // Loop and optimize
+    while(ros::ok())
+    {
+        // Step 0: Check if there is data that can be admitted to the sw buffer
+        double newMaxTime = CIBuf.maxTime();
 
 //         ros::Time timeout = ros::Time::now();
 //         // if(UIBuf.maxTime() < newMaxTime)
@@ -346,21 +352,21 @@ std::string traj_save_path;
 //         // Step 1: Extract the data to the local buffer
 //         // CIBuf.transferData(UIBuf, newMaxTime);
 
-//         // Step 2: Extend the trajectory
-//         if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
-//             traj->extendOneKnot();
-//         }
+        // Step 2: Extend the trajectory
+        if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
+            traj->extendOneKnot();
+        }
 
-//         // Step 3: Optimization
-//         TicToc tt_solve;          
-//         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE) + 1e-3;     // Start time of the sliding window
-//         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
-//         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
-//                                                // also determines the marginalization time limit          
-//         gpmui->Evaluate(traj, bg, ba, tmin, tmax, tmid, CIBuf.corner_data_cam0. CIBuf.corner_data_cam1, CIBuf.imu_data, 
-//                         anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
-//                         w_corner, GYR_N, ACC_N, GYR_W, ACC_W, corner_loss_thres, mp_loss_thres);
-//         tt_solve.Toc();
+        // Step 3: Optimization
+        TicToc tt_solve;          
+        double tmin = traj->getKnotTime(0) + 1e-3;     // Start time of the sliding window
+        double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
+        double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
+                                               // also determines the marginalization time limit          
+        gpmui->Evaluate(traj, bg, ba, tmin, tmax, tmid, CIBuf.corner_data_cam0, CIBuf.corner_data_cam1, CIBuf.imu_data, 
+                        corner_pos_3d, false, 
+                        w_corner, GYR_N, ACC_N, GYR_W, ACC_W, corner_loss_thres, mp_loss_thres);
+        tt_solve.Toc();
 
 //         // Step 4: Report, visualize
 //         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
@@ -411,7 +417,9 @@ std::string traj_save_path;
 //         odom_msg.pose.pose.orientation.z = est_ort.z();
 //         odom_pub.publish(odom_msg);             
 
-//         gt_path_pub.publish(gt_path);    
+        gt_path_pub.publish(gt_path);    
+        publishCornerPos(corner_pos_3d);
+        // break;
 
 //         // // Step 5: Slide the window forward
 //         // if (traj->getNumKnots() >= WINDOW_SIZE)
@@ -419,8 +427,9 @@ std::string traj_save_path;
 //         //     double removeTime = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE + SLIDE_SIZE);
 //         //     swUIBuf.slideForward(removeTime);
 //         // }
-//     // }
-// }
+    }
+    
+}
 
 void saveTraj(GaussianProcessPtr traj)
 {
@@ -515,6 +524,7 @@ int main(int argc, char **argv)
     gt_path_pub = nh_ptr->advertise<nav_msgs::Path>("/ground_truth_path", 10);
     est_pub  = nh_ptr->advertise<nav_msgs::Path>("/estimated_trajectory", 10);
     odom_pub = nh_ptr->advertise<nav_msgs::Odometry>("/estimated_pose", 10);
+    corner_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/corners", 10);
 
     est_path.header.frame_id = "map";
     gt_path.header.frame_id = "map";
@@ -534,7 +544,7 @@ int main(int argc, char **argv)
     
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
-    GPMUIPtr gpmui(new GPMUI(nh_ptr));
+    GPMVICalibPtr gpmui(new GPMVICalib(nh_ptr));
 
     double t0 = CIBuf.minTime();
     SE3d initial_pose;
@@ -563,12 +573,12 @@ int main(int argc, char **argv)
     // printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    // thread pdthread(processData, traj, gpmui);
+    thread pdthread(processData, traj, gpmui, corner_pos_3d);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);
     spinner.spin();
-    // pdthread.join();
+    pdthread.join();
     if (if_save_traj) {
         saveTraj(traj);
     }
