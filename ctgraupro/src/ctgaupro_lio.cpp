@@ -519,7 +519,7 @@ int main(int argc, char **argv)
     {
         // Specify the directory path
         string topic_dir = lidar_topic[lidx]; boost::replace_all(topic_dir, "/", "__");
-        string path = lidar_bag_file + topic_dir + "/";
+        string path = lidar_bag_file + "/clouds/" + topic_dir + "/";
 
         printf("Looking into %s\n", path.c_str());
         
@@ -534,10 +534,18 @@ int main(int argc, char **argv)
             }
         }
 
+        auto inferStamp = [](const fs::directory_entry &tstr) -> ros::Time
+        {
+            string tstr_ = tstr.path().filename().string();
+            boost::replace_all(tstr_, ".pcd", "");
+            vector<string> tstr_parts; boost::split(tstr_parts, tstr_, boost::is_any_of("."));
+            return ros::Time(stod(tstr_parts[0]), stoul(tstr_parts[1]));
+        };
         // Sort the files alphabetically by their path
         std::sort(pcd_files.begin(), pcd_files.end(), 
-                  [](const fs::directory_entry& a, const fs::directory_entry& b)
-                    { return a.path().string() < b.path().string();});
+                  [&inferStamp](const fs::directory_entry& a, const fs::directory_entry& b)
+                  { return inferStamp(a) < inferStamp(b); }
+                 );
 
         // Resize the buffer
         int numClouds = MAX_CLOUDS < 0 ? pcd_files.size() : MAX_CLOUDS;
@@ -560,10 +568,7 @@ int main(int argc, char **argv)
             string filename = pcd_files[cidx].path().string();
 
             // Infer the time stamp
-            string timestamp_ = pcd_files[cidx].path().filename().string(); boost::replace_all(timestamp_, ".pcd", "");
-            vector<string> timestamp_parts; boost::split(timestamp_parts, timestamp_, boost::is_any_of("."));
-            ROS_ASSERT_MSG(timestamp_parts.size() == 2, "time parts %d. timestamp_ %s.\n", timestamp_parts.size(), timestamp_.c_str());
-            ros::Time timestamp(stod(timestamp_parts[0]), stoul(timestamp_parts[1]));
+            ros::Time timestamp = inferStamp(pcd_files[cidx]);
 
             TicToc tt_read;
 
@@ -574,11 +579,6 @@ int main(int argc, char **argv)
             {
                 PCL_ERROR("Couldn't read file %s\n", filename.c_str());
                 exit(-1);
-            }
-            else
-            {
-                if (cidx % 100 == 0)
-                    printf("Loading file %s at time %f. CIDX: %05d. Read Time: %f\n", filename.c_str(), timestamp.toSec(), cidx, tt_read.Toc());
             }
 
             double sweeptime = (cloudRaw->points.back().t - cloudRaw->points.front().t)/1e9;
@@ -631,148 +631,16 @@ int main(int argc, char **argv)
                 po.z = pi.z;
                 po.t = pi.t/1.0e9 + timebase;
                 po.intensity = pi.intensity;
+
+                // printf("t: %f, %f, %f, %f\n", po.t, po.x, po.y, po.z);
             }
+
+            if (cidx % 100 == 0)
+                printf("Loading file %s at time %f. CIDX: %05d. Read Time: %f. Time: %f -> %f.\n",
+                        filename.c_str(), timestamp.toSec(), cidx, tt_read.Toc(), 
+                        clouds[lidx][cidx]->points.front().t, clouds[lidx][cidx]->points.back().t);
         }
     }
-
-    // // Load the bag file
-    // rosbag::Bag lidar_bag;
-    // lidar_bag.open(lidar_bag_file);
-    // rosbag::View view(lidar_bag, rosbag::TopicQuery(queried_topics));
-
-    // // Load the message
-    // for (rosbag::MessageInstance const m : view)
-    // {
-    //     sensor_msgs::PointCloud2::ConstPtr pcMsgOuster = m.instantiate<sensor_msgs::PointCloud2>();
-    //     livox_ros_driver::CustomMsg::ConstPtr pcMsgLivox = m.instantiate<livox_ros_driver::CustomMsg>();
-    //     tf2_msgs::TFMessage::ConstPtr gndtrMsg = m.instantiate<tf2_msgs::TFMessage>();
-    //     RosImuPtr imuMsg = m.instantiate<sensor_msgs::Imu>();
-
-    //     CloudXYZITPtr cloud(new CloudXYZIT());
-    //     ros::Time stamp;
-
-    //     string topic = m.getTopic();
-    //     int lidx = pctopicidx.find(topic) == pctopicidx.end() ? -1 : pctopicidx[topic];
-    //     int NpointRaw = 0;
-    //     int NpointDS = 0;
-
-    //     // Copy the ground truth
-    //     if (gndtrMsg != nullptr && topic == "/tf")
-    //     {
-    //         tf2_msgs::TFMessage msg = *gndtrMsg;
-    //         gndtr.push_back(msg);
-    //         continue;
-    //     }
-
-    //     if (pcMsgOuster != nullptr && lidar_type[lidx] == "ouster")
-    //     {
-    //         CloudOusterPtr cloud_raw(new CloudOuster());
-    //         pcl::fromROSMsg(*pcMsgOuster, *cloud_raw);
-
-    //         // Find the time stamp
-    //         double sweeptime = (cloud_raw->points.back().t - cloud_raw->points.front().t)/1e9;
-    //         double timebase = stamp_time[lidx] == "start" ? pcMsgOuster->header.stamp.toSec() : pcMsgOuster->header.stamp.toSec() - sweeptime;
-    //         stamp = ros::Time(timebase);
-
-    //         NpointRaw = cloud_raw->size();
-
-    //         // Downsample the pointcloud
-    //         CloudOusterPtr cloud_raw_ds = uniformDownsample<PointOuster>(cloud_raw, cloud_ds[lidx]);
-
-    //         auto copyPoint = [](PointOuster &pi, PointXYZIT &po, double timebase) -> void
-    //         {
-    //             po.x = pi.x;
-    //             po.y = pi.y;
-    //             po.z = pi.z;
-    //             po.t = timebase + pi.t/1.0e9;
-    //             po.intensity = pi.intensity;
-    //         };
-
-    //         cloud->resize(cloud_raw_ds->size()+2);
-    //         #pragma omp parallel for num_threads(MAX_THREADS)
-    //         for(int pidx = 0; pidx < cloud_raw_ds->size(); pidx++)
-    //             copyPoint(cloud_raw_ds->points[pidx], cloud->points[pidx + 1], timebase);
-
-    //         copyPoint(cloud_raw->points.front(), cloud->points.front(), timebase);
-    //         copyPoint(cloud_raw->points.back(), cloud->points.back(), timebase);
-
-    //         NpointDS = cloud->size();
-
-    //     }
-    //     else if (pcMsgLivox != nullptr && lidar_type[lidx] == "livox")
-    //     {
-    //         NpointRaw = pcMsgLivox->point_num;
-            
-    //         // Find the time stamp
-    //         double sweeptime = (pcMsgLivox->points.back().offset_time - pcMsgLivox->points.front().offset_time)/1e9;
-    //         double timebase = stamp_time[lidx] == "start" ? pcMsgLivox->header.stamp.toSec() : pcMsgLivox->header.stamp.toSec() - sweeptime;
-    //         stamp = ros::Time(timebase);
-
-    //         auto copyPoint = [](const livox_ros_driver::CustomPoint &pi, PointXYZIT &po, double timebase) -> void
-    //         {
-    //             po.x = pi.x;
-    //             po.y = pi.y;
-    //             po.z = pi.z;
-    //             po.t = timebase + pi.offset_time/1.0e9;
-    //             po.intensity = pi.reflectivity/255.0*1000;
-    //         };
-
-    //         CloudXYZITPtr cloud_temp(new CloudXYZIT());
-    //         cloud_temp->resize(pcMsgLivox->point_num);
-    //         #pragma omp parallel for num_threads(MAX_THREADS)
-    //         for(int pidx = 0; pidx < pcMsgLivox->point_num; pidx++)
-    //             copyPoint(pcMsgLivox->points[pidx], cloud_temp->points[pidx], timebase);
-
-    //         // Downsample
-    //         CloudXYZITPtr cloud_temp_ds = uniformDownsample<PointXYZIT>(cloud_temp, cloud_ds[lidx]);
-            
-    //         // Copy data to final container
-    //         cloud->resize(cloud_temp_ds->size()+2);
-
-    //         #pragma omp parallel for num_threads(MAX_THREADS)
-    //             for(int pidx = 0; pidx < cloud_temp_ds->size(); pidx++)
-    //                 cloud->points[pidx + 1] = cloud_temp_ds->points[pidx];
-
-    //         cloud->points.front() = cloud_temp->points.front();
-    //         cloud->points.back() = cloud_temp->points.back();
-
-    //         NpointDS = cloud->size();
-    //     }
-
-    //     // Extract the imu data
-    //     int iidx = imutopicidx.find(topic) == imutopicidx.end() ? -1 : imutopicidx[topic];
-    //     if(imuMsg != nullptr && iidx >= 0 && iidx < Nimu)
-    //         imus[iidx].push_back(imuMsg);
-        
-    //     // Save the pointcloud if it has data
-    //     if (cloud->size() != 0)
-    //     {
-    //         clouds[lidx].push_back(cloud);
-    //         cloudstamp[lidx].push_back(stamp);
-
-    //         static vector<int> count(Nlidar, 0);
-
-    //         if (count[lidx] == 0 || clouds[lidx].size() - count[lidx] >= 100)
-    //         {
-    //             printf("Loading pointcloud from lidar %d at time: %.3f, %.3f. Cloud total: %5d. Cloud size: %6d / %6d. Topic: %s.\r",
-    //                     lidx,
-    //                     cloudstamp[lidx].back().toSec(),
-    //                     clouds[lidx].back()->points.front().t,
-    //                     clouds[lidx].size(), NpointRaw, NpointDS, lidar_topic[lidx].c_str());
-    //             cout << endl;
-    //             count[lidx] = clouds[lidx].size();
-    //         }
-
-    //         // Confirm the time correctness
-    //         ROS_ASSERT_MSG(fabs(cloudstamp[lidx].back().toSec() - clouds[lidx].back()->points.front().t) < 1e-9,
-    //                        "Time: %f, %f.",
-    //                        cloudstamp[lidx].back().toSec(), clouds[lidx].back()->points.front().t);
-    //     }
-
-    //     // Check if pointcloud is sufficient
-    //     if (MAX_CLOUDS > 0 && clouds.front().size() >= MAX_CLOUDS)
-    //         break;
-    // }
 
     /* #endregion Load the data -------------------------------------------------------------------------------------*/
  
@@ -780,42 +648,63 @@ int main(int argc, char **argv)
 
     vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
-    for(auto &cloud : gndtrCloud)
-    {
-        cloud = CloudPosePtr(new CloudPose());
-        cloud->clear();
-    }
+    // for(auto &cloud : gndtrCloud)
+    // {
+    //     cloud = CloudPosePtr(new CloudPose());
+    //     cloud->clear();
+    // }
     
-    // Add points to gndtr Cloud
-    for(auto &msg : gndtr)
-    {
-        for (auto &tf : msg.transforms)
-        {
-            int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
-            if (lidar_id >= Nlidar)
-            {
-                printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
-                continue;
-            }
+    // // Add points to gndtr Cloud
+    // for(auto &msg : gndtr)
+    // {
+    //     for (auto &tf : msg.transforms)
+    //     {
+    //         int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
+    //         if (lidar_id >= Nlidar)
+    //         {
+    //             printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
+    //             continue;
+    //         }
 
-            // Copy the pose to the cloud
-            PointPose pose;
-            pose.t = tf.header.stamp.toSec();
-            pose.x = tf.transform.translation.x;
-            pose.y = tf.transform.translation.y;
-            pose.z = tf.transform.translation.z;
-            pose.qx = tf.transform.rotation.x;
-            pose.qy = tf.transform.rotation.y;
-            pose.qz = tf.transform.rotation.z;
-            pose.qw = tf.transform.rotation.w;
-            gndtrCloud[lidar_id]->push_back(pose);
+    //         // Copy the pose to the cloud
+    //         PointPose pose;
+    //         pose.t = tf.header.stamp.toSec();
+    //         pose.x = tf.transform.translation.x;
+    //         pose.y = tf.transform.translation.y;
+    //         pose.z = tf.transform.translation.z;
+    //         pose.qx = tf.transform.rotation.x;
+    //         pose.qy = tf.transform.rotation.y;
+    //         pose.qz = tf.transform.rotation.z;
+    //         pose.qw = tf.transform.rotation.w;
+    //         gndtrCloud[lidar_id]->push_back(pose);
             
-            // Save the time stamps
-            gndtr_ts[lidar_id].push_back(pose.t);
+    //         // Save the time stamps
+    //         gndtr_ts[lidar_id].push_back(pose.t);
+    //     }
+    // }
+    // for(auto &cloud : gndtrCloud)
+    //     printf("GNDTR cloud size: %d point(s)\n");
+
+    vector<fs::directory_entry> gtr_files;
+    if(fs::exists(lidar_bag_file + "/gtr") && fs::is_directory(lidar_bag_file + "/gtr"))
+    {
+        // Iterate through the directory and add .pcd files to the vector
+        for (const auto& entry : fs::directory_iterator(lidar_bag_file + "/gtr"))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".pcd") 
+                gtr_files.push_back(entry);
         }
     }
-    for(auto &cloud : gndtrCloud)
-        printf("GNDTR cloud size: %d point(s)\n");
+
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        gndtrCloud[lidx] = CloudPosePtr(new CloudPose());
+        if(lidx < gtr_files.size())
+        {
+            pcl::io::loadPCDFile<PointPose>(gtr_files[lidx].path().string(), *gndtrCloud[lidx]);
+            printf("GNDTR cloud size: %d point(s)\n");
+        }
+    }
 
     // Create thread for visualizing groundtruth
     thread vizGtr = thread(VisualizeGndtr, std::ref(gndtrCloud));
@@ -845,6 +734,7 @@ int main(int argc, char **argv)
     // Split the secondary point clouds by the primary pointcloud
     double TSTART = clouds.front().front()->points.front().t;
     double TFINAL = clouds.front().back()->points.back().t;
+    printf("TSTART, TFINAL: %f, %f\n", TSTART, TFINAL);
 
     auto tcloudStart = [&TSTART, &deltaT](int cidx) -> double
     {
@@ -856,7 +746,7 @@ int main(int argc, char **argv)
         return TSTART + cidx*deltaT + deltaT;
     };
 
-    auto splitCloud = [&tcloudStart, &tcloudFinal, &tcloudFinal](double tstart, double tfinal, double dt, vector<CloudXYZITPtr> &cloudsIn, vector<CloudXYZITPtr> &cloudsOut) -> void
+    auto splitCloud = [&tcloudStart, &tcloudFinal](double tstart, double tfinal, double dt, vector<CloudXYZITPtr> &cloudsIn, vector<CloudXYZITPtr> &cloudsOut) -> void
     {
 
         // Create clouds in cloudsOut
@@ -873,14 +763,20 @@ int main(int argc, char **argv)
         {
             for(auto &point : cloud->points)
             {
-                if (point.t < tstart || point.t >= tfinal)
+                if (point.t < tstart || point.t > tfinal)
                     continue;
+
+                // if (point.t < (tstart + 1e-3))
+                //     point.t = tstart;
+
+                // if (point.t > (tfinal - 1e-3))
+                //     point.t = tfinal;
 
                 // Find the cloudOut index
                 int cidx = int(std::floor((point.t - tstart)/dt));
-                ROS_ASSERT_MSG(tcloudStart(cidx) <= point.t && point.t <= tcloudFinal(cidx),
-                               "point.t: %f. cidx: %d. dt: %f. tcoutstart: %f. tcoutfinal: %f",
-                                point.t, cidx, dt, tcloudStart(cidx), tcloudFinal(cidx));
+                // ROS_ASSERT_MSG(tcloudStart(cidx) <= point.t && point.t <= tcloudFinal(cidx),
+                //                "point.t: %f. cidx: %d. dt: %f. tcoutstart: %f. tcoutfinal: %f",
+                //                 point.t, cidx, dt, tcloudStart(cidx), tcloudFinal(cidx));
                 ROS_ASSERT_MSG(cidx < cloudsOut.size(), "%d, %d, %f, %f, %f\n", cidx, cloudsOut.size(), point.t, tstart, tfinal);
                 // ROS_ASSERT_MSG(coutidx < cloudsOut.size(), "%d %d. %f, %f, %f\n", coutidx, cloudsOut.size(), point.t, tfinal, tstart + cloudsOut.size()*dt);
                 cloudsOut[cidx]->push_back(point);
@@ -891,7 +787,11 @@ int main(int argc, char **argv)
 
     vector<vector<CloudXYZITPtr>> cloudsx(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
         splitCloud(TSTART, TFINAL, deltaT, clouds[lidx], cloudsx[lidx]);
+        printf("Split cloud: %d -> %d\n", clouds[lidx].size(), cloudsx[lidx].size());
+    }
+
 
     // Check for empty cloud and fill in place holders
     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -1268,33 +1168,33 @@ int main(int argc, char **argv)
                 // if(fastR)
                 // {
                     // Constrain the pitch and roll to avoid losing track
-                    for(int lidx = 0; lidx < Nlidar; lidx++)
-                        for(int kidx = traj_curr_knots[lidx]; kidx < trajs[lidx]->getNumKnots(); kidx++)
-                        {
-                            Vec3 ypr = Util::Quat2YPR(trajs[lidx]->getKnotSO3(kidx).unit_quaternion());
+                    // for(int lidx = 0; lidx < Nlidar; lidx++)
+                    //     for(int kidx = traj_curr_knots[lidx]; kidx < trajs[lidx]->getNumKnots(); kidx++)
+                    //     {
+                    //         Vec3 ypr = Util::Quat2YPR(trajs[lidx]->getKnotSO3(kidx).unit_quaternion());
 
-                            // If new pitch and roll angles change suddenly, saturate them at 10 degrees
-                            if (fabs(ypr(1)) > 10.0)
-                            {
-                                printf("Resetting pitch of %d traj from %f to ", lidx, ypr(1));
-                                ypr(1) = 0;//ypr(1)/fabs(ypr(1))*10;
-                                printf("%f\n", ypr(1));
-                                trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
-                                trajs[lidx]->getKnotOmg(kidx) *= 0;
-                                trajs[lidx]->getKnotAlp(kidx) *= 0;
+                    //         // If new pitch and roll angles change suddenly, saturate them at 10 degrees
+                    //         if (fabs(ypr(1)) > 10.0)
+                    //         {
+                    //             printf("Resetting pitch of %d traj from %f to ", lidx, ypr(1));
+                    //             ypr(1) = 0;//ypr(1)/fabs(ypr(1))*10;
+                    //             printf("%f\n", ypr(1));
+                    //             trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
+                    //             trajs[lidx]->getKnotOmg(kidx) *= 0;
+                    //             trajs[lidx]->getKnotAlp(kidx) *= 0;
                                 
-                            }
+                    //         }
                                 
-                            if (fabs(ypr(2)) > 10.0)
-                            {
-                                printf("Resetting roll %d traj from %f to ", lidx, ypr(2));
-                                ypr(2) = 0;//ypr(2)/fabs(ypr(2))*10;
-                                printf("%f\n", ypr(2));
-                                trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
-                                trajs[lidx]->getKnotOmg(kidx) *= 0;
-                                trajs[lidx]->getKnotAlp(kidx) *= 0;
-                            }
-                        }
+                    //         if (fabs(ypr(2)) > 10.0)
+                    //         {
+                    //             printf("Resetting roll %d traj from %f to ", lidx, ypr(2));
+                    //             ypr(2) = 0;//ypr(2)/fabs(ypr(2))*10;
+                    //             printf("%f\n", ypr(2));
+                    //             trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
+                    //             trajs[lidx]->getKnotOmg(kidx) *= 0;
+                    //             trajs[lidx]->getKnotAlp(kidx) *= 0;
+                    //         }
+                    //     }
                 // }
 
                 

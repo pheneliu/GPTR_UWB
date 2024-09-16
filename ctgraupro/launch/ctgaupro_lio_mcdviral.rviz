@@ -28,7 +28,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: PriorMap
+    SyncSource: GPCtrlPoints
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -644,7 +644,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 12.55510139465332
+      Distance: 13.659651756286621
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -652,17 +652,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 3.0516653060913086
-        Y: 3.0054149627685547
-        Z: -2.999999761581421
+        X: -1.8923959732055664
+        Y: 1.2673118114471436
+        Z: -2.9999969005584717
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.15020500123500824
+      Pitch: 0.41479501128196716
       Target Frame: lidar_0
-      Yaw: 4.888737201690674
+      Yaw: 3.863734483718872
     Saved: ~
 Window Geometry:
   Displays:

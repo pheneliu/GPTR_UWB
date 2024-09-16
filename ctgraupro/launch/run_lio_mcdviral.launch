@@ -5,16 +5,16 @@
     <arg name="autorun" default="false" />
 
     <!-- Sequence -->
-    <arg name="sequence" default="ntu_day_01"/>
-    <!-- <arg name="sequence" default="ntu_day_02"/> -->
+    <!-- <arg name="sequence" default="ntu_day_01"/> -->
+    <arg name="sequence" default="ntu_day_02"/>
     <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
     <arg name="lidar_bag_file" value="/home/tmn/DATASETS/ctgaupro/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
-    <arg name="skipped_time" value="4"   if="$(eval 'ntu_day_01' in sequence)"/>
-    <arg name="skipped_time" value="224" if="$(eval 'ntu_day_02' in sequence)"/>
+    <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="13" if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="42"    if="$(eval 'ntu_day_02' in sequence)"/> -->
     <!-- <arg name="skipped_time" value="177.5" if="$(eval 'ntu_day_02' in sequence)"/> -->
@@ -59,7 +59,7 @@
         <!-- <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" /> -->
 
         <!-- Set to 1 to load the search for previous logs and redo -->
-        <param name="resume_from_log" value="[1, 1]" type="yaml"/>
+        <param name="resume_from_log" value="[0, 0]" type="yaml"/>
 
         <!-- Initial pose of each lidars-->
         <param name="xyzypr_W_L0"     value="$(arg xyzypr_W_L0)" type="yaml"/>
@@ -107,15 +107,15 @@
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="min_inner_iter"  value="3"      />
-        <param name="max_inner_iter"  value="3"      />
-        <param name="conv_thres"      value="3"      />
+        <param name="min_inner_iter"  value="10"      />
+        <param name="max_inner_iter"  value="40"      />
+        <param name="conv_thres"      value="5"      />
         <param name="dJ_conv_thres"   value="10"     />
         <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0, 0.05, 0.5, 1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ 15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
         <param name="fix_time_begin"  value="0.25"   />
-        <param name="fix_time_end"    value="0.25"    />
+        <param name="fix_time_end"    value="0.0"    />
 
         <!-- Log dir -->
         <param name="log_period"     value="5.0"     />
