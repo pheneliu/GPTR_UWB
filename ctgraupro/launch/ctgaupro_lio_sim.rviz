@@ -5,7 +5,11 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Lidar01
+        - /Lidar01/GPCtrlPoints1
         - /Lidar01/Odom01/Shape1
+        - /Lidar11
+        - /Lidar11/GPCtrlPoints1
         - /Lidar11/Odom11
         - /Lidar11/Odom11/Shape1
         - /Marker1/Namespaces1
@@ -273,7 +277,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.10000000149011612
+          Size (m): 0.07000000029802322
           Style: Spheres
           Topic: /lidar_0/gp_traj
           Unreliable: false
@@ -536,7 +540,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.10000000149011612
+          Size (m): 0.07000000029802322
           Style: Spheres
           Topic: /lidar_1/gp_traj
           Unreliable: false
@@ -644,7 +648,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 5.145273685455322
+      Distance: 5.472671031951904
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -652,17 +656,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -1.0534693002700806
-        Y: 1.7574416399002075
-        Z: -2.384185791015625e-07
+        X: 0.4675486087799072
+        Y: -0.6099408864974976
+        Z: -1.1920928955078125e-07
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3453982472419739
+      Pitch: 0.10979793965816498
       Target Frame: world
-      Yaw: 2.4203927516937256
+      Yaw: 5.108589172363281
     Saved: ~
 Window Geometry:
   Displays:

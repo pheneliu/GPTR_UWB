@@ -85,8 +85,8 @@
         <param name="max_acc"         value="-5.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"     value="40"     />
-        <param name="SW_CLOUDSTEP"    value="05"     />
+        <param name="SW_CLOUDNUM"     value="60"     />
+        <param name="SW_CLOUDSTEP"    value="08"     />
         <param name="max_lidarcoefs"  value="1000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
@@ -94,9 +94,9 @@
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="min_inner_iter"  value="3"      />
+        <param name="min_inner_iter"  value="2"      />
         <param name="max_inner_iter"  value="40"     />
-        <param name="conv_thres"      value="3"      />
+        <param name="conv_thres"      value="2"      />
         <param name="dJ_conv_thres"   value="10"     />
         <param name="conv_dX_thres"   value="[ -0.05, -0.5, -1.0, -0.05, -0.5, -1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ -15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>

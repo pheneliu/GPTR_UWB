@@ -519,7 +519,7 @@ int main(int argc, char **argv)
     {
         // Specify the directory path
         string topic_dir = lidar_topic[lidx]; boost::replace_all(topic_dir, "/", "__");
-        string path = lidar_bag_file + topic_dir + "/";
+        string path = lidar_bag_file + "/clouds/" + topic_dir + "/";
 
         printf("Looking into %s\n", path.c_str());
         
@@ -648,42 +648,63 @@ int main(int argc, char **argv)
 
     vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
-    for(auto &cloud : gndtrCloud)
-    {
-        cloud = CloudPosePtr(new CloudPose());
-        cloud->clear();
-    }
+    // for(auto &cloud : gndtrCloud)
+    // {
+    //     cloud = CloudPosePtr(new CloudPose());
+    //     cloud->clear();
+    // }
     
-    // Add points to gndtr Cloud
-    for(auto &msg : gndtr)
-    {
-        for (auto &tf : msg.transforms)
-        {
-            int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
-            if (lidar_id >= Nlidar)
-            {
-                printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
-                continue;
-            }
+    // // Add points to gndtr Cloud
+    // for(auto &msg : gndtr)
+    // {
+    //     for (auto &tf : msg.transforms)
+    //     {
+    //         int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
+    //         if (lidar_id >= Nlidar)
+    //         {
+    //             printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
+    //             continue;
+    //         }
 
-            // Copy the pose to the cloud
-            PointPose pose;
-            pose.t = tf.header.stamp.toSec();
-            pose.x = tf.transform.translation.x;
-            pose.y = tf.transform.translation.y;
-            pose.z = tf.transform.translation.z;
-            pose.qx = tf.transform.rotation.x;
-            pose.qy = tf.transform.rotation.y;
-            pose.qz = tf.transform.rotation.z;
-            pose.qw = tf.transform.rotation.w;
-            gndtrCloud[lidar_id]->push_back(pose);
+    //         // Copy the pose to the cloud
+    //         PointPose pose;
+    //         pose.t = tf.header.stamp.toSec();
+    //         pose.x = tf.transform.translation.x;
+    //         pose.y = tf.transform.translation.y;
+    //         pose.z = tf.transform.translation.z;
+    //         pose.qx = tf.transform.rotation.x;
+    //         pose.qy = tf.transform.rotation.y;
+    //         pose.qz = tf.transform.rotation.z;
+    //         pose.qw = tf.transform.rotation.w;
+    //         gndtrCloud[lidar_id]->push_back(pose);
             
-            // Save the time stamps
-            gndtr_ts[lidar_id].push_back(pose.t);
+    //         // Save the time stamps
+    //         gndtr_ts[lidar_id].push_back(pose.t);
+    //     }
+    // }
+    // for(auto &cloud : gndtrCloud)
+    //     printf("GNDTR cloud size: %d point(s)\n");
+
+    vector<fs::directory_entry> gtr_files;
+    if(fs::exists(lidar_bag_file + "/gtr") && fs::is_directory(lidar_bag_file + "/gtr"))
+    {
+        // Iterate through the directory and add .pcd files to the vector
+        for (const auto& entry : fs::directory_iterator(lidar_bag_file + "/gtr"))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".pcd") 
+                gtr_files.push_back(entry);
         }
     }
-    for(auto &cloud : gndtrCloud)
-        printf("GNDTR cloud size: %d point(s)\n");
+
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        gndtrCloud[lidx] = CloudPosePtr(new CloudPose());
+        if(lidx < gtr_files.size())
+        {
+            pcl::io::loadPCDFile<PointPose>(gtr_files[lidx].path().string(), *gndtrCloud[lidx]);
+            printf("GNDTR cloud size: %d point(s)\n");
+        }
+    }
 
     // Create thread for visualizing groundtruth
     thread vizGtr = thread(VisualizeGndtr, std::ref(gndtrCloud));
@@ -713,7 +734,6 @@ int main(int argc, char **argv)
     // Split the secondary point clouds by the primary pointcloud
     double TSTART = clouds.front().front()->points.front().t;
     double TFINAL = clouds.front().back()->points.back().t;
-
     printf("TSTART, TFINAL: %f, %f\n", TSTART, TFINAL);
 
     auto tcloudStart = [&TSTART, &deltaT](int cidx) -> double
