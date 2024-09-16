@@ -133,13 +133,8 @@ void getCameraModel(const std::string& data_path, CameraCalibration &cam_calib)
         DoubleSphereCamera<double> intr;
         intr.setFromInit(fx, fy, cx, cy, xi, alpha);
         cam_calib.intrinsics.push_back(intr);
-
-        // double w,v;
-        // w = resolution[i][0];
-        // w = resolution[i]["w"];
     }
 
-    // std::cout << "22222222222 " << Eigen::Vector3d(x, y, z).transpose() << std::endl;
 }
 
 void getIMUMeasurements(const std::string &data_path, vector<IMUData> &imu_meas)
@@ -205,13 +200,6 @@ void getGT(const std::string &data_path, nav_msgs::Path &gt_path)
     std::cout << "loaded " << gt_path.poses.size() << " gt data" << std::endl;
 }
 
-// typedef sensor_msgs::Imu  ImuMsg    ;
-// typedef ImuMsg::ConstPtr  ImuMsgPtr ;
-// typedef cf_msgs::Tdoa     TdoaMsg   ;
-// typedef TdoaMsg::ConstPtr TdoaMsgPtr;
-// typedef cf_msgs::Tof      TofMsg    ;
-// typedef TofMsg::ConstPtr  TofMsgPtr ;
-
 const double POSINF =  std::numeric_limits<double>::infinity();
 const double NEGINF = -std::numeric_limits<double>::infinity();
 
@@ -232,23 +220,11 @@ double mp_loss_thres = -1;
 
 GaussianProcessPtr traj;
 
-// bool fuse_tdoa = true;
-// bool fuse_tof  = false;
-// bool fuse_imu  = true;
-
 bool acc_ratio = false;
 bool gyro_unit = false;
 
 struct CameraImuBuf
 {
-    // deque<TdoaMsgPtr> tdoaBuf;
-    // deque<TofMsgPtr>  tofBuf;
-    // deque<ImuMsgPtr>  imuBuf;
-
-    // mutex tdoaBuf_mtx;
-    // mutex tofBuf_mtx;
-    // mutex imuBuf_mtx;
-
     vector<CornerData> corner_data_cam0;
     vector<CornerData> corner_data_cam1;
     vector<IMUData> imu_data;
@@ -276,76 +252,6 @@ struct CameraImuBuf
             tmax = max(tmax, imu_data.back().t);
         return tmax;
     }
-
-    // template<typename T>
-    // void transferDataOneBuf(deque<T> &selfbuf, deque<T> &otherbuf, mutex &otherbufmtx, double tmax)
-    // {
-    //     while(otherbuf.size() != 0)
-    //     {
-    //         if (otherbuf.front()->header.stamp.toSec() <= tmax)
-    //         {
-    //             lock_guard<mutex> lg(otherbufmtx);
-    //             selfbuf.push_back(otherbuf.front());
-    //             otherbuf.pop_front();
-    //         }
-    //         else
-    //             break;
-    //     }
-    // }
-
-    // void transferData(UwbImuBuf &other, double tmax)
-    // {
-    //     if (fuse_tdoa) transferDataOneBuf(tdoaBuf, other.tdoaBuf, other.tdoaBuf_mtx, tmax);
-    //     if (fuse_tof ) transferDataOneBuf(tofBuf,  other.tofBuf,  other.tofBuf_mtx,  tmax);
-    //     if (fuse_imu ) transferDataOneBuf(imuBuf,  other.imuBuf,  other.imuBuf_mtx,  tmax);
-    //     transferTDOAData();
-    //     if (fuse_imu ) {
-    //         transferIMUData();
-    //     }
-    // }
-
-    // void transferTDOAData()
-    // {
-    //     tdoa_data.clear();
-    //     for (const auto& data : tdoaBuf) {
-    //         TDOAData tdoa(data->header.stamp.toSec(), data->idA, data->idB, data->data);
-    //         tdoa_data.push_back(tdoa);
-    //     }
-    // }
-
-    // void transferIMUData()
-    // {
-    //     int i = 0;
-    //     imu_data.clear();
-    //     for (const auto& data : imuBuf) {
-    //         if (i % 10 == 0) {
-    //             Eigen::Vector3d acc(data->linear_acceleration.x, data->linear_acceleration.y, data->linear_acceleration.z);
-    //             if (acc_ratio) acc *= 9.81;
-    //             Eigen::Vector3d gyro(data->angular_velocity.x, data->angular_velocity.y, data->angular_velocity.z);
-    //             if (gyro_unit) gyro *= M_PI / 180.0;            
-    //             IMUData imu(data->header.stamp.toSec(), acc, gyro);
-    //             imu_data.push_back(imu);
-    //         }
-    //         i++;
-    //     }
-    // }
-
-    // template<typename T>
-    // void slideForwardOneBuf(deque<T> &buf, double tremove)
-    // {
-    //     while(buf.size() != 0)
-    //         if(buf.front()->header.stamp.toSec() < tremove)
-    //             buf.pop_front();
-    //         else
-    //             break;
-    // }
-
-    // void slideForward(double tremove)
-    // {
-    //     if (fuse_tdoa) slideForwardOneBuf(tdoaBuf, tremove);
-    //     if (fuse_tof ) slideForwardOneBuf(tofBuf,  tremove);
-    //     if (fuse_imu ) slideForwardOneBuf(imuBuf,  tremove);
-    // }
 };
 
 CameraImuBuf CIBuf;
@@ -387,33 +293,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
     // Loop and optimize
     while(ros::ok())
     {
-        // Step 0: Check if there is data that can be admitted to the sw buffer
-//         double newMaxTime = CIBuf.maxTime();
-
-// //         ros::Time timeout = ros::Time::now();
-// //         // if(UIBuf.maxTime() < newMaxTime)
-// //         // {
-// //         //     if(auto_exit && (ros::Time::now() - timeout).toSec() > 20.0)
-// //         //     {
-// //         //         printf("Polling time out exiting.\n");
-// //         //         exit(-1);
-// //         //     }
-// //         //     static int msWait = int(SLIDE_SIZE*gpDt*1000);
-// //         //     this_thread::sleep_for(chrono::milliseconds(msWait));
-// //         //     continue;
-// //         // }
-// //         timeout = ros::Time::now();
-
-// //         // Step 1: Extract the data to the local buffer
-// //         // CIBuf.transferData(UIBuf, newMaxTime);
-
-//         // Step 2: Extend the trajectory
-//         if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
-//             std::cout << "newMaxTime: " << newMaxTime << " num: " << traj->getNumKnots() << std::endl;
-//             traj->extendOneKnot();
-//         }
-
-        // Step 3: Optimization
+        // Step: Optimization
         TicToc tt_solve;          
         double tmin = traj->getKnotTime(0) + 1e-3;     // Start time of the sliding window
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
@@ -428,7 +308,12 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
 //         printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
 //                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
 //                 UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
-
+        for (int i = 0; i < 2; i++) {
+            std::cout << "Ric" << i  << ": " << cam_calib->T_i_c[i].so3().matrix() << std::endl;
+            std::cout << "tic" << i  << ": " << cam_calib->T_i_c[i].translation().transpose() << std::endl;
+        }
+        std::cout << "ba: " << ba.transpose() << " bg: " << bg.transpose() << std::endl;
+        
         // Visualize knots
         pcl::PointCloud<pcl::PointXYZ> est_knots;
         for (int i = 0; i < traj->getNumKnots(); i++) {   
@@ -475,14 +360,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
 
         gt_path_pub.publish(gt_path);    
         publishCornerPos(corner_pos_3d);
-        // break;
-
-//         // // Step 5: Slide the window forward
-//         // if (traj->getNumKnots() >= WINDOW_SIZE)
-//         // {
-//         //     double removeTime = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE + SLIDE_SIZE);
-//         //     swUIBuf.slideForward(removeTime);
-//         // }
+        break;
     }
     
 }
@@ -625,27 +503,6 @@ int main(int argc, char **argv)
         std::cout << "newMaxTime: " << newMaxTime << " num: " << traj->getNumKnots() << std::endl;
         traj->extendKnotsTo(newMaxTime, GPState(t0, initial_pose));
     }    
-    
-    // Wait to get the initial time
-    // while(ros::ok())
-    // {
-    //     if(UIBuf.minTime() == POSINF)
-    //     {
-    //         this_thread::sleep_for(chrono::milliseconds(5));
-    //         ros::spinOnce();
-    //         continue;
-    //     }
-
-        // double t0 = CIBuf.minTime();
-        // traj->setStartTime(t0);
-
-    //     // Set initial pose
-    //     SE3d initial_pose;
-    //     initial_pose.translation() = Eigen::Vector3d(1.25, 0.0, 0.07);
-    //     traj->setKnot(0, GPState(t0, initial_pose));
-    //     break;
-    // }
-    // printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
     thread pdthread(processData, traj, gpmui, corner_pos_3d, &cam_calib);
