@@ -382,35 +382,36 @@ void publishCornerPos(std::map<int, Eigen::Vector3d> &corner_pos_3d)
 }
 
 void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eigen::Vector3d> corner_pos_3d,
-                CameraCalibration &cam_calib)
+                CameraCalibration* cam_calib)
 {
     // Loop and optimize
     while(ros::ok())
     {
         // Step 0: Check if there is data that can be admitted to the sw buffer
-        double newMaxTime = CIBuf.maxTime();
+//         double newMaxTime = CIBuf.maxTime();
 
-//         ros::Time timeout = ros::Time::now();
-//         // if(UIBuf.maxTime() < newMaxTime)
-//         // {
-//         //     if(auto_exit && (ros::Time::now() - timeout).toSec() > 20.0)
-//         //     {
-//         //         printf("Polling time out exiting.\n");
-//         //         exit(-1);
-//         //     }
-//         //     static int msWait = int(SLIDE_SIZE*gpDt*1000);
-//         //     this_thread::sleep_for(chrono::milliseconds(msWait));
-//         //     continue;
-//         // }
-//         timeout = ros::Time::now();
+// //         ros::Time timeout = ros::Time::now();
+// //         // if(UIBuf.maxTime() < newMaxTime)
+// //         // {
+// //         //     if(auto_exit && (ros::Time::now() - timeout).toSec() > 20.0)
+// //         //     {
+// //         //         printf("Polling time out exiting.\n");
+// //         //         exit(-1);
+// //         //     }
+// //         //     static int msWait = int(SLIDE_SIZE*gpDt*1000);
+// //         //     this_thread::sleep_for(chrono::milliseconds(msWait));
+// //         //     continue;
+// //         // }
+// //         timeout = ros::Time::now();
 
-//         // Step 1: Extract the data to the local buffer
-//         // CIBuf.transferData(UIBuf, newMaxTime);
+// //         // Step 1: Extract the data to the local buffer
+// //         // CIBuf.transferData(UIBuf, newMaxTime);
 
-        // Step 2: Extend the trajectory
-        if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
-            traj->extendOneKnot();
-        }
+//         // Step 2: Extend the trajectory
+//         if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
+//             std::cout << "newMaxTime: " << newMaxTime << " num: " << traj->getNumKnots() << std::endl;
+//             traj->extendOneKnot();
+//         }
 
         // Step 3: Optimization
         TicToc tt_solve;          
@@ -428,17 +429,17 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
 //                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
 //                 UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
 
-//         // Visualize knots
-//         pcl::PointCloud<pcl::PointXYZ> est_knots;
-//         for (int i = 0; i < traj->getNumKnots(); i++) {   
-//             Eigen::Vector3d knot_pos = traj->getKnotPose(i).translation();
-//             est_knots.points.push_back(pcl::PointXYZ(knot_pos.x(), knot_pos.y(), knot_pos.z()));
-//         }
-//         sensor_msgs::PointCloud2 knot_msg;
-//         pcl::toROSMsg(est_knots, knot_msg);
-//         knot_msg.header.stamp = ros::Time::now();
-//         knot_msg.header.frame_id = "map";        
-//         knot_pub.publish(knot_msg);
+        // Visualize knots
+        pcl::PointCloud<pcl::PointXYZ> est_knots;
+        for (int i = 0; i < traj->getNumKnots(); i++) {   
+            Eigen::Vector3d knot_pos = traj->getKnotPose(i).translation();
+            est_knots.points.push_back(pcl::PointXYZ(knot_pos.x(), knot_pos.y(), knot_pos.z()));
+        }
+        sensor_msgs::PointCloud2 knot_msg;
+        pcl::toROSMsg(est_knots, knot_msg);
+        knot_msg.header.stamp = ros::Time::now();
+        knot_msg.header.frame_id = "map";        
+        knot_pub.publish(knot_msg);
 
 //         // Visualize estimated trajectory
 //         auto est_pose = traj->pose(swUIBuf.tdoa_data.front().t);
@@ -607,10 +608,24 @@ int main(int argc, char **argv)
     GPMVICalibPtr gpmui(new GPMVICalib(nh_ptr));
 
     double t0 = CIBuf.minTime();
+    traj->setStartTime(t0);
     SE3d initial_pose;
-    initial_pose.translation() = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d rwi;
+    rwi << -0.997865,  0.0135724,  0.0638772,
+            0.0628005, -0.0687564,   0.995655,
+            0.0179054,   0.997541,  0.0677573;
+    initial_pose.so3() = Sophus::SO3d::fitToSO3(rwi);
+    initial_pose.translation() = Eigen::Vector3d(0.290213, 0.393962, 0.642399);
     traj->setKnot(0, GPState(t0, initial_pose));
 
+    double newMaxTime = CIBuf.maxTime();
+
+    // Step 2: Extend the trajectory
+    if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
+        std::cout << "newMaxTime: " << newMaxTime << " num: " << traj->getNumKnots() << std::endl;
+        traj->extendKnotsTo(newMaxTime, GPState(t0, initial_pose));
+    }    
+    
     // Wait to get the initial time
     // while(ros::ok())
     // {
@@ -621,8 +636,8 @@ int main(int argc, char **argv)
     //         continue;
     //     }
 
-    //     double t0 = UIBuf.minTime();
-    //     traj->setStartTime(t0);
+        // double t0 = CIBuf.minTime();
+        // traj->setStartTime(t0);
 
     //     // Set initial pose
     //     SE3d initial_pose;
@@ -633,7 +648,7 @@ int main(int argc, char **argv)
     // printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    thread pdthread(processData, traj, gpmui, corner_pos_3d, cam_calib);
+    thread pdthread(processData, traj, gpmui, corner_pos_3d, &cam_calib);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);

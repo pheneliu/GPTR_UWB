@@ -40,7 +40,7 @@ public:
 
     // Constructor
     GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, 
-                double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_)
+                double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_, Eigen::Vector3d g_ = Eigen::Vector3d(0, 0, 9.81))
     :   acc         (acc_             ),
         gyro        (gyro_            ),
         acc_bias    (acc_bias_        ),
@@ -51,7 +51,8 @@ public:
         wBiasAcce   (wBiasAcce_       ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
-        gpm         (gpm_             )
+        gpm         (gpm_             ),
+        g           (g_               )
 
     {
         // 6-element residual: 
@@ -111,8 +112,9 @@ public:
 
         // Residual
         Eigen::Map<Matrix<double, 12, 1>> residual(residuals);      
-        Eigen::Vector3d g(0, 0, 9.81);
-
+        // Eigen::Vector3d g(0, 0, 9.81);
+        // Eigen::Vector3d g(-0.118566, 9.55362, 1.03586);
+        
         residual.block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
         residual.block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
         residual.block<3, 1>(6, 0) = wBiasGyro*(biasW - gyro_bias);
@@ -268,6 +270,8 @@ private:
     Vector3d gyro;
     Vector3d acc_bias;
     Vector3d gyro_bias;    
+
+    Eigen::Vector3d g;
 
     // Weight
     double wGyro;

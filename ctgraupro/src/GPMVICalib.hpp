@@ -2,6 +2,7 @@
 
 #include "GPMUI.hpp"
 #include "camera.hpp"
+#include "factor/GPProjectionFactor.h"
 
 class GPMVICalib : public GPMUI
 {
@@ -20,9 +21,9 @@ public:
     void AddProjFactors(
         ceres::Problem &problem, GaussianProcessPtr &traj, 
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
-        const vector<CornerData> &corner_data_cam0, std::map<int, Eigen::Vector3d> &corner_pos_3d, 
-        CameraCalibration &cam_calib, 
-        double tmin, double tmax, double w_corner, double corner_loss_thres)
+        const vector<CornerData> &corner_data_cam, std::map<int, Eigen::Vector3d> &corner_pos_3d, 
+        CameraCalibration *cam_calib, int cam_id, 
+        double tmin, double tmax, double w_corner, double proj_loss_thres)
     {
 
         auto usmin = traj->computeTimeIndex(tmin);
@@ -30,7 +31,7 @@ public:
 
         int kidxmin = usmin.first;
         int kidxmax = usmax.first+1;        
-        for (auto &corners : corner_data_cam0)
+        for (auto &corners : corner_data_cam)
         {
             if (!traj->TimeInInterval(corners.t, 1e-6)) {
                 continue;
@@ -65,25 +66,85 @@ public:
                 factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);             
             }
 
-            for (int i = 0; i < cam_calib.T_i_c.size(); i++) {
-                factor_param_blocks.push_back(cam_calib.T_i_c[i].so3().data());
-                factor_param_blocks.push_back(cam_calib.T_i_c[i].translation().data());
+            factor_param_blocks.push_back(cam_calib->T_i_c[cam_id].so3().data());
+            factor_param_blocks.push_back(cam_calib->T_i_c[cam_id].translation().data());
 
-                factorMeta.coupled_params.back().push_back(paramInfoMap[cam_calib.T_i_c[i].so3().data()]);
-                factorMeta.coupled_params.back().push_back(paramInfoMap[cam_calib.T_i_c[i].translation().data()]);
-            }            
+            factorMeta.coupled_params.back().push_back(paramInfoMap[cam_calib->T_i_c[cam_id].so3().data()]);
+            factorMeta.coupled_params.back().push_back(paramInfoMap[cam_calib->T_i_c[cam_id].translation().data()]);
             ceres::LossFunction *proj_loss_function = proj_loss_thres == -1 ? NULL : new ceres::HuberLoss(proj_loss_thres);
-            ceres::CostFunction *cost_function = new GPProjFactor(corners.proj, corners.id, corner_pos_3d, w_corner, traj->getGPMixerPtr(), s);
-            // auto res = problem.AddResidualBlock(cost_function, tdoa_loss_function, factor_param_blocks);
+            ceres::CostFunction *cost_function = new GPProjFactor(corners.proj, corners.id, cam_calib->intrinsics[cam_id], corner_pos_3d, w_corner, traj->getGPMixerPtr(), s);
+            auto res = problem.AddResidualBlock(cost_function, proj_loss_function, factor_param_blocks);
             // Record the residual block
-            // factorMeta.res.push_back(res);
+            factorMeta.res.push_back(res);
 
             // Record the time stamp of the factor
-            // factorMeta.stamp.push_back(tdoa.t);
+            factorMeta.stamp.push_back(corners.t);
         }
     }    
 
-    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, CameraCalibration &cam_calib,
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        const vector<IMUData> &imuData, double tmin, double tmax, 
+        double wGyro, double wAcce, double wBiasGyro, double wBiasAcce)
+    {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;  
+        for (auto &imu : imuData)
+        {
+            if (!traj->TimeInInterval(imu.t, 1e-6)) {
+                continue;
+            }
+            
+            auto   us = traj->computeTimeIndex(imu.t);
+            int    u  = us.first;
+            double s  = us.second;
+
+            if (u < kidxmin || u+1 > kidxmax) {
+                continue;
+            }
+      
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            // Add the parameter blocks for rotation
+            for (int kidx = u; kidx < u + 2; kidx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);               
+            }
+            factor_param_blocks.push_back(XBIG.data());
+            factor_param_blocks.push_back(XBIA.data());  
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIG.data()]);
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);                            
+
+            double imu_loss_thres = -1.0;
+            ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
+            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s, Eigen::Vector3d(-0.118566, 9.55362, 1.03586));
+            auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
+
+            // Record the residual block
+            factorMeta.res.push_back(res);                
+
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(imu.t);
+        }
+    }    
+
+    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, CameraCalibration *cam_calib,
                   double tmin, double tmax, double tmid,
                   const vector<CornerData> &corner_data_cam0, const vector<CornerData> &corner_data_cam1, const vector<IMUData> &imuData,
                   std::map<int, Eigen::Vector3d> &corner_pos_3d, 
@@ -120,12 +181,12 @@ public:
 
             ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
 
-            for (int i = 0; i < cam_calib.T_i_c.size(); i++) {
-                problem.AddParameterBlock(cam_calib.T_i_c[i].so3().data(), 4, so3parameterization);
-                problem.AddParameterBlock(cam_calib.T_i_c[i].translation().data(), 3);
+            for (int i = 0; i < cam_calib->T_i_c.size(); i++) {
+                problem.AddParameterBlock(cam_calib->T_i_c[i].so3().data(), 4, so3parameterization);
+                problem.AddParameterBlock(cam_calib->T_i_c[i].translation().data(), 3);
 
-                paramInfoMap.insert(make_pair(cam_calib.T_i_c[i].so3().data(), ParamInfo(cam_calib.T_i_c[i].so3().data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
-                paramInfoMap.insert(make_pair(cam_calib.T_i_c[i].translation().data(), ParamInfo(cam_calib.T_i_c[i].translation().data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+                paramInfoMap.insert(make_pair(cam_calib->T_i_c[i].so3().data(), ParamInfo(cam_calib->T_i_c[i].so3().data(), ParamType::SO3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+                paramInfoMap.insert(make_pair(cam_calib->T_i_c[i].translation().data(), ParamInfo(cam_calib->T_i_c[i].translation().data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
             }
             
             // Sanity check
@@ -180,9 +241,13 @@ public:
         AddMP2KFactorsUI(problem, traj, paramInfoMap, factorMetaMp2k, tmin, tmax, mp_loss_thres);
 
         // Add the projection factors
-        FactorMeta factorMetaProj;
-        double cost_proj_init = -1; double cost_proj_final = -1;
-        AddProjFactors(problem, traj, paramInfoMap, factorMetaProj, corner_data_cam0, corner_pos_3d, cam_calib, tmin, tmax, w_corner, corner_loss_thres);
+        FactorMeta factorMetaProjCam0;
+        double cost_proj_init0 = -1; double cost_proj_final0 = -1;
+        AddProjFactors(problem, traj, paramInfoMap, factorMetaProjCam0, corner_data_cam0, corner_pos_3d, cam_calib, 0, tmin, tmax, w_corner, corner_loss_thres);
+
+        FactorMeta factorMetaProjCam1;
+        double cost_proj_init1 = -1; double cost_proj_final1 = -1;
+        AddProjFactors(problem, traj, paramInfoMap, factorMetaProjCam1, corner_data_cam1, corner_pos_3d, cam_calib, 1, tmin, tmax, w_corner, corner_loss_thres);
 
         FactorMeta factorMetaIMU;
         double cost_imu_init = -1; double cost_imu_final = -1;
@@ -201,7 +266,8 @@ public:
 
         // Find the initial cost
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
-        Util::ComputeCeresCost(factorMetaProj.res, cost_proj_init, problem);
+        Util::ComputeCeresCost(factorMetaProjCam0.res, cost_proj_init0, problem);
+        Util::ComputeCeresCost(factorMetaProjCam1.res, cost_proj_init1, problem);
         Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_init,   problem);
         // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
@@ -210,14 +276,15 @@ public:
         // std::cout << summary.FullReport() << std::endl;
 
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
-        Util::ComputeCeresCost(factorMetaProj.res, cost_proj_final, problem);
+        Util::ComputeCeresCost(factorMetaProjCam0.res, cost_proj_final0, problem);
+        Util::ComputeCeresCost(factorMetaProjCam1.res, cost_proj_final1, problem);
         Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_final,   problem);
         // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
         // Determine the factors to remove
-        if (do_marginalization) {
-            Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaProj, factorMetaIMU, factorMetaPrior);
-        }
+        // if (do_marginalization) {
+        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaProjCam0, factorMetaProjCam1, factorMetaIMU, factorMetaPrior);
+        // }
 
         tt_slv.Toc();
     }
