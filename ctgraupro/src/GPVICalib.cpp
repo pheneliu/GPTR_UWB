@@ -6,6 +6,8 @@
 #include <pcl/filters/uniform_sampling.h>
 #include <pcl/filters/impl/uniform_sampling.hpp>
 
+#include <opencv2/opencv.hpp>
+
 // ROS utilities
 #include "ros/ros.h"
 #include <rosbag/bag.h>
@@ -15,8 +17,6 @@
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "livox_ros_driver/CustomMsg.h"
 
-// Add ikdtree
-#include <ikdTree/ikd_Tree.h>
 
 // Basalt
 #include "basalt/spline/se3_spline.h"
@@ -86,6 +86,60 @@ void getCornerPosition2D(const std::string& data_path, vector<CornerData> &corne
     }
     infile.close();
     std::cout << "loaded " << corner_meas.size() << " images wih corner positions" << std::endl;
+}
+
+void getCameraModel(const std::string& data_path, CameraCalibration &cam_calib)
+{
+    cv::FileStorage fsSettings(data_path, cv::FileStorage::READ);
+
+    if(!fsSettings.isOpened())
+    {
+        std::cerr << "ERROR: Wrong path to settings " << data_path << std::endl;
+        return;
+    }
+
+    cv::FileNode root = fsSettings["value0"];
+    cv::FileNode T_imu_cam = root["T_imu_cam"];
+    cv::FileNode intrinsics = root["intrinsics"];
+    cv::FileNode resolution = root["resolution"];
+
+
+    for (int i = 0; i < 2; i++) {
+        double x,y,z;
+        x = T_imu_cam[i]["px"];
+        y = T_imu_cam[i]["py"];
+        z = T_imu_cam[i]["pz"];
+
+        double qx, qy, qz, qw;
+        qx = T_imu_cam[i]["qx"];
+        qy = T_imu_cam[i]["qy"];
+        qz = T_imu_cam[i]["qz"];
+        qw = T_imu_cam[i]["qw"];
+
+        double fx, fy, cx, cy, xi, alpha;
+        fx = intrinsics[i]["fx"];
+        fy = intrinsics[i]["fy"];
+        cx = intrinsics[i]["cx"];
+        cy = intrinsics[i]["cy"];
+        xi = intrinsics[i]["xi"];
+        alpha = intrinsics[i]["alpha"];
+
+        Eigen::Quaterniond qic(qw, qx, qy, qz);
+        Sophus::SE3d Tic;
+        Tic.translation() = Eigen::Vector3d(x, y, z);
+        Tic.so3() = Sophus::SO3d::fitToSO3(qic.toRotationMatrix());
+        cam_calib.T_i_c.push_back(Tic);
+
+        DoubleSphereCamera<double> intr;
+        intr.setFromInit(fx, fy, cx, cy, xi, alpha);
+        cam_calib.intrinsics.push_back(intr);
+
+        // double w,v;
+        // w = resolution[i][0];
+        // w = resolution[i]["w"];
+    }
+
+    // std::cout << "22222222222 " << Eigen::Vector3d(x, y, z).transpose() << std::endl;
 }
 
 void getIMUMeasurements(const std::string &data_path, vector<IMUData> &imu_meas)
@@ -327,7 +381,8 @@ void publishCornerPos(std::map<int, Eigen::Vector3d> &corner_pos_3d)
     corner_pub.publish(corners_msg);
 }
 
-void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eigen::Vector3d> corner_pos_3d)
+void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eigen::Vector3d> corner_pos_3d,
+                CameraCalibration &cam_calib)
 {
     // Loop and optimize
     while(ros::ok())
@@ -363,7 +418,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(traj, bg, ba, tmin, tmax, tmid, CIBuf.corner_data_cam0, CIBuf.corner_data_cam1, CIBuf.imu_data, 
+        gpmui->Evaluate(traj, bg, ba, cam_calib, tmin, tmax, tmid, CIBuf.corner_data_cam0, CIBuf.corner_data_cam1, CIBuf.imu_data, 
                         corner_pos_3d, false, 
                         w_corner, GYR_N, ACC_N, GYR_W, ACC_W, corner_loss_thres, mp_loss_thres);
         tt_solve.Toc();
@@ -500,6 +555,11 @@ int main(int argc, char **argv)
     string corner2d_path1 = data_path + "corners2D_cam1.csv";
     getCornerPosition2D(corner2d_path1, CIBuf.corner_data_cam1);    
 
+    CameraCalibration cam_calib;
+
+    string cam_path = data_path + "initial_calibration.json";
+    getCameraModel(cam_path, cam_calib);
+
     getIMUMeasurements(data_path, CIBuf.imu_data);
     getGT(data_path, gt_path);
 
@@ -573,7 +633,7 @@ int main(int argc, char **argv)
     // printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
 
     // Start polling and processing the data
-    thread pdthread(processData, traj, gpmui, corner_pos_3d);
+    thread pdthread(processData, traj, gpmui, corner_pos_3d, cam_calib);
 
     // Spin
     ros::MultiThreadedSpinner spinner(0);

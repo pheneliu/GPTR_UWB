@@ -28,7 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(OpenMP REQUIRED)
 find_package(Sophus REQUIRED)
 find_package(PCL REQUIRED)
-# find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
 
