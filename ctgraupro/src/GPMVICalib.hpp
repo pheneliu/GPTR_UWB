@@ -165,7 +165,7 @@ public:
         options.max_num_iterations = 100;
         options.check_gradients = false;
         
-        options.gradient_check_relative_precision = 0.02;  
+        // options.gradient_check_relative_precision = 0.02;  
 
         // Documenting the parameter blocks
         paramInfoMap.clear();
@@ -273,7 +273,7 @@ public:
 
         ceres::Solve(options, &problem, &summary);
 
-        // std::cout << summary.FullReport() << std::endl;
+        std::cout << summary.FullReport() << std::endl;
 
         Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
         Util::ComputeCeresCost(factorMetaProjCam0.res, cost_proj_final0, problem);

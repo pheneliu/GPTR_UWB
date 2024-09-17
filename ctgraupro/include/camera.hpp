@@ -154,7 +154,7 @@ class DoubleSphereCamera {
 //     param_[5] = std::clamp(param_[5], Scalar(0), Scalar(1));
 //   }
 
-//   const VecN& getParam() const { return param_; }
+  const VecN& getParam() const { return param_; }
 
 //   static Eigen::aligned_vector<DoubleSphereCamera> getTestProjections() {
 //     Eigen::aligned_vector<DoubleSphereCamera> res;

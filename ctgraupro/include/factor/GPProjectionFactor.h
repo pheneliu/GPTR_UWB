@@ -91,7 +91,8 @@ public:
         // Map parameters to the control point states
         GPState Xa(0);  gpm->MapParamToState(parameters, RaIdx, Xa);
         GPState Xb(Dt); gpm->MapParamToState(parameters, RbIdx, Xb);
-        Eigen::Matrix3d R_i_c = Eigen::Map<Eigen::Matrix3d const>(parameters[RicIdx]);        
+        Sophus::SO3d R_i_c_so3 = Eigen::Map<Sophus::SO3d const>(parameters[RicIdx]);      
+        Eigen::Matrix3d R_i_c =  R_i_c_so3.matrix();
         Eigen::Vector3d t_i_c = Eigen::Map<Eigen::Vector3d const>(parameters[ticIdx]);            
 
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
@@ -175,6 +176,14 @@ public:
                 vec_Dr_DPt[i] = d_r_d_p.leftCols<3>() * Dp_DPt;
                 vec_Dr_DRic[i] = d_r_d_p.leftCols<3>() * SO3d::hat(p_c);
                 vec_Dr_Dtic[i] = d_r_d_p.leftCols<3>() * Dp_Dtic;
+                // if (p_c.z()< 0) {
+                //     std::cout << "p_c: " << p_c.transpose() << "p_i: " << p_i.transpose() 
+                //         << " p_w: " << p_w.transpose() << " Xt.P: " << Xt.P.transpose() 
+                //         << " t_i_c: " << t_i_c.transpose() << " R_i_c: " << R_i_c << std::endl;
+                // }
+                
+                // std::cout << "vec_Dr_Dtic[i]: " << vec_Dr_Dtic[i] << std::endl;
+                // std::cout << "vec_Dr_DRic[i]: " << vec_Dr_DRic[i] << std::endl;
             }
 
             size_t idx;
@@ -437,6 +446,7 @@ public:
                         idx_jac++;
                     }
                 }
+                
             }        
 
             idx = ticIdx;
@@ -456,6 +466,7 @@ public:
                         idx_jac++;
                     }
                 }
+                // std::cout << "Dr_Dtic: " << Dr_Dtic << std::endl;
             }     
         }
 

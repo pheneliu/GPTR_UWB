@@ -81,6 +81,9 @@ void getCornerPosition2D(const std::string& data_path, vector<CornerData> &corne
             corners.push_back(Eigen::Vector2d(px, py));
             ids.push_back(idx);
             idx++;
+            // if (idx > 10) {
+            //     break;
+            // }
         }
         corner_meas.emplace_back(t_s, ids, corners);
     }
@@ -116,13 +119,16 @@ void getCameraModel(const std::string& data_path, CameraCalibration &cam_calib)
         qz = T_imu_cam[i]["qz"];
         qw = T_imu_cam[i]["qw"];
 
+        cv::FileNode intrinsic = intrinsics[i];
+        cv::FileNode subintrinsic = intrinsic["intrinsics"];
+
         double fx, fy, cx, cy, xi, alpha;
-        fx = intrinsics[i]["fx"];
-        fy = intrinsics[i]["fy"];
-        cx = intrinsics[i]["cx"];
-        cy = intrinsics[i]["cy"];
-        xi = intrinsics[i]["xi"];
-        alpha = intrinsics[i]["alpha"];
+        fx = subintrinsic["fx"];
+        fy = subintrinsic["fy"];
+        cx = subintrinsic["cx"];
+        cy = subintrinsic["cy"];
+        xi = subintrinsic["xi"];
+        alpha = subintrinsic["alpha"];
 
         Eigen::Quaterniond qic(qw, qx, qy, qz);
         Sophus::SE3d Tic;
@@ -133,6 +139,8 @@ void getCameraModel(const std::string& data_path, CameraCalibration &cam_calib)
         DoubleSphereCamera<double> intr;
         intr.setFromInit(fx, fy, cx, cy, xi, alpha);
         cam_calib.intrinsics.push_back(intr);
+        std::cout << "intr.setFromI: " << intr.getParam().transpose() << std::endl;
+        std::cout << "qic: " << qic.coeffs().transpose() << " Ric: " << Tic.so3().matrix() << std::endl;
     }
 
 }
@@ -311,6 +319,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
         for (int i = 0; i < 2; i++) {
             std::cout << "Ric" << i  << ": " << cam_calib->T_i_c[i].so3().matrix() << std::endl;
             std::cout << "tic" << i  << ": " << cam_calib->T_i_c[i].translation().transpose() << std::endl;
+            std::cout << "param" << i  << ": " << cam_calib->intrinsics[i].getParam().transpose() << std::endl;
         }
         std::cout << "ba: " << ba.transpose() << " bg: " << bg.transpose() << std::endl;
         
