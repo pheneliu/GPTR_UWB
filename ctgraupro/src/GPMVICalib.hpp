@@ -82,7 +82,7 @@ public:
         }
     }    
 
-    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<IMUData> &imuData, double tmin, double tmax, 
         double wGyro, double wAcce, double wBiasGyro, double wBiasAcce)
@@ -128,12 +128,14 @@ public:
             }
             factor_param_blocks.push_back(XBIG.data());
             factor_param_blocks.push_back(XBIA.data());  
+            factor_param_blocks.push_back(g.data());  
             factorMeta.coupled_params.back().push_back(paramInfoMap[XBIG.data()]);
-            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);                            
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);     
+            factorMeta.coupled_params.back().push_back(paramInfoMap[g.data()]);                                                   
 
             double imu_loss_thres = -1.0;
             ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
-            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s, Eigen::Vector3d(-0.118566, 9.55362, 1.03586));
+            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s);
             auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
 
             // Record the residual block
@@ -144,7 +146,7 @@ public:
         }
     }    
 
-    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, CameraCalibration *cam_calib,
+    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g, CameraCalibration *cam_calib,
                   double tmin, double tmax, double tmid,
                   const vector<CornerData> &corner_data_cam0, const vector<CornerData> &corner_data_cam1, const vector<IMUData> &imuData,
                   std::map<int, Eigen::Vector3d> &corner_pos_3d, 
@@ -175,9 +177,11 @@ public:
             AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
             problem.AddParameterBlock(XBIG.data(), 3);
             problem.AddParameterBlock(XBIA.data(), 3);
+            problem.AddParameterBlock(g.data(), 3);
 
             paramInfoMap.insert(make_pair(XBIG.data(), ParamInfo(XBIG.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
             paramInfoMap.insert(make_pair(XBIA.data(), ParamInfo(XBIA.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+            paramInfoMap.insert(make_pair(g.data(), ParamInfo(g.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
 
             ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
 
@@ -251,7 +255,7 @@ public:
 
         FactorMeta factorMetaIMU;
         double cost_imu_init = -1; double cost_imu_final = -1;
-        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce);
+        AddIMUFactors(problem, traj, XBIG, XBIA, g, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce);
 
         // Add the prior factor
         FactorMeta factorMetaPrior;

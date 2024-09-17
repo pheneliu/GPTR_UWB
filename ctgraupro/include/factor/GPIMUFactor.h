@@ -40,7 +40,7 @@ public:
 
     // Constructor
     GPIMUFactor(const Vector3d &acc_, const Vector3d &gyro_, const Vector3d &acc_bias_, const Vector3d &gyro_bias_, 
-                double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_, Eigen::Vector3d g_ = Eigen::Vector3d(0, 0, 9.81))
+                double wGyro_, double wAcce_, double wBiasGyro_, double wBiasAcce_, GPMixerPtr gpm_, double s_)
     :   acc         (acc_             ),
         gyro        (gyro_            ),
         acc_bias    (acc_bias_        ),
@@ -51,8 +51,8 @@ public:
         wBiasAcce   (wBiasAcce_       ),
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
-        gpm         (gpm_             ),
-        g           (g_               )
+        gpm         (gpm_             )
+        // g           (g_               )
 
     {
         // 6-element residual: 
@@ -87,6 +87,8 @@ public:
         // IMU biases
         mutable_parameter_block_sizes()->push_back(3);
         mutable_parameter_block_sizes()->push_back(3);
+        // gravity
+        mutable_parameter_block_sizes()->push_back(3);
     }
 
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
@@ -98,6 +100,7 @@ public:
         GPState Xb(Dt); gpm->MapParamToState(parameters, RbIdx, Xb);
         Eigen::Vector3d biasW = Eigen::Map<Eigen::Vector3d const>(parameters[12]);        
         Eigen::Vector3d biasA = Eigen::Map<Eigen::Vector3d const>(parameters[13]);    
+        Eigen::Vector3d g = Eigen::Map<Eigen::Vector3d const>(parameters[14]);   
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
@@ -112,8 +115,6 @@ public:
 
         // Residual
         Eigen::Map<Matrix<double, 12, 1>> residual(residuals);      
-        // Eigen::Vector3d g(0, 0, 9.81);
-        // Eigen::Vector3d g(-0.118566, 9.55362, 1.03586);
         
         residual.block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
         residual.block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
@@ -243,6 +244,7 @@ public:
             Dr_DAb.block<3, 3>(0, 0) = wAcce*Dr_DAt*DXt_DXb[Aidx][Aidx];
         }
 
+        // Jacobian on Bg
         idx = 12;
         if (jacobians[idx])
         {
@@ -252,6 +254,7 @@ public:
             Dr_DBg.block<3, 3>(6, 0) = wBiasGyro*Matrix3d::Identity();
         }        
 
+        // Jacobian on Ba
         idx = 13;
         if (jacobians[idx])
         {
@@ -260,6 +263,15 @@ public:
             Dr_DBa.block<3, 3>(0, 0) = wAcce*Matrix3d::Identity();
             Dr_DBa.block<3, 3>(9, 0) = wBiasAcce*Matrix3d::Identity();
         }        
+
+        // Jacobian on g
+        idx = 14;
+        if (jacobians[idx])
+        {
+            Eigen::Map<Eigen::Matrix<double, 12, 3, Eigen::RowMajor>> Dr_Dg(jacobians[idx]);
+            Dr_Dg.setZero();
+            Dr_Dg.block<3, 3>(0, 0) = wAcce*Xt.R.matrix().transpose();
+        }          
         return true;
     }
 
@@ -271,7 +283,7 @@ private:
     Vector3d acc_bias;
     Vector3d gyro_bias;    
 
-    Eigen::Vector3d g;
+    // Eigen::Vector3d g;
 
     // Weight
     double wGyro;

@@ -276,7 +276,7 @@ ros::Publisher corner_pub;
 
 Eigen::Vector3d bg = Eigen::Vector3d::Zero();
 Eigen::Vector3d ba = Eigen::Vector3d::Zero();
-const Eigen::Vector3d P_I_tag = Eigen::Vector3d(-0.012, 0.001, 0.091);
+Eigen::Vector3d g = Eigen::Vector3d(0, 0, 9.81);
 
 bool if_save_traj;
 std::string traj_save_path;
@@ -307,7 +307,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(traj, bg, ba, cam_calib, tmin, tmax, tmid, CIBuf.corner_data_cam0, CIBuf.corner_data_cam1, CIBuf.imu_data, 
+        gpmui->Evaluate(traj, bg, ba, g, cam_calib, tmin, tmax, tmid, CIBuf.corner_data_cam0, CIBuf.corner_data_cam1, CIBuf.imu_data, 
                         corner_pos_3d, false, 
                         w_corner, GYR_N, ACC_N, GYR_W, ACC_W, corner_loss_thres, mp_loss_thres);
         tt_solve.Toc();
@@ -321,7 +321,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
             std::cout << "tic" << i  << ": " << cam_calib->T_i_c[i].translation().transpose() << std::endl;
             std::cout << "param" << i  << ": " << cam_calib->intrinsics[i].getParam().transpose() << std::endl;
         }
-        std::cout << "ba: " << ba.transpose() << " bg: " << bg.transpose() << std::endl;
+        std::cout << "ba: " << ba.transpose() << " bg: " << bg.transpose() << " g: " << g.transpose() << std::endl;
         
         // Visualize knots
         pcl::PointCloud<pcl::PointXYZ> est_knots;
@@ -333,39 +333,7 @@ void processData(GaussianProcessPtr traj, GPMVICalibPtr gpmui, std::map<int, Eig
         pcl::toROSMsg(est_knots, knot_msg);
         knot_msg.header.stamp = ros::Time::now();
         knot_msg.header.frame_id = "map";        
-        knot_pub.publish(knot_msg);
-
-//         // Visualize estimated trajectory
-//         auto est_pose = traj->pose(swUIBuf.tdoa_data.front().t);
-//         Eigen::Vector3d est_pos = est_pose.translation();
-//         Eigen::Quaterniond est_ort = est_pose.unit_quaternion();
-//         geometry_msgs::PoseStamped traj_msg;
-//         traj_msg.header.stamp = ros::Time::now();
-//         traj_msg.pose.position.x = est_pos.x();
-//         traj_msg.pose.position.y = est_pos.y();
-//         traj_msg.pose.position.z = est_pos.z();
-//         traj_msg.pose.orientation.w = 1;
-//         traj_msg.pose.orientation.x = 0;
-//         traj_msg.pose.orientation.y = 0;
-//         traj_msg.pose.orientation.z = 0;
-//         est_path.poses.push_back(traj_msg);
-//         est_pub.publish(est_path);
-
-//         // Visualize odometry
-//         nav_msgs::Odometry odom_msg;
-//         odom_msg.header.stamp = ros::Time::now();
-//         odom_msg.header.frame_id = "map";
-//         est_pose = traj->pose(traj->getKnotTime(traj->getNumKnots() - 1));
-//         est_pos = est_pose.translation();
-//         est_ort = est_pose.unit_quaternion();
-//         odom_msg.pose.pose.position.x = est_pos[0];
-//         odom_msg.pose.pose.position.y = est_pos[1];
-//         odom_msg.pose.pose.position.z = est_pos[2];
-//         odom_msg.pose.pose.orientation.w = est_ort.w();
-//         odom_msg.pose.pose.orientation.x = est_ort.x();
-//         odom_msg.pose.pose.orientation.y = est_ort.y();
-//         odom_msg.pose.pose.orientation.z = est_ort.z();
-//         odom_pub.publish(odom_msg);             
+        knot_pub.publish(knot_msg);           
 
         gt_path_pub.publish(gt_path);    
         publishCornerPos(corner_pos_3d);
@@ -451,21 +419,6 @@ int main(int argc, char **argv)
     getIMUMeasurements(data_path, CIBuf.imu_data);
     getGT(data_path, gt_path);
 
-    // Topics to subscribe to
-    // string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
-    // string tof_topic;  nh_ptr->getParam("tof_topic", tof_topic);
-    // string imu_topic;  nh_ptr->getParam("imu_topic", imu_topic);
-    // string gt_topic;   nh_ptr->getParam("gt_topic", gt_topic);
-    // fuse_tdoa = Util::GetBoolParam(nh_ptr, "fuse_tdoa", fuse_tdoa);
-    // fuse_tof  = Util::GetBoolParam(nh_ptr, "fuse_tof" , fuse_tof );
-    // fuse_imu  = Util::GetBoolParam(nh_ptr, "fuse_imu" , fuse_imu );
-
-    // // Subscribe to the topics
-    // tdoaSub = nh_ptr->subscribe(tdoa_topic, 10, tdoaCb);
-    // tofSub  = nh_ptr->subscribe(tof_topic,  10, tofCb);
-    // imuSub  = nh_ptr->subscribe(imu_topic,  10, imuCb);
-    // gtSub   = nh_ptr->subscribe(gt_topic,   10, gtCb);
-
     // Publish estimates
     knot_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/estimated_knot", 10);
     // gt_pub   = nh_ptr->advertise<nav_msgs::Odometry>("/ground_truth", 10);
@@ -494,7 +447,8 @@ int main(int argc, char **argv)
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
     GPMVICalibPtr gpmui(new GPMVICalib(nh_ptr));
 
-    double t0 = CIBuf.minTime();
+    // double t0 = CIBuf.minTime();
+    double t0 = max(CIBuf.imu_data.front().t, CIBuf.corner_data_cam0.front().t);
     traj->setStartTime(t0);
     SE3d initial_pose;
     Eigen::Matrix3d rwi;
@@ -504,6 +458,23 @@ int main(int argc, char **argv)
     initial_pose.so3() = Sophus::SO3d::fitToSO3(rwi);
     initial_pose.translation() = Eigen::Vector3d(0.290213, 0.393962, 0.642399);
     traj->setKnot(0, GPState(t0, initial_pose));
+
+    Eigen::Matrix3d rai;
+    rai << -0.997945, 0.00867498,  0.0634844,
+            0.0627571, -0.0675298,   0.995742,
+            0.0129251,    0.99768,  0.0668466;
+
+    for (size_t i = 0; i < CIBuf.imu_data.size(); i++) {
+        const Eigen::Vector3d ad = CIBuf.imu_data[i].acc;
+        if (std::abs(CIBuf.imu_data[i].t - CIBuf.corner_data_cam0[1].t) < 3000000*1e-9) {
+            g = rai * ad;
+            // g_initialized = true;
+            std::cout << "g_a initialized with " << g.transpose() << "i: " << i << std::endl;
+            break;
+        }
+    }
+      
+
 
     double newMaxTime = CIBuf.maxTime();
 
