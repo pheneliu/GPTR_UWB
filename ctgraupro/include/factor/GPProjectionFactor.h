@@ -122,12 +122,17 @@ public:
                 p_c4 << p_c[0], p_c[1], p_c[2], 1;
 
                 Eigen::Vector2d proj2d;
-                cam_model.project(p_c4, proj2d);          
-                residuals[2 * i + 0] = proj2d[0] - proj[i][0];
-                residuals[2 * i + 1] = proj2d[1] - proj[i][1];        
+                bool success = cam_model.project(p_c4, proj2d);          
+                if (success) {
+                    residuals[2 * i + 0] = proj2d[0] - proj[i][0];
+                    residuals[2 * i + 1] = proj2d[1] - proj[i][1];        
 
-                residuals[2 * i + 0] *= w;
-                residuals[2 * i + 1] *= w;   
+                    residuals[2 * i + 0] *= w;
+                    residuals[2 * i + 1] *= w;  
+                } else {
+                    residuals[2 * i + 0] = 0;
+                    residuals[2 * i + 1] = 0;                      
+                }
             }
         } else {
 
@@ -147,8 +152,6 @@ public:
             vec_Dr_DPt.resize(num_proj);
             vec_Dr_DRic.resize(num_proj);
             vec_Dr_Dtic.resize(num_proj);
-            // vec_p_c.resize(num_proj);
-            // vec_d_r_d_p.resize(num_proj);
             for (size_t i = 0; i < num_proj; i++) {
                 auto iter = corner_pos_3d.find(id[i]);
                 assert(iter != corner_pos_3d.end());
@@ -160,30 +163,24 @@ public:
 
                 Eigen::Vector2d proj2d;
                 Eigen::Matrix<double, 2, 4> d_r_d_p;
-                cam_model.project(p_c4, proj2d, &d_r_d_p);
+                bool success = cam_model.project(p_c4, proj2d, &d_r_d_p);
        
-                residuals[2 * i + 0] = proj2d[0] - proj[i][0];
-                residuals[2 * i + 1] = proj2d[1] - proj[i][1];        
+                if (success) {
+                    residuals[2 * i + 0] = proj2d[0] - proj[i][0];
+                    residuals[2 * i + 1] = proj2d[1] - proj[i][1];        
 
-                residuals[2 * i + 0] *= w;
-                residuals[2 * i + 1] *= w;   
-
-                // vec_p_i[i] = p_i;
-                // vec_p_c[i] = p_c;
-                // vec_d_r_d_p[i] = d_r_d_p.leftCols<3>();
+                    residuals[2 * i + 0] *= w;
+                    residuals[2 * i + 1] *= w;  
+                } else {
+                    residuals[2 * i + 0] = 0;
+                    residuals[2 * i + 1] = 0;    
+                    d_r_d_p.setZero();                  
+                }
 
                 vec_Dr_DRt[i] = d_r_d_p.leftCols<3>() * R_i_c.transpose() * SO3d::hat(p_i);
                 vec_Dr_DPt[i] = d_r_d_p.leftCols<3>() * Dp_DPt;
                 vec_Dr_DRic[i] = d_r_d_p.leftCols<3>() * SO3d::hat(p_c);
                 vec_Dr_Dtic[i] = d_r_d_p.leftCols<3>() * Dp_Dtic;
-                // if (p_c.z()< 0) {
-                //     std::cout << "p_c: " << p_c.transpose() << "p_i: " << p_i.transpose() 
-                //         << " p_w: " << p_w.transpose() << " Xt.P: " << Xt.P.transpose() 
-                //         << " t_i_c: " << t_i_c.transpose() << " R_i_c: " << R_i_c << std::endl;
-                // }
-                
-                // std::cout << "vec_Dr_Dtic[i]: " << vec_Dr_Dtic[i] << std::endl;
-                // std::cout << "vec_Dr_DRic[i]: " << vec_Dr_DRic[i] << std::endl;
             }
 
             size_t idx;
@@ -193,7 +190,6 @@ public:
             if (jacobians[idx])
             {
                 Eigen::Matrix<double, Eigen::Dynamic, 4, Eigen::RowMajor> Dr_DRa;
-                // Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 4, Eigen::RowMajor>> Dr_DRa(jacobians[idx]);
                 Dr_DRa.resize(2*num_proj, 4);
                 Dr_DRa.setZero();
                 for (size_t i = 0; i < num_proj; i++) {

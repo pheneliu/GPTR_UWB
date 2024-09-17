@@ -167,7 +167,7 @@ public:
         options.max_num_iterations = 100;
         options.check_gradients = false;
         
-        // options.gradient_check_relative_precision = 0.02;  
+        options.gradient_check_relative_precision = 0.02;  
 
         // Documenting the parameter blocks
         paramInfoMap.clear();
@@ -257,13 +257,6 @@ public:
         double cost_imu_init = -1; double cost_imu_final = -1;
         AddIMUFactors(problem, traj, XBIG, XBIA, g, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce);
 
-        // Add the prior factor
-        FactorMeta factorMetaPrior;
-        // double cost_prior_init = -1; double cost_prior_final = -1;
-        // if (margInfo != NULL) {
-        //     AddPriorFactor(problem, traj, factorMetaPrior, tmin, tmax);
-        // }
-            
         tt_build.Toc();
 
         TicToc tt_slv;
@@ -273,7 +266,6 @@ public:
         Util::ComputeCeresCost(factorMetaProjCam0.res, cost_proj_init0, problem);
         Util::ComputeCeresCost(factorMetaProjCam1.res, cost_proj_init1, problem);
         Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_init,   problem);
-        // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
 
         ceres::Solve(options, &problem, &summary);
 
@@ -283,12 +275,7 @@ public:
         Util::ComputeCeresCost(factorMetaProjCam0.res, cost_proj_final0, problem);
         Util::ComputeCeresCost(factorMetaProjCam1.res, cost_proj_final1, problem);
         Util::ComputeCeresCost(factorMetaIMU.res,   cost_imu_final,   problem);
-        // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
         
-        // Determine the factors to remove
-        // if (do_marginalization) {
-        //     Marginalize(problem, traj, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaProjCam0, factorMetaProjCam1, factorMetaIMU, factorMetaPrior);
-        // }
 
         tt_slv.Toc();
     }

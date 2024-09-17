@@ -15,8 +15,6 @@
 #include "sensor_msgs/PointCloud2.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
-#include "livox_ros_driver/CustomMsg.h"
-
 
 // Basalt
 #include "basalt/spline/se3_spline.h"
@@ -81,9 +79,6 @@ void getCornerPosition2D(const std::string& data_path, vector<CornerData> &corne
             corners.push_back(Eigen::Vector2d(px, py));
             ids.push_back(idx);
             idx++;
-            // if (idx > 10) {
-            //     break;
-            // }
         }
         corner_meas.emplace_back(t_s, ids, corners);
     }
@@ -142,7 +137,6 @@ void getCameraModel(const std::string& data_path, CameraCalibration &cam_calib)
         std::cout << "intr.setFromI: " << intr.getParam().transpose() << std::endl;
         std::cout << "qic: " << qic.coeffs().transpose() << " Ric: " << Tic.so3().matrix() << std::endl;
     }
-
 }
 
 void getIMUMeasurements(const std::string &data_path, vector<IMUData> &imu_meas)
@@ -200,9 +194,6 @@ void getGT(const std::string &data_path, nav_msgs::Path &gt_path)
         traj_msg.pose.orientation.y = q.y();
         traj_msg.pose.orientation.z = q.z();
         gt_path.poses.push_back(traj_msg);          
-
-        // data->gt_timestamps.emplace_back(timestamp);
-        // data->gt_pose_data.emplace_back(q, pos);
     }
     infile.close();
     std::cout << "loaded " << gt_path.poses.size() << " gt data" << std::endl;
@@ -263,8 +254,7 @@ struct CameraImuBuf
 };
 
 CameraImuBuf CIBuf;
-// vector<Eigen::Vector3d> gtBuf;
-nav_msgs::Path est_path;
+// nav_msgs::Path est_path;
 nav_msgs::Path gt_path;
 
 ros::Publisher gt_pub;
@@ -427,7 +417,7 @@ int main(int argc, char **argv)
     odom_pub = nh_ptr->advertise<nav_msgs::Odometry>("/estimated_pose", 10);
     corner_pub = nh_ptr->advertise<sensor_msgs::PointCloud2>("/corners", 10);
 
-    est_path.header.frame_id = "map";
+    // est_path.header.frame_id = "map";
     gt_path.header.frame_id = "map";
 
     // Time to check the buffers and perform optimization
@@ -460,27 +450,23 @@ int main(int argc, char **argv)
     traj->setKnot(0, GPState(t0, initial_pose));
 
     Eigen::Matrix3d rai;
-    rai << -0.997945, 0.00867498,  0.0634844,
-            0.0627571, -0.0675298,   0.995742,
-            0.0129251,    0.99768,  0.0668466;
+    rai << -0.997945, 0.00867498, 0.0634844,
+            0.0627571, -0.0675298, 0.995742,
+            0.0129251, 0.99768, 0.0668466;
 
     for (size_t i = 0; i < CIBuf.imu_data.size(); i++) {
         const Eigen::Vector3d ad = CIBuf.imu_data[i].acc;
         if (std::abs(CIBuf.imu_data[i].t - CIBuf.corner_data_cam0[1].t) < 3000000*1e-9) {
             g = rai * ad;
-            // g_initialized = true;
-            std::cout << "g_a initialized with " << g.transpose() << "i: " << i << std::endl;
+            std::cout << "g_a initialized with " << g.transpose() << std::endl;
             break;
         }
     }
-      
-
 
     double newMaxTime = CIBuf.maxTime();
 
     // Step 2: Extend the trajectory
     if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {
-        std::cout << "newMaxTime: " << newMaxTime << " num: " << traj->getNumKnots() << std::endl;
         traj->extendKnotsTo(newMaxTime, GPState(t0, initial_pose));
     }    
 
