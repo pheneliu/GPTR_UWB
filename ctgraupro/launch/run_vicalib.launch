@@ -9,7 +9,7 @@
     <node pkg="ctgaupro" type="ctgaupro_gpvicalib" name="ctgaupro_gpvicalib" output="log">
         
         <param name="auto_exit"  value="1"/>
-        <param name="if_save_traj" value="0"/>
+        <param name="if_save_traj" value="1"/>
         <param name="traj_save_path" value="$(arg result_save_path)"/>
         <param name="data_path" value="$(arg vi_data_path)"/>
 
@@ -21,11 +21,11 @@
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="2"/> <!-- How many knots to slide -->
         <param name="WINDOW_SIZE" value="20"/> <!-- How many knot length does the sliding window -->
-        <param name="w_corner" value="200.0"/> <!-- Coefficients for TDOA residuals -->
+        <param name="w_corner" value="8.0"/> <!-- Coefficients for TDOA residuals -->
         <param name="GYR_N" value="2000.0"/> <!-- Coefficients for IMU residuals -->
-        <param name="GYR_W" value="100.0"/> <!-- Coefficients for IMU residuals -->
+        <param name="GYR_W" value="0.0"/> <!-- Coefficients for IMU residuals -->
         <param name="ACC_N" value="100.0"/> <!-- Coefficients for IMU residuals -->
-        <param name="ACC_W" value="100.0"/> <!-- Coefficients for IMU residuals -->
+        <param name="ACC_W" value="0.0"/> <!-- Coefficients for IMU residuals -->
         <param name="corner_loss_thres" value="-1.0"/> <!-- Loss function for IMU residuals -->
         <param name="mp_loss_thres" value="-1.0"/> <!-- Loss function for motion prior residuals -->
 
