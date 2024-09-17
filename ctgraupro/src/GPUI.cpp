@@ -259,6 +259,7 @@ ros::Subscriber gtSub  ;
 
 Eigen::Vector3d bg = Eigen::Vector3d::Zero();
 Eigen::Vector3d ba = Eigen::Vector3d::Zero();
+Eigen::Vector3d g = Eigen::Vector3d(0, 0, 9.81);
 const Eigen::Vector3d P_I_tag = Eigen::Vector3d(-0.012, 0.001, 0.091);
 
 bool if_save_traj;
@@ -357,7 +358,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
         double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
                                                // also determines the marginalization time limit          
-        gpmui->Evaluate(traj, bg, ba, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
+        gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
                         anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
                         w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);
         tt_solve.Toc();

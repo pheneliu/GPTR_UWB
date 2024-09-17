@@ -360,7 +360,7 @@ public:
         }
     }
 
-    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
         map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
         const vector<IMUData> &imuData, double tmin, double tmax, 
         double wGyro, double wAcce, double wBiasGyro, double wBiasAcce)
@@ -406,8 +406,10 @@ public:
             }
             factor_param_blocks.push_back(XBIG.data());
             factor_param_blocks.push_back(XBIA.data());  
+            factor_param_blocks.push_back(g.data());  
             factorMeta.coupled_params.back().push_back(paramInfoMap[XBIG.data()]);
-            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);                            
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);          
+            // factorMeta.coupled_params.back().push_back(paramInfoMap[g.data()]);                       
 
             double imu_loss_thres = -1.0;
             ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
@@ -749,7 +751,7 @@ public:
         }
     }    
 
-    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA,
+    void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
                   double tmin, double tmax, double tmid,
                   const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
                   std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
@@ -780,10 +782,13 @@ public:
             AddTrajParams(problem, traj, 0, paramInfoMap, tmin, tmax, tmid);
             problem.AddParameterBlock(XBIG.data(), 3);
             problem.AddParameterBlock(XBIA.data(), 3);
+            problem.AddParameterBlock(g.data(), 3);
 
             paramInfoMap.insert(make_pair(XBIG.data(), ParamInfo(XBIG.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
             paramInfoMap.insert(make_pair(XBIA.data(), ParamInfo(XBIA.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
+            paramInfoMap.insert(make_pair(g.data(), ParamInfo(g.data(), ParamType::RV3, ParamRole::EXTRINSIC, paramInfoMap.size(), -1, -1, 1)));
 
+            problem.SetParameterBlockConstant(g.data());
             // Sanity check
             for(auto &param_ : paramInfoMap)
             {
@@ -842,7 +847,7 @@ public:
 
         FactorMeta factorMetaIMU;
         double cost_imu_init = -1; double cost_imu_final = -1;
-        AddIMUFactors(problem, traj, XBIG, XBIA, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce);
+        AddIMUFactors(problem, traj, XBIG, XBIA, g, paramInfoMap, factorMetaIMU, imuData, tmin, tmax, wGyro, wAcce, wBiasGyro, wBiasAcce);
 
         // Add the prior factor
         FactorMeta factorMetaPrior;

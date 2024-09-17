@@ -21,7 +21,7 @@
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="2"/> <!-- How many knots to slide -->
         <param name="WINDOW_SIZE" value="20"/> <!-- How many knot length does the sliding window -->
-        <param name="w_corner" value="100.0"/> <!-- Coefficients for TDOA residuals -->
+        <param name="w_corner" value="200.0"/> <!-- Coefficients for TDOA residuals -->
         <param name="GYR_N" value="2000.0"/> <!-- Coefficients for IMU residuals -->
         <param name="GYR_W" value="100.0"/> <!-- Coefficients for IMU residuals -->
         <param name="ACC_N" value="100.0"/> <!-- Coefficients for IMU residuals -->
@@ -32,7 +32,7 @@
     </node>
 
    <!-- Visualize -->
-    <node pkg="rviz" type="rviz" name="rviz_ui" output="log" required="true"
+    <node pkg="rviz" type="rviz" name="rviz" output="log" required="true"
         args="-d $(find ctgaupro)/launch/ctgaupro_vicalib.rviz" />      
 
 </launch>

@@ -3,7 +3,7 @@
 
     <!-- Name of the UWB sequence -->
     <arg name="bag_file" default="/home/kailai/Documents/100_dataset/util/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
-    <arg name="result_save_path" default="/home/kailai/Documents/results/ctgaupro/"/>
+    <arg name="result_save_path" default="/home/kailai/Documents/results/ctgaupro/c1/"/>
     <arg name="anchor_path" default="/home/kailai/Documents/100_dataset/util/flight-dataset/survey-results/anchor_const1_survey.txt"/>
 
     <!-- Launch the uwb imu fusion node -->
@@ -40,6 +40,10 @@
         <param name="mp_loss_thres" value="100.0"/> <!-- Loss function for motion prior residuals -->
 
     </node>
+
+   <!-- Visualize -->
+    <node pkg="rviz" type="rviz" name="rviz_ui" output="log" required="true"
+        args="-d $(find ctgaupro)/launch/ctgaupro_ui.rviz" />        
 
     <!-- Play the bag file -->
     <node required="true" pkg="rosbag" type="play" name="rosbag_player"

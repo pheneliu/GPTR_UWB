@@ -52,7 +52,6 @@ public:
         Dt          (gpm_->getDt()    ),
         s           (s_               ),
         gpm         (gpm_             )
-        // g           (g_               )
 
     {
         // 6-element residual: 
@@ -282,8 +281,6 @@ private:
     Vector3d gyro;
     Vector3d acc_bias;
     Vector3d gyro_bias;    
-
-    // Eigen::Vector3d g;
 
     // Weight
     double wGyro;
