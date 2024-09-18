@@ -212,7 +212,7 @@ void AddAnalyticGPMP2KFactor(GaussianProcessPtr &traj, ceres::Problem &problem, 
     //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
 }
 
-void AddAutodiffIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta, vector<IMUData> &imu_data, Eigen::Vector3d &bg, Eigen::Vector3d &ba)
+void AddAutodiffIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta, vector<IMUData> &imu_data, Eigen::Vector3d &bg, Eigen::Vector3d &ba, Eigen::Vector3d &g)
 {
     vector<double *> so3_param;
     vector<double *> r3_param;
@@ -255,10 +255,13 @@ void AddAutodiffIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, Fac
         }
         factor_param_blocks.push_back(bg.data());
         factor_param_blocks.push_back(ba.data());   
+        factor_param_blocks.push_back(g.data());   
         r3_param.push_back(bg.data());
         r3_param.push_back(ba.data());       
+        r3_param.push_back(g.data());   
         cost_function->AddParameterBlock(3);
-        cost_function->AddParameterBlock(3);                  
+        cost_function->AddParameterBlock(3);           
+        cost_function->AddParameterBlock(3);       
         auto res_block = problem.AddResidualBlock(cost_function, gp_loss_func, factor_param_blocks);
         res_ids_gp.push_back(res_block);
     }
@@ -271,7 +274,7 @@ void AddAutodiffIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, Fac
     //         res_ids_gp.size(), gpmpFactorMeta.residual_blocks.size());
 }
 
-void AddAnalyticIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta, vector<IMUData> &imu_data, Eigen::Vector3d &bg, Eigen::Vector3d &ba)
+void AddAnalyticIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, FactorMeta &gpmpFactorMeta, vector<IMUData> &imu_data, Eigen::Vector3d &bg, Eigen::Vector3d &ba, Eigen::Vector3d &g)
 {
     vector<double *> so3_param;
     vector<double *> r3_param;
@@ -301,8 +304,10 @@ void AddAnalyticIMUFactor(GaussianProcessPtr &traj, ceres::Problem &problem, Fac
         }
         factor_param_blocks.push_back(bg.data());
         factor_param_blocks.push_back(ba.data());    
+        factor_param_blocks.push_back(g.data());  
         r3_param.push_back(bg.data());
-        r3_param.push_back(ba.data());                 
+        r3_param.push_back(ba.data());       
+        r3_param.push_back(g.data());            
         // Create the factors
         double mp_loss_thres = -1;
         // nh_ptr->getParam("mp_loss_thres", mp_loss_thres);
@@ -394,15 +399,16 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
     
     // IMU
     {
-        Eigen::Vector3d bg;        
-        Eigen::Vector3d ba;        
+        Eigen::Vector3d bg = Eigen::Vector3d::Zero();        
+        Eigen::Vector3d ba = Eigen::Vector3d::Zero();     
+        Eigen::Vector3d g = Eigen::Vector3d(0, 0, 9.81);     
         double time_autodiff;
         VectorXd residual_autodiff_;
         MatrixXd Jacobian_autodiff_;
         {
             // Test the autodiff Jacobian
             FactorMeta gpimuFactorMetaAutodiff;
-            AddAutodiffIMUFactor(swTraj, problem, gpimuFactorMetaAutodiff, imu_data, bg, ba);
+            AddAutodiffIMUFactor(swTraj, problem, gpimuFactorMetaAutodiff, imu_data, bg, ba, g);
             if (gpimuFactorMetaAutodiff.parameter_blocks() == 0)
                 return;
             TicToc tt_autodiff;
@@ -430,7 +436,7 @@ void TestAnalyticJacobian(ceres::Problem &problem, GaussianProcessPtr &swTraj, v
         {
             // Test the analytic Jacobian
             FactorMeta gpimuFactorMetaAnalytic;
-            AddAnalyticIMUFactor(swTraj, problem, gpimuFactorMetaAnalytic, imu_data, bg, ba);
+            AddAnalyticIMUFactor(swTraj, problem, gpimuFactorMetaAnalytic, imu_data, bg, ba, g);
             if (gpimuFactorMetaAnalytic.parameter_blocks() == 0)
                 return;
             TicToc tt_analytic;

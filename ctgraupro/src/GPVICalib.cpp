@@ -463,7 +463,7 @@ int main(int argc, char **argv)
         }
     }
 
-    double newMaxTime = CIBuf.maxTime();
+    double newMaxTime = min(CIBuf.imu_data.back().t, CIBuf.corner_data_cam0.back().t);
 
     // Step 2: Extend the trajectory
     if (traj->getMaxTime() < newMaxTime && (newMaxTime - traj->getMaxTime()) > gpDt*0.01) {

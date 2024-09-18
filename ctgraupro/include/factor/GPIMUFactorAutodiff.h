@@ -66,6 +66,7 @@ public:
         GPState<T> Xb(Dt); gpm->MapParamToState(parameters, RbIdx, Xb);
         Eigen::Matrix<T, 3, 1> biasW = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[12]);        
         Eigen::Matrix<T, 3, 1> biasA = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[13]);    
+        Eigen::Matrix<T, 3, 1> g = Eigen::Map<Eigen::Matrix<T, 3, 1> const>(parameters[14]);   
         /* #endregion Map the memory to control points --------------------------------------------------------------*/
 
         /* #region Calculate the pose at sampling time --------------------------------------------------------------*/
@@ -80,7 +81,7 @@ public:
 
         // Residual
         Eigen::Map<Matrix<T, 12, 1>> residual(residuals);      
-        Eigen::Vector3d g(0, 0, 9.81);
+        // Eigen::Vector3d g(0, 0, 9.81);
 
         residual.template block<3, 1>(0, 0) = wAcce*(Xt.R.matrix().transpose() * (Xt.A + g) - acc + biasA);
         residual.template block<3, 1>(3, 0) = wGyro*(Xt.O - gyro + biasW);
