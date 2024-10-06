@@ -9,7 +9,7 @@
     <arg name="sequence" default="cloud_avia_mid"/>
 
     <!-- Bag file -->
-    <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/$(arg sequence)/"/>
+    <arg name="lidar_bag_file" value="/home/xy/DATASETS/CTGAUPRO/$(arg sequence)/"/>
                                      
     <!-- Initial start time of each sequence -->
     <arg name="skipped_time" value="4"/>
@@ -24,7 +24,7 @@
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/ctgaupro/priormap.pcd" />
+        <param name="priormap_file"   value="/home/xy/DATASETS/CTGAUPRO/priormap.pcd" />
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />

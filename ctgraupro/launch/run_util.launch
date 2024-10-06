@@ -2,9 +2,10 @@
 <launch>
 
     <!-- Name of the UWB sequence -->
-    <arg name="bag_file" default="/home/kailai/Documents/100_dataset/util/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
+    <arg name="bag_file" default="/home/xy/DATASETS/CTGAUPRO/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
     <arg name="result_save_path" default="/home/kailai/Documents/results/ctgaupro/c1/"/>
-    <arg name="anchor_path" default="/home/kailai/Documents/100_dataset/util/flight-dataset/survey-results/anchor_const1_survey.txt"/>
+    <arg name="anchor_path" default="/home/xy/DATASETS/CTGAUPRO/dataset/flight-dataset/survey-results/anchor_const1_survey.txt"/>
+    
 
     <!-- Launch the uwb imu fusion node -->
     <node pkg="ctgaupro" type="ctgaupro_gpui" name="ctgaupro_gpui" output="screen">

@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   livox_ros_driver
   cf_msgs
+  fmt
 )
 
 ## System dependencies are found with CMake's conventions
@@ -31,7 +32,9 @@ find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
+find_package(fmt REQUIRED)
 
+set(fmt_DIR "/usr/local/lib/cmake/fmt")
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
@@ -139,6 +142,7 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${CERES_INCLUDE_DIR}
 )
+include_directories(/home/xy/ws_livox/src/fmt/include)
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -156,32 +160,32 @@ include_directories(
 add_executable(${PROJECT_NAME} src/ctgaupro_lio.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME} PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
 
 add_executable(${PROJECT_NAME}_lio_test src/testLIO.cpp include/ikdTree/ikd_Tree.cpp)
 add_dependencies(${PROJECT_NAME}_lio_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_lio_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_lio_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(${PROJECT_NAME}_lio_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
 
 # Structure from motion
 add_executable(${PROJECT_NAME}_test_ljp src/test_ljp.cpp)
 add_dependencies(${PROJECT_NAME}_test_ljp ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_test_ljp PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS}) 
+target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt) 
 
 # UWB fusion
 add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
 
 add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
 add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
 
 # visual-inertial calibration
 add_executable(${PROJECT_NAME}_gpvicalib src/GPVICalib.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpvicalib PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpvicalib ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(${PROJECT_NAME}_gpvicalib ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
