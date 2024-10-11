@@ -5,8 +5,8 @@
     <arg name="autorun" default="false" />
 
     <!-- Sequence -->
-    <!-- <arg name="sequence" default="ntu_day_01"/> -->
-    <arg name="sequence" default="ntu_day_02"/>
+    <arg name="sequence" default="ntu_day_01"/>
+    <!-- <arg name="sequence" default="ntu_day_02"/> -->
     <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
@@ -59,7 +59,7 @@
         <!-- <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" /> -->
 
         <!-- Set to 1 to load the search for previous logs and redo -->
-        <param name="resume_from_log" value="[0, 0]" type="yaml"/>
+        <param name="resume_from_log" value="[1, 1]" type="yaml"/>
 
         <!-- Initial pose of each lidars-->
         <param name="xyzypr_W_L0"     value="$(arg xyzypr_W_L0)" type="yaml"/>
@@ -98,28 +98,28 @@
         <param name="max_acc"         value="-5.0"   />
 
         <!-- Extrinsic estimation -->
-        <param name="SW_CLOUDNUM"     value="80"     />
-        <param name="SW_CLOUDSTEP"    value="2"     />
-        <param name="max_lidarcoefs"  value="1000"   />
+        <param name="SW_CLOUDNUM"     value="50"     />
+        <param name="SW_CLOUDSTEP"    value="5"     />
+        <param name="max_lidarcoefs"  value="2000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="min_inner_iter"  value="10"      />
+        <param name="min_inner_iter"  value="3"      />
         <param name="max_inner_iter"  value="40"      />
-        <param name="conv_thres"      value="5"      />
+        <param name="conv_thres"      value="3"      />
         <param name="dJ_conv_thres"   value="10"     />
-        <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0, 0.05, 0.5, 1.0 ]" type="yaml"/>
+        <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0,  0.05,  0.5,  1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ 15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
-        <param name="fix_time_begin"  value="0.25"   />
-        <param name="fix_time_end"    value="0.0"    />
+        <param name="fix_time_begin"  value="0.025"   />
+        <param name="fix_time_end"    value="0.025"    />
 
         <!-- Log dir -->
-        <param name="log_period"     value="5.0"     />
-        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/logs/lio/exp_mcdviral_$(arg sequence)"/>
+        <param name="log_period"      value="5.0"     />
+        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/logs/lio/exp_mcdviral_$(arg sequence)_pcd"/>
 
     </node>
 

@@ -197,69 +197,57 @@ void getInitPose(int lidx,
     ROS_ASSERT(pc0.size() == Nlidar);
     ROS_ASSERT(tf_W_Li0.size() == Nlidar);
 
-    // // Find the init pose of each lidar
-    // for (int lidx = 0; lidx < Nlidar; lidx++)
-    // {
-        // Merge the pointclouds in the first few seconds
-        pc0[lidx] = CloudXYZIPtr(new CloudXYZI());
-        int Ncloud = cloudstamp[lidx].size();
-        for(int cidx = 0; cidx < Ncloud; cidx++)
+    // Merge the pointclouds in the first few seconds
+    pc0[lidx] = CloudXYZIPtr(new CloudXYZI());
+    int Ncloud = cloudstamp[lidx].size();
+    for(int cidx = 0; cidx < Ncloud; cidx++)
+    {
+        // Check if pointcloud is later
+        if ((cloudstamp[lidx][cidx] - cloudstamp[lidx][0]).toSec() > startup_merge_time)
         {
-            // Check if pointcloud is later
-            if ((cloudstamp[lidx][cidx] - cloudstamp[lidx][0]).toSec() > startup_merge_time)
-            {
-                timestart[lidx] = cloudstamp[lidx][cidx].toSec();
-                break;
-            }
-
-            // Merge lidar
-            CloudXYZI temp; pcl::copyPointCloud(*clouds[lidx][cidx], temp);
-            *pc0[lidx] += temp;
-
-            // printf("P0 lidar %d, Cloud %d. Points: %d. Copied: %d\n", lidx, cidx, clouds[lidx][cidx]->size(), pc0[lidx]->size());
+            timestart[lidx] = cloudstamp[lidx][cidx].toSec();
+            break;
         }
-
-        int Norg = pc0[lidx]->size();
-
-        // Downsample the pointcloud
-        pc0[lidx] = uniformDownsample<PointXYZI>(pc0[lidx], pmap_leaf_size);
-        printf("Intial cloud of lidar %d, Points: %d -> %d\n", lidx, Norg, pc0[lidx]->size());
-
-        // Find ICP alignment and refine
-        CloudMatcher cm(0.1, 0.1);
-
-        // Set the original position of the anchors
-        Vector3d p_W_L0(xyzypr_W_L0[lidx*6 + 0], xyzypr_W_L0[lidx*6 + 1], xyzypr_W_L0[lidx*6 + 2]);
-        Quaternd q_W_L0 = Util::YPR2Quat(xyzypr_W_L0[lidx*6 + 3], xyzypr_W_L0[lidx*6 + 4], xyzypr_W_L0[lidx*6 + 5]);
-        myTf tf_W_L0(q_W_L0, p_W_L0);
-
-        // // Find ICP pose
-        // Matrix4f tfm_W_Li0;
-        // double   icpFitness   = 0;
-        // double   icpTime      = 0;
-        // bool     icpconverged = cm.CheckICP(priormap, pc0[lidx], tf_W_L0.cast<float>().tfMat(), tfm_W_Li0, 0.2, 10, 1.0, icpFitness, icpTime);
-        
-        // tf_W_L0 = myTf(tfm_W_Li0);
-        // printf("Lidar %d initial pose. %s. Time: %f. Fn: %f. XYZ: %f, %f, %f. YPR: %f, %f, %f.\n",
-        //         lidx, icpconverged ? "Conv" : "Not Conv", icpTime, icpFitness,
-        //         tf_W_L0.pos.x(), tf_W_L0.pos.y(), tf_W_L0.pos.z(),
-        //         tf_W_L0.yaw(), tf_W_L0.pitch(), tf_W_L0.roll());
-
-        // Find the refined pose
-        IOAOptions ioaOpt;
-        ioaOpt.init_tf = tf_W_L0;
-        ioaOpt.max_iterations = 20;
-        ioaOpt.show_report = true;
-        ioaOpt.text = myprintf("T_W_L(%d,0)_refined_%d", lidx, 10);
-        IOASummary ioaSum;
-        ioaSum.final_tf = ioaOpt.init_tf;
-        cm.IterateAssociateOptimize(ioaOpt, ioaSum, priormap, pc0[lidx]);
-        printf("Refined: \n");
-        cout << ioaSum.final_tf.tfMat() << endl;
-
-        // Save the result to external buffer
-        tf_W_Li0[lidx] = ioaSum.final_tf;
-    // }
+        // Merge lidar
+        CloudXYZI temp; pcl::copyPointCloud(*clouds[lidx][cidx], temp);
+        *pc0[lidx] += temp;
+        // printf("P0 lidar %d, Cloud %d. Points: %d. Copied: %d\n", lidx, cidx, clouds[lidx][cidx]->size(), pc0[lidx]->size());
+    }
+    int Norg = pc0[lidx]->size();
+    // Downsample the pointcloud
+    pc0[lidx] = uniformDownsample<PointXYZI>(pc0[lidx], pmap_leaf_size);
+    printf("Intial cloud of lidar %d, Points: %d -> %d\n", lidx, Norg, pc0[lidx]->size());
+    // Find ICP alignment and refine
+    CloudMatcher cm(0.1, 0.1);
+    // Set the original position of the anchors
+    Vector3d p_W_L0(xyzypr_W_L0[lidx*6 + 0], xyzypr_W_L0[lidx*6 + 1], xyzypr_W_L0[lidx*6 + 2]);
+    Quaternd q_W_L0 = Util::YPR2Quat(xyzypr_W_L0[lidx*6 + 3], xyzypr_W_L0[lidx*6 + 4], xyzypr_W_L0[lidx*6 + 5]);
+    myTf tf_W_L0(q_W_L0, p_W_L0);
+    // // Find ICP pose
+    // Matrix4f tfm_W_Li0;
+    // double   icpFitness   = 0;
+    // double   icpTime      = 0;
+    // bool     icpconverged = cm.CheckICP(priormap, pc0[lidx], tf_W_L0.cast<float>().tfMat(), tfm_W_Li0, 0.2, 10, 1.0, icpFitness, icpTime);
+    
+    // tf_W_L0 = myTf(tfm_W_Li0);
+    // printf("Lidar %d initial pose. %s. Time: %f. Fn: %f. XYZ: %f, %f, %f. YPR: %f, %f, %f.\n",
+    //         lidx, icpconverged ? "Conv" : "Not Conv", icpTime, icpFitness,
+    //         tf_W_L0.pos.x(), tf_W_L0.pos.y(), tf_W_L0.pos.z(),
+    //         tf_W_L0.yaw(), tf_W_L0.pitch(), tf_W_L0.roll());
+    
+    // // Find the refined pose
+    IOAOptions ioaOpt;
+    ioaOpt.init_tf = tf_W_L0;
+    ioaOpt.max_iterations = 20;
+    ioaOpt.show_report = true;
+    ioaOpt.text = myprintf("T_W_L(%d,0)_refined_%d", lidx, 10);
+    IOASummary ioaSum;
+    ioaSum.final_tf = ioaOpt.init_tf;
+    // cm.IterateAssociateOptimize(ioaOpt, ioaSum, priormap, pc0[lidx]);
+    // printf("Refined: \n");
+    // cout << ioaSum.final_tf.tfMat() << endl;
+    // Save the result to external buffer
+    tf_W_Li0[lidx] = ioaSum.final_tf;
 
     return;
 }
@@ -548,7 +536,7 @@ int main(int argc, char **argv)
                  );
 
         // Resize the buffer
-        int numClouds = MAX_CLOUDS < 0 ? pcd_files.size() : MAX_CLOUDS;
+        int numClouds = MAX_CLOUDS < 0 ? pcd_files.size() : min(int(pcd_files.size()), MAX_CLOUDS);
         clouds[lidx].resize(numClouds);
         cloudstamp[lidx].resize(numClouds);
 
@@ -648,43 +636,6 @@ int main(int argc, char **argv)
 
     vector<vector<double>> gndtr_ts(Nlidar);
     vector<CloudPosePtr> gndtrCloud(Nlidar);
-    // for(auto &cloud : gndtrCloud)
-    // {
-    //     cloud = CloudPosePtr(new CloudPose());
-    //     cloud->clear();
-    // }
-    
-    // // Add points to gndtr Cloud
-    // for(auto &msg : gndtr)
-    // {
-    //     for (auto &tf : msg.transforms)
-    //     {
-    //         int lidar_id = std::stoi(tf.child_frame_id.replace(0, string("lidar_").length(), string("")));
-    //         if (lidar_id >= Nlidar)
-    //         {
-    //             printf(KRED "gndtr of lidar %d but it is not declared\n" RESET, lidar_id);
-    //             continue;
-    //         }
-
-    //         // Copy the pose to the cloud
-    //         PointPose pose;
-    //         pose.t = tf.header.stamp.toSec();
-    //         pose.x = tf.transform.translation.x;
-    //         pose.y = tf.transform.translation.y;
-    //         pose.z = tf.transform.translation.z;
-    //         pose.qx = tf.transform.rotation.x;
-    //         pose.qy = tf.transform.rotation.y;
-    //         pose.qz = tf.transform.rotation.z;
-    //         pose.qw = tf.transform.rotation.w;
-    //         gndtrCloud[lidar_id]->push_back(pose);
-            
-    //         // Save the time stamps
-    //         gndtr_ts[lidar_id].push_back(pose.t);
-    //     }
-    // }
-    // for(auto &cloud : gndtrCloud)
-    //     printf("GNDTR cloud size: %d point(s)\n");
-
     vector<fs::directory_entry> gtr_files;
     if(fs::exists(lidar_bag_file + "/gtr") && fs::is_directory(lidar_bag_file + "/gtr"))
     {
@@ -701,7 +652,15 @@ int main(int argc, char **argv)
         gndtrCloud[lidx] = CloudPosePtr(new CloudPose());
         if(lidx < gtr_files.size())
         {
-            pcl::io::loadPCDFile<PointPose>(gtr_files[lidx].path().string(), *gndtrCloud[lidx]);
+            CloudPosePtr temp(new CloudPose());
+            pcl::io::loadPCDFile<PointPose>(gtr_files[lidx].path().string(), *temp);
+
+            for(auto &pose : temp->points)
+            {
+                if (pose.t < cloudstamp.front().back().toSec())
+                    gndtrCloud[lidx]->push_back(pose);
+            }
+
             printf("GNDTR cloud size: %d point(s)\n");
         }
     }
@@ -1309,6 +1268,19 @@ int main(int argc, char **argv)
                     cout << report_opt + report_state + report_xtrs << endl;
                 }
 
+                // Save the pointclouds
+                if (tcloudStart(cidx) - TSTART < 100.0)
+                {
+                    static vector<int> cloud_idx(Nlidar, -1);
+                    for(int lidx = 0; lidx < Nlidar; lidx++)
+                    {
+                        cloud_idx[lidx] += 1;
+                        string cloud_dir = lidar_bag_file + "/ctgp_deskewed_cloud/";
+                        fs::create_directory(cloud_dir + "/lidar_" + to_string(lidx));
+                        string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "/cloud_" + to_string(cloud_idx[lidx]) + ".pcd";
+                        pcl::io::savePCDFileBinary(cloud_name, *swCloudUndiInW[lidx].back());
+                    }
+                }
 
                 // if the system has converged and marginalization done, slide window
                 if (converged && report.marginalization_done)
@@ -1350,7 +1322,7 @@ int main(int argc, char **argv)
                                 << pose.pose.orientation.x << ","
                                 << pose.pose.orientation.y << ","
                                 << pose.pose.orientation.z << ","
-                                << pose.pose.orientation.w << "," << endl;
+                                << pose.pose.orientation.w << endl;
                 }
                 xts_logfile.close();
             }
@@ -1375,15 +1347,6 @@ int main(int argc, char **argv)
     /* #endregion Do optimization with inter-trajectory factors -----------------------------------------------------*/
  
     /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
-
-    // vector<ros::Publisher> poseSamplePub(Nlidar);
-    // for(int lidx = 0; lidx < Nlidar; lidx++)
-    //     poseSamplePub[lidx] = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_sampled", lidx), 1);
-
-    // // Loop in waiting
-    // ros::Rate rate(0.2);
-    // while(ros::ok())
-    //     rate.sleep();
 
     exit(0);
 
