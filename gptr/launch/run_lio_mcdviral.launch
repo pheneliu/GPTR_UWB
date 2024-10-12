@@ -10,7 +10,7 @@
     <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
-    <arg name="lidar_bag_file" value="/home/tmn/DATASETS/ctgaupro/mcd_$(arg sequence)_lidars/"/>
+    <arg name="lidar_bag_file" value="/home/tmn/DATASETS/gptr/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
     <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/>
@@ -30,12 +30,12 @@
                                      39.49, 23.48,  6.54,  36,  3, 1 ]" if="$(eval 'ntu_day_10' in sequence)"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="true" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
+    <node required="true" pkg="gptr" type="gptr" name="gptr" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/ctgaupro/mcd_ntu_priormap_downsampled.pcd" />
+        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/mcd_ntu_priormap_downsampled.pcd" />
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
@@ -122,12 +122,12 @@
 
         <!-- Log dir -->
         <param name="log_period"      value="5.0"     />
-        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/logs/lio/exp_mcdviral_$(arg sequence)_pcd"/>
+        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/exp_mcdviral_$(arg sequence)_pcd"/>
 
     </node>
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-          args="-d $(find ctgaupro)/launch/ctgaupro_lio_mcdviral.rviz" />
+          args="-d $(find gptr)/launch/gptr_lio_mcdviral.rviz" />
 
 </launch>

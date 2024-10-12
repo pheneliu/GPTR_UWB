@@ -350,7 +350,7 @@ void VisualizeGndtr(vector<CloudPosePtr> &gndtrCloud)
 int main(int argc, char **argv)
 {
     // Initalize ros nodes
-    ros::init(argc, argv, "ctgaupro");
+    ros::init(argc, argv, "gptr");
     ros::NodeHandle nh("~");
     nh_ptr = boost::make_shared<ros::NodeHandle>(nh);
     

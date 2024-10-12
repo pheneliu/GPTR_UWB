@@ -2,11 +2,11 @@
 <launch>
 
     <!-- Name of the VI sequence -->
-    <arg name="result_save_path" default="/home/kailai/Documents/results/ctgaupro/vicalib/"/>
-    <arg name="vi_data_path" default="$(find ctgaupro)/dataVICalib/"/>
+    <arg name="result_save_path" default="/home/kailai/Documents/results/gptr/vicalib/"/>
+    <arg name="vi_data_path" default="$(find gptr)/dataVICalib/"/>
 
     <!-- Launch the camera imu calibration node -->
-    <node pkg="ctgaupro" type="ctgaupro_gpvicalib" name="ctgaupro_gpvicalib" output="log">
+    <node pkg="gptr" type="gptr_gpvicalib" name="gptr_gpvicalib" output="log">
         
         <param name="auto_exit"  value="1"/>
         <param name="if_save_traj" value="1"/>
@@ -33,6 +33,6 @@
 
    <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz" output="log" required="true"
-        args="-d $(find ctgaupro)/launch/ctgaupro_vicalib.rviz" />      
+        args="-d $(find gptr)/launch/gptr_vicalib.rviz" />      
 
 </launch>

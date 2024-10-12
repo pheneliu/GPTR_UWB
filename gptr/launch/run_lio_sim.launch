@@ -9,7 +9,7 @@
     <arg name="sequence" default="cloud_avia_mid_dynamic_extrinsics"/>
 
     <!-- Bag file -->
-    <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/$(arg sequence)/"/>
+    <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/gptr/$(arg sequence)/"/>
                                      
     <!-- Initial start time of each sequence -->
     <arg name="skipped_time" value="0"/>
@@ -19,12 +19,12 @@
                                     -0.3, -0.3, 0.55, -134, 0,  0 ]"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="false" pkg="ctgaupro" type="ctgaupro" name="ctgaupro" output="screen"
+    <node required="false" pkg="gptr" type="gptr" name="gptr" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/ctgaupro/priormap.pcd" />
+        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/priormap.pcd" />
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
@@ -109,17 +109,17 @@
 
         <!-- Log dir -->
         <param name="log_period"     value="5.0"     />
-        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/ctgaupro/logs/lio/sim_$(arg sequence)"/>
+        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_$(arg sequence)"/>
 
     </node>
 
     <!-- Robot visualization node -->
-    <node name="cartinbot_viz" pkg="ctgaupro" type="cartinbot_viz.py" output="screen">
+    <node name="cartinbot_viz" pkg="gptr" type="cartinbot_viz.py" output="screen">
         <!-- If you have parameters or arguments, you can set them here -->
     </node>
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-        args="-d $(find ctgaupro)/launch/ctgaupro_lio_sim.rviz" />
+        args="-d $(find gptr)/launch/gptr_lio_sim.rviz" />
 
 </launch>

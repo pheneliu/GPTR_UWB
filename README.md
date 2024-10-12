@@ -1,6 +1,6 @@
 # Presiquite
 
-* Please build [SFUISE](https://github.com/KIT-ISAS/SFUISE) in your workspace to have the cf_msg, which is required in ctgaupro.
+* Please build [SFUISE](https://github.com/KIT-ISAS/SFUISE) in your workspace to have the cf_msg, which is required in gptr.
 * Please install Ceres 2.1.0 is needed.
 
 # Testing with lidar:
@@ -21,16 +21,16 @@ The data can be downloaded here:
 Example for testing on [UTIL](https://utiasdsl.github.io/util-uwb-dataset/) (TDoA-inertial):
 ```
 # Change bag_file and anchor_pose_path in `launch/run_util.launch` according to the path to the data
-roslaunch ctgaupro run_util.launch
+roslaunch gptr run_util.launch
 ```
 Baseline approach for comparison is the ESKF presented by the UTIL paper
 Evaluation using [evo](https://github.com/MichaelGrupp/evo) package
 ```
 # Set if_save_traj in `launch/run_util.launch` to `1` and change traj_save_path accordingly
-roslaunch ctgaupro run_util.launch
+roslaunch gptr run_util.launch
 evo_ape tum /traj_save_path/gt.txt /traj_save_path/traj.txt -a --plot
 ```
 Check the analytic Jacobian of IMU factor
 ```
-roslaunch ctgaupro run_testui.launch
+roslaunch gptr run_testui.launch
 ``` 

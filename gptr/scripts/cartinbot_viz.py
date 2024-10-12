@@ -35,7 +35,7 @@ class STLPublisher:
         self.marker.lifetime = rospy.Duration()
 
         # Set the mesh resource (path to the STL file)
-        self.marker.mesh_resource = "package://ctgaupro/scripts/cartinbot.stl"
+        self.marker.mesh_resource = "package://gptr/scripts/cartinbot.stl"
 
         # Scale (adjust depending on your STL file size)
         self.marker.scale.x = 1.0

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(ctgaupro)
+project(gptr)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 set(CMAKE_BUILD_TYPE "Release")
@@ -119,7 +119,7 @@ find_package(Ceres REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES ctgaupro
+#  LIBRARIES gptr
 #  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
 )
@@ -142,7 +142,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/ctgaupro.cpp
+#   src/${PROJECT_NAME}/gptr.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -153,7 +153,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collidelibraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt)
-add_executable(${PROJECT_NAME} src/ctgaupro_lio.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
+add_executable(${PROJECT_NAME} src/gptr_lio.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME} PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
