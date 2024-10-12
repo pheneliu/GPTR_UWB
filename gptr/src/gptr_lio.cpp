@@ -832,7 +832,7 @@ int main(int argc, char **argv)
         for(int lidx = 0; lidx < Nlidar; lidx++)
         {
             // Creating the trajectory estimator
-            StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0_refined[lidx].rot, tf_W_Li0_refined[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
+            StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
 
             gpkflo.push_back(GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.4, nh_ptr, nh_mtx)));
 
@@ -849,8 +849,8 @@ int main(int argc, char **argv)
             trajEst[lidx].join();
             
             // Save the trajectory
-            string cloud_dir = lidar_bag_file + "/ctgp_kf/";
-            fs::create_directory(cloud_dir);
+            string cloud_dir = log_dir + "/gptr_kf/";
+            fs::create_directories(cloud_dir);
             string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "_pose.pcd";
             // pcl::io::savePCDFileBinary(cloud_name, *posePrior[lidx]);
             PCDWriter writer;
@@ -1328,8 +1328,8 @@ int main(int argc, char **argv)
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
                         cloud_idx[lidx] += 1;
-                        string cloud_dir = lidar_bag_file + "/ctgp_deskewed_cloud/";
-                        fs::create_directory(cloud_dir + "/lidar_" + to_string(lidx));
+                        string cloud_dir = log_dir + "/gptr_deskewed_cloud/";
+                        fs::create_directories(cloud_dir + "/lidar_" + to_string(lidx));
                         string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "/cloud_" + to_string(cloud_idx[lidx]) + ".pcd";
                         pcl::io::savePCDFileBinary(cloud_name, *swCloudUndiInW[lidx].back());
                     }

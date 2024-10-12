@@ -5,12 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Lidar01
         - /Lidar01/Odom01/Shape1
-        - /Lidar01/Kfpose01
-        - /Lidar11
         - /Lidar11/Odom11/Shape1
-        - /Lidar11/Kfpose11
         - /Marker1/Namespaces1
       Splitter Ratio: 0.6441176533699036
     Tree Height: 746
@@ -276,7 +272,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.07000000029802322
+          Size (m): 0.05000000074505806
           Style: Spheres
           Topic: /lidar_0/gp_traj
           Unreliable: false
@@ -355,7 +351,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 230; 69; 255
+          Color: 3; 102; 255
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -367,7 +363,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.029999999329447746
+          Size (m): 0.05000000074505806
           Style: Spheres
           Topic: /lidar_0/kf_pose
           Unreliable: false
@@ -555,7 +551,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 252; 175; 62
+          Color: 0; 255; 32
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -567,7 +563,7 @@ Visualization Manager:
           Queue Size: 0
           Selectable: true
           Size (Pixels): 5
-          Size (m): 0.07000000029802322
+          Size (m): 0.05000000074505806
           Style: Spheres
           Topic: /lidar_1/gp_traj
           Unreliable: false
@@ -646,7 +642,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 230; 69; 255
+          Color: 3; 102; 255
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -658,7 +654,7 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.029999999329447746
+          Size (m): 0.05000000074505806
           Style: Spheres
           Topic: /lidar_1/kf_pose
           Unreliable: false
@@ -711,7 +707,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 4.2497663497924805
+      Distance: 6.4449238777160645
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -719,17 +715,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.8744823932647705
-        Y: 0.6245417594909668
-        Z: -1.3498829503078014e-06
+        X: 0.36314845085144043
+        Y: -1.0154905319213867
+        Z: -1.409487595083192e-06
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.31479886174201965
+      Pitch: 0.03979746997356415
       Target Frame: world
-      Yaw: 0.5535735487937927
+      Yaw: 1.3503806591033936
     Saved: ~
 Window Geometry:
   Displays:

@@ -1342,6 +1342,7 @@ public:
         for(int kidx = 0; kidx < getNumKnots(); kidx++)
         {
             logfile << kidx << ", "
+                    << getKnotTime(kidx) << ", "
                     << getKnotSO3(kidx).unit_quaternion().x() << ", "
                     << getKnotSO3(kidx).unit_quaternion().y() << ", "
                     << getKnotSO3(kidx).unit_quaternion().z() << ", "
@@ -1498,14 +1499,13 @@ public:
             // Set the knot values
             for(int ridx = 0; ridx < traj.rows(); ridx++)
             {
-
                 VectorXd X = traj.row(ridx);
-                R.push_back(SO3d(Quaternd(X(4), X(1), X(2), X(3))));
-                O.push_back(Vec3(X(5),  X(6),  X(7)));
-                S.push_back(Vec3(X(8),  X(9),  X(10)));
-                P.push_back(Vec3(X(11), X(12), X(13)));
-                V.push_back(Vec3(X(14), X(15), X(16)));
-                A.push_back(Vec3(X(17), X(18), X(19)));
+                R.push_back(SO3d(Quaternd(X(5), X(2), X(3), X(4))));
+                O.push_back(Vec3(X(6),  X(7),  X(8)));
+                S.push_back(Vec3(X(9),  X(10), X(11)));
+                P.push_back(Vec3(X(12), X(13), X(14)));
+                V.push_back(Vec3(X(15), X(16), X(17)));
+                A.push_back(Vec3(X(18), X(19), X(20)));
 
                 // C.push_back(CovMZero);
             }
@@ -1522,12 +1522,12 @@ public:
             for(int ridx = 0; ridx < traj.rows(); ridx++)
             {
                 VectorXd X = traj.row(ridx);
-                trajLog.extendOneKnot(GPState<double>(ridx*dt_inLog+t0_inLog, SO3d(Quaternd(X(4), X(1), X(2), X(3))),
-                                                                              Vec3(X(5),  X(6),  X(7)),
-                                                                              Vec3(X(8),  X(9),  X(10)),
-                                                                              Vec3(X(11), X(12), X(13)),
-                                                                              Vec3(X(14), X(15), X(16)),
-                                                                              Vec3(X(17), X(18), X(19))));
+                trajLog.extendOneKnot(GPState<double>(ridx*dt_inLog+t0_inLog, SO3d(Quaternd(X(5), X(2), X(3), X(4))),
+                                                                              Vec3(X(6),  X(7),  X(8)),
+                                                                              Vec3(X(9),  X(10), X(11)),
+                                                                              Vec3(X(12), X(13), X(14)),
+                                                                              Vec3(X(15), X(16), X(17)),
+                                                                              Vec3(X(18), X(19), X(20))));
             }
 
             // Sample the log trajectory to initialize current trajectory
