@@ -111,6 +111,8 @@ vector<myTf<double>> T_B_Li_gndtr;
 string log_dir = "/home/tmn/logs";
 double log_period = 10;
 
+bool runkf = false;
+
 // Mutex for the node handle
 mutex nh_mtx;
 
@@ -186,7 +188,8 @@ void getInitPose(int lidx,
                  vector<double> &timestart,
                  const vector<double> &xyzypr_W_L0,
                  vector<CloudXYZIPtr> &pc0,
-                 vector<myTf<double>> &tf_W_Li0)
+                 vector<myTf<double>> &tf_W_Li0,
+                 vector<myTf<double>> &tf_W_Li0_refined)
 {
     // Number of lidars
     int Nlidar = cloudstamp.size();
@@ -223,6 +226,7 @@ void getInitPose(int lidx,
     Vector3d p_W_L0(xyzypr_W_L0[lidx*6 + 0], xyzypr_W_L0[lidx*6 + 1], xyzypr_W_L0[lidx*6 + 2]);
     Quaternd q_W_L0 = Util::YPR2Quat(xyzypr_W_L0[lidx*6 + 3], xyzypr_W_L0[lidx*6 + 4], xyzypr_W_L0[lidx*6 + 5]);
     myTf tf_W_L0(q_W_L0, p_W_L0);
+
     // // Find ICP pose
     // Matrix4f tfm_W_Li0;
     // double   icpFitness   = 0;
@@ -235,7 +239,7 @@ void getInitPose(int lidx,
     //         tf_W_L0.pos.x(), tf_W_L0.pos.y(), tf_W_L0.pos.z(),
     //         tf_W_L0.yaw(), tf_W_L0.pitch(), tf_W_L0.roll());
     
-    // // Find the refined pose
+    // Find the refined pose
     IOAOptions ioaOpt;
     ioaOpt.init_tf = tf_W_L0;
     ioaOpt.max_iterations = 20;
@@ -243,11 +247,13 @@ void getInitPose(int lidx,
     ioaOpt.text = myprintf("T_W_L(%d,0)_refined_%d", lidx, 10);
     IOASummary ioaSum;
     ioaSum.final_tf = ioaOpt.init_tf;
-    // cm.IterateAssociateOptimize(ioaOpt, ioaSum, priormap, pc0[lidx]);
-    // printf("Refined: \n");
-    // cout << ioaSum.final_tf.tfMat() << endl;
+    cm.IterateAssociateOptimize(ioaOpt, ioaSum, priormap, pc0[lidx]);
+    printf("Refined: \n");
+    cout << ioaSum.final_tf.tfMat() << endl;
+    
     // Save the result to external buffer
-    tf_W_Li0[lidx] = ioaSum.final_tf;
+    tf_W_Li0[lidx] = ioaOpt.init_tf;
+    tf_W_Li0_refined[lidx] = ioaSum.final_tf;
 
     return;
 }
@@ -356,6 +362,8 @@ int main(int argc, char **argv)
     ros::Time programstart = ros::Time::now();
  
     /* #region Read parameters --------------------------------------------------------------------------------------*/
+
+    runkf = Util::GetBoolParam(nh_ptr, "runkf", false);
 
     // Knot length
     nh_ptr->getParam("deltaT", deltaT);
@@ -675,13 +683,14 @@ int main(int argc, char **argv)
     
     // Initial coordinates of the lidar
     vector<myTf<double>> tf_W_Li0(Nlidar);
+    vector<myTf<double>> tf_W_Li0_refined(Nlidar);
     vector<CloudXYZIPtr> pc0(Nlidar);
 
     vector<double> timestart(Nlidar);
     vector<thread> poseInitThread(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         poseInitThread[lidx] = thread(getInitPose, lidx, std::ref(clouds), std::ref(cloudstamp), std::ref(priormap),
-                                      std::ref(timestart), std::ref(xyzypr_W_L0), std::ref(pc0), std::ref(tf_W_Li0));
+                                      std::ref(timestart), std::ref(xyzypr_W_L0), std::ref(pc0), std::ref(tf_W_Li0), std::ref(tf_W_Li0_refined));
 
     for(int lidx = 0; lidx < Nlidar; lidx++)
         poseInitThread[lidx].join();
@@ -772,14 +781,6 @@ int main(int argc, char **argv)
         }
     }
 
-    // Clear the clouds data to free memory
-    for(auto &cs : clouds)
-    {
-        for(auto &c : cs)
-            c->clear();
-        cs.clear();
-    }
-
     /* #endregion Split the pointcloud by time ----------------------------------------------------------------------*/
 
     /* #region Split the imu by cloud time --------------------------------------------------------------------------*/
@@ -818,6 +819,58 @@ int main(int argc, char **argv)
     
     /* #endregion Split the imu by cloud time -----------------------------------------------------------------------*/
   
+    /* #region Run the KF method ------------------------------------------------------------------------------------*/
+    
+    if(runkf)
+    {
+        typedef std::shared_ptr<GPKFLO> GPKFLOPtr;
+        // Find a preliminary trajectory for each lidar sequence
+        vector<GPKFLOPtr> gpkflo;
+        vector<thread> trajEst;
+        vector<CloudPosePtr> posePrior(Nlidar);
+        double UW_NOISE = 100.0, UV_NOISE = 100.0;
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+        {
+            // Creating the trajectory estimator
+            StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0_refined[lidx].rot, tf_W_Li0_refined[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
+
+            gpkflo.push_back(GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.4, nh_ptr, nh_mtx)));
+
+            // Estimate the trajectory
+            posePrior[lidx] = CloudPosePtr(new CloudPose());
+            trajEst.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
+                                                std::ref(kdTreeMap), std::ref(priormap),
+                                                std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
+                                                std::ref(posePrior[lidx]))));
+        }
+        // Wait for the trajectory estimate to finish
+        for(int lidx = 0; lidx < Nlidar; lidx++)
+        {
+            trajEst[lidx].join();
+            
+            // Save the trajectory
+            string cloud_dir = lidar_bag_file + "/ctgp_kf/";
+            fs::create_directory(cloud_dir);
+            string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "_pose.pcd";
+            // pcl::io::savePCDFileBinary(cloud_name, *posePrior[lidx]);
+            PCDWriter writer;
+            writer.writeASCII<PointPose>(cloud_name, *posePrior[lidx], 18);
+        }
+
+        trajEst.clear();
+        gpkflo.clear();
+
+        // Clear the clouds data to free memory
+        for(auto &cs : clouds)
+        {
+            for(auto &c : cs)
+                c->clear();
+            cs.clear();
+        }
+    }
+
+    /* #endregion ---------------------------------------------------------------------------------------------------*/
+    
     /* #region Create the LOAM modules ------------------------------------------------------------------------------*/
 
     gpmaplo = vector<GPMAPLOPtr>(Nlidar);

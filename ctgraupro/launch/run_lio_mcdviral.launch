@@ -5,8 +5,8 @@
     <arg name="autorun" default="false" />
 
     <!-- Sequence -->
-    <arg name="sequence" default="ntu_day_01"/>
-    <!-- <arg name="sequence" default="ntu_day_02"/> -->
+    <!-- <arg name="sequence" default="ntu_day_01"/> -->
+    <arg name="sequence" default="ntu_day_02"/>
     <!-- <arg name="sequence" default="ntu_day_10"/> -->
 
     <!-- Bag file -->
@@ -57,6 +57,9 @@
 
         <!-- Imu topics and their settings -->
         <!-- <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" /> -->
+
+        <!-- Run kf for comparison -->
+        <param name="runkf" value="1" />
 
         <!-- Set to 1 to load the search for previous logs and redo -->
         <param name="resume_from_log" value="[1, 1]" type="yaml"/>

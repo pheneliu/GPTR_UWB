@@ -218,9 +218,9 @@ private:
     double minKnnNbrDis = 0.1;
 
     // Optimimzation params
-    int MAX_ITER  = 10;
+    int MAX_ITER  = 5;
     double lambda = 0.0;
-    double dXmax  = 0.5;
+    double dXmax  = 0.2;
 
     // Number of debug steps
     int DEBUG_STEPS = 1;
@@ -261,7 +261,7 @@ public:
         // Advertise report
         assocPub    = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/assoc_cloud",  lidx), 1);
         cloudDskPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/clouddsk_inW", lidx), 1);
-        pppub       = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/pose_prior",   lidx), 1);
+        pppub       = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/kf_pose",   lidx), 1);
 
         nh_mtx.unlock();
     }
@@ -384,11 +384,11 @@ public:
     }
 
     void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr priormap,
-                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp)
+                  const vector<CloudXYZITPtr> &clouds, const vector<ros::Time> &cloudstamp, CloudPosePtr &posePrior)
     {
         int Ncloud = clouds.size();
-        trajEst = CloudPosePtr(new CloudPose());
-        trajEst->resize(Ncloud);
+        posePrior = CloudPosePtr(new CloudPose());
+        posePrior->resize(Ncloud);
 
         for(int cidx = 0; cidx < Ncloud && ros::ok(); cidx++)
         {
@@ -400,7 +400,7 @@ public:
             double dt = tn - tc;
 
             // assert that tn > tc and time steps differ less then 0.1 seconds
-            ROS_ASSERT_MSG(dt > 0 && fabs(dt - 0.1) < 0.02, "Time step error: %f", dt);
+            // ROS_ASSERT_MSG(dt > 0 && fabs(dt - 0.1) < 0.02, "Time step error: %f", dt);
 
             // Step 1: Predict the trajectory, use this as the prior
             StateWithCov Xpred = Xhat.Propagation(tn, Xhatprev, Rm);
@@ -503,7 +503,7 @@ public:
                 // Visualization
                 {
                     // Pointcloud deskewed
-                    Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
+                    // Util::publishCloud(cloudDskPub, *cloudDeskewedInW, ros::Time::now(), "world");
 
                     // Associated the associated points
                     CloudXYZIPtr assocCloud(new CloudXYZI());
@@ -515,7 +515,7 @@ public:
                         point.y = Coef[pidx].finW.y();
                         point.z = Coef[pidx].finW.z();
                     }
-                    Util::publishCloud(assocPub, *assocCloud, ros::Time::now(), "world");
+                    // Util::publishCloud(assocPub, *assocCloud, ros::Time::now(), "world");
 
                     printf("LIDX: %d, CIDX: %d. ITER: %d. Time: %f. Features: %d. J: %f -> %f\n",
                             lidx, cidx, iidx, Xpred.tcurr, Nf, J0, JK);
@@ -539,13 +539,13 @@ public:
             Xhat = Xpred;
 
             // Add the estimated pose to the pointcloud
-            trajEst->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
-            Util::publishCloud(pppub, *trajEst, ros::Time::now(), "world");
+            posePrior->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);
+            Util::publishCloud(pppub, *posePrior, ros::Time::now(), "world");
 
-            // DEBUG: Break after n steps
-            static int debug_count = 0; debug_count++;
-            if (DEBUG_STEPS > 0 && debug_count >= DEBUG_STEPS)
-                break; 
+            // // DEBUG: Break after n steps
+            // static int debug_count = 0; debug_count++;
+            // if (DEBUG_STEPS > 0 && debug_count >= DEBUG_STEPS)
+            //     break; 
         }
     }
 
