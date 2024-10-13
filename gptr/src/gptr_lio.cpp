@@ -1360,24 +1360,27 @@ int main(int argc, char **argv)
                     gpmaplo[lidx]->GetTraj()->saveTrajectory(output_dir, lidx, gndtr_ts[lidx]);
                 }
 
-                // Log the extrinsics
-                string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
-                std::ofstream xts_logfile;
-                xts_logfile.open(xts_log); // Open the file for writing
-                xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
-                xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
-                for(auto &pose : extrinsic_poses[1])
+                if (Nlidar > 1)
                 {
-                    xts_logfile << pose.header.stamp.toSec() << ","
-                                << pose.pose.position.x << ","
-                                << pose.pose.position.y << ","
-                                << pose.pose.position.z << ","
-                                << pose.pose.orientation.x << ","
-                                << pose.pose.orientation.y << ","
-                                << pose.pose.orientation.z << ","
-                                << pose.pose.orientation.w << endl;
+                    // Log the extrinsics
+                    string xts_log = output_dir + "/extrinsics_" + std::to_string(1) + ".csv";
+                    std::ofstream xts_logfile;
+                    xts_logfile.open(xts_log); // Open the file for writing
+                    xts_logfile.precision(std::numeric_limits<double>::digits10 + 1);
+                    xts_logfile << "t, x, y, z, qx, qy, qz, qw" << endl;
+                    for(auto &pose : extrinsic_poses[1])
+                    {
+                        xts_logfile << pose.header.stamp.toSec() << ","
+                                    << pose.pose.position.x << ","
+                                    << pose.pose.position.y << ","
+                                    << pose.pose.position.z << ","
+                                    << pose.pose.orientation.x << ","
+                                    << pose.pose.orientation.y << ","
+                                    << pose.pose.orientation.z << ","
+                                    << pose.pose.orientation.w << endl;
+                    }
+                    xts_logfile.close();
                 }
-                xts_logfile.close();
             }
 
             // Exit if loam diverges
