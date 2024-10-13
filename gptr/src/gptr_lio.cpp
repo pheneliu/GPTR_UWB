@@ -1019,7 +1019,7 @@ int main(int argc, char **argv)
                 }
 
                 // Prepare a report
-                static OptReport report;
+                OptReport report;
                 
 
                 // Optimize

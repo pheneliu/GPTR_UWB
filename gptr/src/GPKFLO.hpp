@@ -233,6 +233,8 @@ private:
     ros::Publisher cloudDskPub;
     ros::Publisher pppub;
 
+    double SKIPPED_TIME = 0;
+
 public:
 
     // Destructor
@@ -242,6 +244,11 @@ public:
     GPKFLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
     : lidx(lidx_), Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_), trajEst(CloudPosePtr(new CloudPose()))
     {
+
+        printf("Init state: P: %f, %f, %f, Q: %f, %f, %f, %f\n",
+                X0.Pos.x(), X0.Pos.y(), X0.Pos.z(), 
+                X0.Rot.unit_quaternion().x(), X0.Rot.unit_quaternion().y(), X0.Rot.unit_quaternion().z(), X0.Rot.unit_quaternion().w());
+
         // Initialize the covariance of velocity
         Eigen::VectorXd Rm_(12);
         Rm_ << 0, 0, 0, 0, 0, 0, Rw, Rw, Rw, Rv, Rv, Rv;
@@ -255,6 +262,9 @@ public:
 
         // Debug steps
         nh_ptr->getParam("DEBUG_STEPS", DEBUG_STEPS);
+
+        // Skip time
+        nh_ptr->getParam("SKIPPED_TIME", SKIPPED_TIME);
 
         nh_mtx.lock();
 
@@ -534,9 +544,22 @@ public:
                     break;
             }
 
-            // Update the states
-            Xhatprev = Xhat;
-            Xhat = Xpred;
+            if (tc < SKIPPED_TIME)
+            {
+                Xpred = Xhatprev;
+                Xhat = Xhatprev;
+                Xhatprev = Xhatprev;
+
+                Xpred.tcurr = tn;
+                Xhat.tcurr = tn;
+                Xhatprev.tcurr = tn;
+            }
+            else
+            {
+                // Update the states
+                Xhatprev = Xhat;
+                Xhat = Xpred;
+            }
 
             // Add the estimated pose to the pointcloud
             posePrior->points[cidx] = myTf(Xpred.Rot.matrix(), Xpred.Pos).Pose6D(Xpred.tcurr);

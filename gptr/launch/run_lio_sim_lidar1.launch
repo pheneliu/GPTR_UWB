@@ -15,8 +15,7 @@
     <arg name="skipped_time" value="0"/>
 
     <!-- Initial pose in each sequence -->
-    <arg name="xyzypr_W_L0" value="[ 0,    0,   0.70,  43,  48, 0,
-                                    -0.3, -0.3, 0.55, -134, 0,  0 ]"/>
+    <arg name="xyzypr_W_L0" value="[-0.3, -0.3, 0.55, -134, 0,  0 ]"/>
 
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="gptr" type="gptr" name="gptr" output="screen"
@@ -38,7 +37,7 @@
         <!-- Set to '1' to skip optimization -->
         <param name="VIZ_ONLY"        value="0"/>
         
-        <param name="lidar_topic"     value="['/lidar_0/points', '/lidar_1/points']" type="yaml" />
+        <param name="lidar_topic"     value="['/lidar_1/points']" type="yaml" />
         <param name="lidar_type"      value="['livox', 'livox']" type="yaml" />
         <param name="stamp_time"      value="['start', 'start']" type="yaml" />
 
@@ -89,12 +88,12 @@
 
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"     />
-        <param name="SW_CLOUDSTEP"    value="05"     />
+        <param name="SW_CLOUDSTEP"    value="02"     />
         <param name="max_lidarcoefs"  value="2000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
-        
+
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
         <param name="min_inner_iter"  value="5"      />

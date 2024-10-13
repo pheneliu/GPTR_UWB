@@ -1128,8 +1128,8 @@ void GPMLC::Evaluate(
     // Add the prior factor
     FactorMeta factorMetaPrior;
     double cost_prior_init = -1; double cost_prior_final = -1;
-    if (margInfo != NULL)
-        AddPriorFactor(problem, trajs, factorMetaPrior, tmin, tmax);
+    // if (margInfo != NULL)
+    //     AddPriorFactor(problem, trajs, factorMetaPrior, tmin, tmax);
 
     tt_build.Toc();
 
