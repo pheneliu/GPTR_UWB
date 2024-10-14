@@ -28,6 +28,9 @@ GPMLC::GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
 
     nh->getParam("xtSigGa", xtSigGa);
     nh->getParam("xtSigNu", xtSigNu);
+
+    fuse_marg = Util::GetBoolParam(nh, "fuse_marg", false);
+    compute_cost = Util::GetBoolParam(nh, "compute_cost", false);
 };
 
 // Add parameters
@@ -1128,31 +1131,41 @@ void GPMLC::Evaluate(
     // Add the prior factor
     FactorMeta factorMetaPrior;
     double cost_prior_init = -1; double cost_prior_final = -1;
-    // if (margInfo != NULL)
-    //     AddPriorFactor(problem, trajs, factorMetaPrior, tmin, tmax);
+    if (margInfo != NULL && fuse_marg)
+        AddPriorFactor(problem, trajs, factorMetaPrior, tmin, tmax);
 
     tt_build.Toc();
 
     TicToc tt_slv;
 
     // Find the initial cost
-    // Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
-    // Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_init, problem);
-    // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
-    // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
+    if(compute_cost)
+    {
+        Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_init,  problem);
+        Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_init, problem);
+        Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_init,   problem);
+        Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_init, problem);
+    }
 
     ceres::Solve(options, &problem, &summary);
 
-    // Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
-    // Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_final, problem);
-    // Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
-    // Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
+    if(compute_cost)
+    {
+        Util::ComputeCeresCost(factorMetaMp2k.res,  cost_mp2k_final,  problem);
+        Util::ComputeCeresCost(factorMetaLidar.res, cost_lidar_final, problem);
+        Util::ComputeCeresCost(factorMetaGpx.res,   cost_gpx_final,   problem);
+        Util::ComputeCeresCost(factorMetaPrior.res, cost_prior_final, problem);
+    }
 
     // Determine the factors to remove
     if (do_marginalization)
     {
         Marginalize(problem, trajs, tmin, tmax, tmid, paramInfoMap, factorMetaMp2k, factorMetaLidar, factorMetaGpx, factorMetaPrior);
         report.marginalization_done = true;
+    }
+    else
+    {
+        report.marginalization_done = false;
     }
 
     tt_slv.Toc();

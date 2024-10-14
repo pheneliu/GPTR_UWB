@@ -449,6 +449,9 @@ protected:
     MarginalizationInfoPtr margInfo;
     // MarginalizationFactor* margFactor = NULL;
 
+    bool compute_cost = false;
+    bool fuse_marg = false;
+
 public:
 
     // Destructor

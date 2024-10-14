@@ -105,7 +105,9 @@
 
         <param name="fix_time_begin"  value="0.025"    />
         <param name="fix_time_end"    value="0.0"    />
-
+        <param name="fuse_marg"       value="1"       />
+        <param name="compute_cost"    value="0"       />
+        
         <!-- Log dir -->
         <param name="log_period"     value="5.0"     />
         <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_$(arg sequence)"/>

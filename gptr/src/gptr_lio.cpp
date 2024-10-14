@@ -106,6 +106,9 @@ double dJ_conv_thres = 5.0;
 vector<double> conv_dX_thres = {0.05, 0.2, 1.0, 0.05, 0.2, 1.0};
 vector<double> change_thres = {0.5, 3.0, 8.0, 5.0};
 
+// Range of ypr
+vector<vector<vector<double>>> pr_range = {{{}, {}}, {{}, {}}};
+
 vector<myTf<double>> T_B_Li_gndtr;
 
 string log_dir = "/home/tmn/logs";
@@ -1179,34 +1182,39 @@ int main(int argc, char **argv)
 
                 // if(fastR)
                 // {
-                    // Constrain the pitch and roll to avoid losing track
-                    // for(int lidx = 0; lidx < Nlidar; lidx++)
-                    //     for(int kidx = traj_curr_knots[lidx]; kidx < trajs[lidx]->getNumKnots(); kidx++)
-                    //     {
-                    //         Vec3 ypr = Util::Quat2YPR(trajs[lidx]->getKnotSO3(kidx).unit_quaternion());
+                //     // Constrain the pitch and roll to avoid losing track
+                //     for(int lidx = 0; lidx < Nlidar; lidx++)
+                //         for(int kidx = traj_curr_knots[lidx]; kidx < trajs[lidx]->getNumKnots(); kidx++)
+                //         {
+                //             Vec3 ypr = Util::Quat2YPR(trajs[lidx]->getKnotSO3(kidx).unit_quaternion());
 
-                    //         // If new pitch and roll angles change suddenly, saturate them at 10 degrees
-                    //         if (fabs(ypr(1)) > 10.0)
-                    //         {
-                    //             printf("Resetting pitch of %d traj from %f to ", lidx, ypr(1));
-                    //             ypr(1) = 0;//ypr(1)/fabs(ypr(1))*10;
-                    //             printf("%f\n", ypr(1));
-                    //             trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
-                    //             trajs[lidx]->getKnotOmg(kidx) *= 0;
-                    //             trajs[lidx]->getKnotAlp(kidx) *= 0;
-                                
-                    //         }
-                                
-                    //         if (fabs(ypr(2)) > 10.0)
-                    //         {
-                    //             printf("Resetting roll %d traj from %f to ", lidx, ypr(2));
-                    //             ypr(2) = 0;//ypr(2)/fabs(ypr(2))*10;
-                    //             printf("%f\n", ypr(2));
-                    //             trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
-                    //             trajs[lidx]->getKnotOmg(kidx) *= 0;
-                    //             trajs[lidx]->getKnotAlp(kidx) *= 0;
-                    //         }
-                    //     }
+                //             // If new pitch and roll angles change suddenly, reset them
+                //             if(pr_range[lidx][1].size() != 0)
+                //             {
+                //                 if (ypr(1) < pr_range[lidx][1][0] || ypr(1) > pr_range[lidx][1][1])
+                //                 {
+                //                     printf("Resetting pitch of %d traj from %f to ", lidx, ypr(1));
+                //                     ypr(1) = 0;//ypr(1)/fabs(ypr(1))*10;
+                //                     printf("%f\n", ypr(1));
+                //                     trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
+                //                     trajs[lidx]->getKnotOmg(kidx) *= 0;
+                //                     trajs[lidx]->getKnotAlp(kidx) *= 0;
+                //                 }
+                //             }
+
+                //             if(pr_range[lidx][2].size() != 0)
+                //             {
+                //                 if (ypr(2) < pr_range[lidx][2][0] || ypr(2) > pr_range[lidx][2][1])
+                //                 {
+                //                     printf("Resetting roll %d traj from %f to ", lidx, ypr(2));
+                //                     ypr(2) = 0;//ypr(2)/fabs(ypr(2))*10;
+                //                     printf("%f\n", ypr(2));
+                //                     trajs[lidx]->getKnotSO3(kidx) = SO3d(Util::YPR2Quat(ypr));
+                //                     trajs[lidx]->getKnotOmg(kidx) *= 0;
+                //                     trajs[lidx]->getKnotAlp(kidx) *= 0;
+                //                 }
+                //             }
+                //         }
                 // }
 
                 
