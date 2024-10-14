@@ -13,8 +13,8 @@
     <arg name="lidar_bag_file" value="/home/tmn/DATASETS/gptr/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
-    <!-- <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/> -->
-    <arg name="skipped_time" value="134.5"  if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/>
+    <!-- <arg name="skipped_time" value="144.8"  if="$(eval 'ntu_day_01' in sequence)"/> -->
 
     <arg name="skipped_time" value="13" if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
@@ -75,7 +75,7 @@
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size"  value="0.15"   />
-        <param name="cloud_ds"        value="[1.6, 0.1]" type="yaml" />
+        <param name="cloud_ds"        value="[0.2, 0.1]" type="yaml" />
         
         <!-- GN MAP optimization params -->
         <param name="deltaT"          value="0.02204"/>
@@ -112,8 +112,8 @@
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="min_inner_iter"  value="20"      />
         <param name="max_inner_iter"  value="40"      />
+        <param name="min_inner_iter"  value="20"      />
         <param name="conv_thres"      value="10"      />
         <param name="dJ_conv_thres"   value="10"     />
         <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0,  0.05,  0.5,  1.0 ]" type="yaml"/>
