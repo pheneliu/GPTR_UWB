@@ -703,7 +703,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 47.79438781738281
+      Distance: 10
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -711,17 +711,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 79.29740142822266
-        Y: 89.71295928955078
-        Z: 1.0995021511917002e-05
+        X: 0
+        Y: 0
+        Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5447966456413269
+      Pitch: 0.6903982758522034
       Target Frame: lidar_0
-      Yaw: 2.5767672061920166
+      Yaw: 4.858582019805908
     Saved: ~
 Window Geometry:
   Displays:

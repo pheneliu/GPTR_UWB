@@ -6,7 +6,7 @@
     <arg name="autorun" default="false" />
 
     <!-- Sequence -->
-    <arg name="sequence" default="cloud_avia_mid_dynamic_extrinsics"/>
+    <arg name="sequence" default="cathhs_01"/>
 
     <!-- Bag file -->
     <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/gptr/$(arg sequence)/"/>
@@ -15,8 +15,8 @@
     <arg name="skipped_time" value="0"/>
 
     <!-- Initial pose in each sequence -->
-    <arg name="xyzypr_W_L0" value="[ 0,    0,   0.70,  43,  48, 0,
-                                    -0.3, -0.3, 0.55, -134, 0,  0 ]"/>
+    <arg name="xyzypr_W_L0" value="[ 0, 0, 0, 0, 0, 0,
+                                     0, 0, 0, 0, 0, 0 ]"/>
 
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="gptr" type="gptr" name="gptr" output="screen"
@@ -24,31 +24,31 @@
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/priormap.pcd" />
+        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/cathhs_prior.pcd" />
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)" />
         
         <!-- Total number of clouds loaded -->
-        <param name="MAX_CLOUDS"      value="300" />
+        <param name="MAX_CLOUDS"      value="-1" />
         
         <!-- Time since first pointcloud to skip MAP Opt-->
-        <param name="SKIPPED_TIME"    value="4.9" />
+        <param name="SKIPPED_TIME"    value="0.0" />
         <param name="RECURRENT_SKIP"  value="0" />
 
         <!-- Set to '1' to skip optimization -->
         <param name="VIZ_ONLY"        value="0"/>
         
         <!-- Lidar topics and their settings -->
-        <param name="lidar_topic"     value="['/lidar_0/points', '/lidar_1/points']" type="yaml" />
-        <param name="lidar_type"      value="['livox', 'livox']" type="yaml" />
+        <param name="lidar_topic"     value="['/livox/lidar_0/points']" type="yaml" />
+        <param name="lidar_type"      value="['ouster', 'livox']" type="yaml" />
         <param name="stamp_time"      value="['start', 'start']" type="yaml" />
 
         <!-- Imu topics and their settings -->
         <!-- <param name="imu_topic"       value="['/os_cloud_node/imu']" type="yaml" /> -->
 
         <!-- Run kf for comparison -->
-        <param name="runkf" value="1" />
+        <param name="runkf" value="0" />
         
         <!-- Set to 1 to load the search for previous logs and redo -->
         <param name="resume_from_log" value="[0, 0]" type="yaml"/>
@@ -57,11 +57,11 @@
         <param name="xyzypr_W_L0"     value="$(arg xyzypr_W_L0)" type="yaml"/>
 
         <!-- Groundtruth for evaluation-->
-        <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0, 0,
-                                              -0.1767767, 0, -0.53033009, 180, 45, 0 ]" type="yaml"/>
+        <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0,  0,
+                                               0, 0, 0, 0, 90, 0, ]" type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
-        <param name="pmap_leaf_size"  value="0.15"   />
+        <param name="pmap_leaf_size"  value="0.05"   />
         <param name="cloud_ds"        value="[0.1]" type="yaml" />
   
         <!-- GN MAP optimization params -->

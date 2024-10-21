@@ -486,7 +486,7 @@ int main(int argc, char **argv)
     pcl::io::loadPCDFile<PointXYZI>(priormap_file, *priormap);
     priormap = uniformDownsample<PointXYZI>(priormap, pmap_leaf_size);
     // Create the kd tree
-    printf("Building the prior map\n");
+    printf(KYEL "Building the prior map. Size: %d\n" RESET, priormap->size());
     kdTreeMap->setInputCloud(priormap);
 
     /* #endregion Load the priormap ---------------------------------------------------------------------------------*/

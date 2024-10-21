@@ -13,8 +13,8 @@
     <arg name="lidar_bag_file" value="/home/tmn/DATASETS/gptr/mcd_$(arg sequence)_lidars/"/>
                                      
     <!-- Initial start time of each sequence -->
-    <!-- <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/> -->
-    <arg name="skipped_time" value="559"  if="$(eval 'ntu_day_01' in sequence)"/>
+    <arg name="skipped_time" value="4"  if="$(eval 'ntu_day_01' in sequence)"/>
+    <!-- <arg name="skipped_time" value="144.8"  if="$(eval 'ntu_day_01' in sequence)"/> -->
 
     <arg name="skipped_time" value="13" if="$(eval 'ntu_day_02' in sequence)"/>
     <!-- <arg name="skipped_time" value="33"    if="$(eval 'ntu_day_02' in sequence)"/> -->
@@ -84,18 +84,18 @@
         <param name="lidar_weight"    value="50.0"   />
 
         <!-- Motion prior factors -->
-        <param name="mpSigGa"         value="0.1"    />
-        <param name="mpSigNu"         value="0.1"    />
+        <param name="mpSigGa"         value="1.0"    />
+        <param name="mpSigNu"         value="1.0"    />
 
         <!-- Extrinsic factors -->
-        <param name="xtSigGa"         value="0.02"    />
-        <param name="xtSigNu"         value="0.05"    />
+        <param name="xtSigGa"         value="0.2"    />
+        <param name="xtSigNu"         value="0.5"    />
 
         <!-- Loss function threshold -->
         <param name="ld_loss_thres"   value="-1.0"   />
         <param name="pp_loss_thres"   value="-1.0"   />
         <param name="mp_loss_thres"   value="10.0"   />
-        <param name="xt_loss_thres"   value="01.0"   />
+        <param name="xt_loss_thres"   value="10.0"   />
 
         <param name="max_omg"         value="-20.0"  />
         <param name="max_alp"         value="-40.0"  />
@@ -104,28 +104,28 @@
 
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"     />
-        <param name="SW_CLOUDSTEP"    value="01"     />
-        <param name="max_lidarcoefs"  value="4000"   />
+        <param name="SW_CLOUDSTEP"    value="20"     />
+        <param name="max_lidarcoefs"  value="2000"   />
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
         
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
-        <param name="max_inner_iter"  value="40"      />
-        <param name="min_inner_iter"  value="20"      />
-        <param name="conv_thres"      value="10"      />
+        <param name="max_inner_iter"  value="40"     />
+        <param name="min_inner_iter"  value="2"      />
+        <param name="conv_thres"      value="1"      />
         <param name="dJ_conv_thres"   value="10"     />
         <param name="conv_dX_thres"   value="[ 0.05,  0.5, -1.0,  0.05,  0.5,  1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ 15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
         <param name="fix_time_begin"  value="0.025"   />
-        <param name="fix_time_end"    value="0.0"     />
+        <param name="fix_time_end"    value="0.025"     />
         <param name="fuse_marg"       value="0"       />
         <param name="compute_cost"    value="0"       />
 
         <!-- Log dir -->
-        <param name="log_period"      value="1.0"     />
+        <param name="log_period"      value="5.0"     />
         <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/exp_mcdviral_$(arg sequence)_pcd"/>
 
     </node>
