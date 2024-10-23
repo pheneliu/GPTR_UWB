@@ -580,7 +580,11 @@ int main(int argc, char **argv)
                 exit(-1);
             }
 
-            double sweeptime = (cloudRaw->points.back().t - cloudRaw->points.front().t)/1e9;
+            std::sort(cloudRaw->points.begin(), cloudRaw->points.end(),
+                      [](const PointOuster& pa, const PointOuster& pb)
+                      { return pa.t < pb.t; });
+
+            double sweeptime = (cloudRaw->points.back().t - cloudRaw->points.front().t)/1.0e9; ROS_ASSERT(fabs(sweeptime - 0.1) < 1e-3);
             double timebase = stamp_time[lidx] == "start" ? timestamp.toSec() : timestamp.toSec() - sweeptime;
 
             // Preserve the start point and end point
@@ -772,7 +776,7 @@ int main(int argc, char **argv)
             // ROS_ASSERT_MSG(cloudsx[lidx][cidx]->size() != 0, "%d", cloudsx[lidx][cidx]->size());
             if(cloudsx[lidx][cidx]->size() == 0)
             {
-                printf(KYEL "cloud[%2d][%6d] is empty with %d points.\n" RESET, cidx, lidx, cloudsx[lidx][cidx]->size());
+                // printf(KYEL "cloud[%2d][%6d] is empty with %d points.\n" RESET, cidx, lidx, cloudsx[lidx][cidx]->size());
 
                 PointXYZIT p;
                 p.x = 0; p.y = 0; p.z = 0; p.intensity = 0;

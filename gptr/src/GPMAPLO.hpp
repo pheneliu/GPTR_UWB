@@ -147,6 +147,7 @@ public:
         // Association params
         nh_ptr->getParam("min_planarity", min_planarity);
         nh_ptr->getParam("max_plane_dis", max_plane_dis);
+        nh_ptr->getParam("knnSize", knnSize);
 
         trajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gp_traj", LIDX), 1);
         swTrajPub = nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/sw_opt", LIDX), 1);
