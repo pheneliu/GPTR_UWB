@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   livox_ros_driver
   cf_msgs
+  nlink_parser
   fmt
 )
 
@@ -173,11 +174,17 @@ add_dependencies(${PROJECT_NAME}_test_ljp ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_test_ljp PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_test_ljp ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt) 
 
-# UWB fusion
-add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
+# UWB_LT fusion
+add_executable(${PROJECT_NAME}_gpui src/GPUI_LT.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
+
+# # UWB fusion
+# add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
+# add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+# target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+# target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt::fmt)
 
 add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
 add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})

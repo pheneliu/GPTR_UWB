@@ -1621,6 +1621,34 @@ struct TDOAData {
   TDOAData(double s, int idxA, int idxB, double r) : t(s), idA(idxA), idB(idxB), data(r) {};
 };
 
+struct LinktrackNode {
+  const uint8_t role;
+  const uint8_t id;
+  const float dis;
+  const float fp_rssi;
+  const float rx_rssi;
+
+  LinktrackNode(uint8_t r, uint8_t i, float d, float fp, float rx)
+      : role(r), id(i), dis(d), fp_rssi(fp), rx_rssi(rx) {};
+};
+
+struct LinktrackData {
+  const double timestamp;
+  const uint8_t role;
+  const uint8_t id;
+  const uint32_t local_time;
+  const uint32_t system_time;
+  const float voltage;
+  std::vector<LinktrackNode> nodes;
+
+  LinktrackData(double ts, uint8_t r, uint8_t i, uint32_t l_time, uint32_t s_time, float v)
+      : timestamp(ts), role(r), id(i), local_time(l_time), system_time(s_time), voltage(v) {};
+  
+  void addNode(uint8_t r, uint8_t i, float d, float fp, float rx) {
+      nodes.emplace_back(r, i, d, fp, rx);
+  }
+};
+
 struct CornerData {
   const double t;         // Time stamp
   const vector<int> id;

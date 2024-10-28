@@ -31,19 +31,18 @@
 
 using namespace Eigen;
 
-class GPTDOAFactor: public ceres::CostFunction
+class GPLTFactor: public ceres::CostFunction
 {
 public:
 
     // Destructor
-    ~GPTDOAFactor() {}; 
+    ~GPLTFactor() {}; 
 
     // Constructor
-    GPTDOAFactor(double tdoa_, const Vector3d &pos_anchor_i_, const Vector3d &pos_anchor_j_, const Vector3d &offset_, double w_,
+    GPLTFactor(double linktrack_, const Vector3d &pos_anchor_i_, const Vector3d &offset_, double w_,
                          GPMixerPtr gpm_, double s_)
-    :   tdoa        (tdoa_            ),
+    :   linktrack   (linktrack_       ),
         pos_anchor_i(pos_anchor_i_    ),
-        pos_anchor_j(pos_anchor_j_    ),
         offset      (offset_          ),
         w           (w_               ),
         Dt          (gpm_->getDt()    ),
@@ -51,7 +50,7 @@ public:
         gpm         (gpm_             )
 
     {
-        // 1-element residual: || p_itp - pos_an_i || - || p_itp - pos_an_j || - tdoa
+        // 1-element residual: || p_itp - pos_an_i || - || p_itp - pos_an_j || - linktrack
         set_num_residuals(1);
 
         // Rotation of the first knot
@@ -104,16 +103,15 @@ public:
         // Residual
         Eigen::Map<Matrix<double, 1, 1>> residual(residuals);
         Eigen::Vector3d p_tag_W = Xt.R.matrix() * offset + Xt.P;
-        Eigen::Vector3d diff_i = p_tag_W - pos_anchor_i;
-        Eigen::Vector3d diff_j = p_tag_W - pos_anchor_j;        
-        residual[0] = w*(diff_j.norm() - diff_i.norm() - tdoa);
+        Eigen::Vector3d diff_i = p_tag_W - pos_anchor_i;     
+        residual[0] = w*(diff_i.norm() - linktrack);
 
         /* #endregion Calculate the pose at sampling time -----------------------------------------------------------*/
 
         if (!jacobians)
             return true;
 
-        Matrix<double, 1, 3> Dr_DPW  = (diff_j.normalized() - diff_i.normalized()).transpose();   
+        Matrix<double, 1, 3> Dr_DPW  = diff_i.normalized().transpose();   
         Matrix<double, 1, 3> Dr_DRt  = - Dr_DPW * Xt.R.matrix() * SO3d::hat(offset);
         Matrix<double, 1, 3> Dr_DPt  = Dr_DPW;        
 
@@ -232,12 +230,11 @@ public:
 
 private:
 
-    // TDOA measurement
-    double tdoa;
+    // Linktrack measurement
+    double linktrack;
 
     // Anchor positions 
     Vector3d pos_anchor_i;
-    Vector3d pos_anchor_j;
     const Vector3d offset;
 
     // Weight
