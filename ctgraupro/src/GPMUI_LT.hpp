@@ -770,8 +770,13 @@ public:
 
     void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
                   double tmin, double tmax, double tmid,
-                  const vector<LinktrackData> &linktrackData, const vector<IMUData> &imuData,
-                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
+                  const vector<LinktrackData> &linktrackData0, 
+                  const vector<LinktrackData> &linktrackData1,
+                  const vector<LinktrackData> &linktrackData2,
+                  const vector<LinktrackData> &linktrackData3,
+                  const vector<IMUData> &imuData,
+                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors, 
+                  const Vector3d &P_I_tag0, const Vector3d &P_I_tag1, const Vector3d &P_I_tag2, const Vector3d &P_I_tag3, 
                   bool do_marginalization, double w_linktrack, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double linktrack_loss_thres, double mp_loss_thres)
     {
         static int cnt = 0;
@@ -860,7 +865,10 @@ public:
         // Add the LinkTrack factors
         FactorMeta factorMetaLT;
         double cost_linktrack_init = -1; double cost_linktrack_final = -1;
-        AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData, pos_anchors, P_I_tag, tmin, tmax, w_linktrack, linktrack_loss_thres);
+        AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData0, pos_anchors, P_I_tag0, tmin, tmax, w_linktrack, linktrack_loss_thres);
+        AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData1, pos_anchors, P_I_tag1, tmin, tmax, w_linktrack, linktrack_loss_thres);
+        AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData2, pos_anchors, P_I_tag2, tmin, tmax, w_linktrack, linktrack_loss_thres);
+        AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData3, pos_anchors, P_I_tag3, tmin, tmax, w_linktrack, linktrack_loss_thres);
         std::cout << "Initial cost (Linktrack): " << cost_linktrack_init << ", Final cost (Linktrack): " << cost_linktrack_final << std::endl;
 
         FactorMeta factorMetaIMU;

@@ -144,17 +144,26 @@ bool gyro_unit = true;
 struct UwbImuBuf
 {
     // deque<TdoaMsgPtr> tdoaBuf;
-    deque<LinktrackMsgPtr> linktrackBuf;
+    deque<LinktrackMsgPtr> linktrackBuf0;
+    deque<LinktrackMsgPtr> linktrackBuf1;
+    deque<LinktrackMsgPtr> linktrackBuf2;
+    deque<LinktrackMsgPtr> linktrackBuf3;
     deque<TofMsgPtr>  tofBuf;
     deque<ImuMsgPtr>  imuBuf;
 
     // mutex tdoaBuf_mtx;
-    mutex linktrackBuf_mtx;
+    mutex linktrackBuf_mtx0;
+    mutex linktrackBuf_mtx1;
+    mutex linktrackBuf_mtx2;
+    mutex linktrackBuf_mtx3;
     mutex tofBuf_mtx;
     mutex imuBuf_mtx;
 
     // vector<TDOAData> tdoa_data; 
-    vector<LinktrackData> linktrack_data;
+    vector<LinktrackData> linktrack_data0;
+    vector<LinktrackData> linktrack_data1;
+    vector<LinktrackData> linktrack_data2;
+    vector<LinktrackData> linktrack_data3;
     vector<IMUData> imu_data;
 
     double minTime()
@@ -162,8 +171,14 @@ struct UwbImuBuf
         double tmin = std::numeric_limits<double>::infinity();
         // if (tdoaBuf.size() != 0 && fuse_tdoa)   
         //     tmin = min(tmin, tdoaBuf.front()->header.stamp.toSec()); 
-        if (linktrackBuf.size() != 0 && fuse_linktrack)
-            tmin = min(tmin, linktrackBuf.front()->header.stamp.toSec());
+        if (linktrackBuf0.size() != 0 && fuse_linktrack)
+            tmin = min(tmin, linktrackBuf0.front()->header.stamp.toSec());
+        if (linktrackBuf1.size() != 0 && fuse_linktrack)
+            tmin = min(tmin, linktrackBuf1.front()->header.stamp.toSec());
+        if (linktrackBuf2.size() != 0 && fuse_linktrack)
+            tmin = min(tmin, linktrackBuf2.front()->header.stamp.toSec());
+        if (linktrackBuf3.size() != 0 && fuse_linktrack)
+            tmin = min(tmin, linktrackBuf3.front()->header.stamp.toSec());
         if (tofBuf.size() != 0 && fuse_tof)
             tmin = min(tmin, tofBuf.front()->header.stamp.toSec());
         if (imuBuf.size() != 0 && fuse_imu)
@@ -175,28 +190,32 @@ struct UwbImuBuf
     
     double maxTime()
     {
-        std::cout << "maxtime calculating!" << std::endl;
-        std::cout << "linktrackBuf size: " << linktrackBuf.size() << std::endl;
         double tmax = -std::numeric_limits<double>::infinity(); 
         // if (tdoaBuf.size() != 0 && fuse_tdoa)   
         //     tmax = max(tmax, tdoaBuf.back()->header.stamp.toSec());
-        // if (linktrackBuf.size() != 0 && fuse_linktrack)
-        //     tmax = max(tmax, linktrackBuf.back()->header.stamp.toSec());
-        if (linktrackBuf.size() != 0 && fuse_linktrack) {
-            double local_time_sec = linktrackBuf.back()->local_time / 1000.0;  // 将毫秒转换为秒
+        if (linktrackBuf0.size() != 0 && fuse_linktrack)
+            tmax = max(tmax, linktrackBuf0.back()->header.stamp.toSec());
+        if (linktrackBuf1.size() != 0 && fuse_linktrack)
+            tmax = max(tmax, linktrackBuf1.back()->header.stamp.toSec());
+        if (linktrackBuf2.size() != 0 && fuse_linktrack)
+            tmax = max(tmax, linktrackBuf2.back()->header.stamp.toSec());
+        if (linktrackBuf3.size() != 0 && fuse_linktrack)
+            tmax = max(tmax, linktrackBuf3.back()->header.stamp.toSec());
+        // if (linktrackBuf.size() != 0 && fuse_linktrack) {
+        //     double local_time_sec = linktrackBuf.back()->local_time / 1000.0;  // 将毫秒转换为秒
 
-            // 设置初始 local_time，使其从 0 开始
-            if (initial_local_time < 0) {
-                initial_local_time = local_time_sec;  // 保存第一次的 local_time
-            }
-            std::cout << "local time: " << local_time_sec << std::endl;
-            // 使用相对于初始 local_time 的时间
-            double adjusted_time_sec = local_time_sec - initial_local_time;
+        //     // 设置初始 local_time，使其从 0 开始
+        //     if (initial_local_time < 0) {
+        //         initial_local_time = local_time_sec;  // 保存第一次的 local_time
+        //     }
+        //     std::cout << "local time: " << local_time_sec << std::endl;
+        //     // 使用相对于初始 local_time 的时间
+        //     double adjusted_time_sec = local_time_sec - initial_local_time;
 
-            tmax = max(tmax, adjusted_time_sec);
+        //     tmax = max(tmax, adjusted_time_sec);
 
-            std::cout << "Adjusted linktrack message timestamp: " << adjusted_time_sec << " seconds" << std::endl;
-        }
+        //     std::cout << "Adjusted linktrack message timestamp: " << adjusted_time_sec << " seconds" << std::endl;
+        // }
         if (tofBuf.size() != 0 && fuse_tof)
             tmax = max(tmax, tofBuf.back()->header.stamp.toSec());
         if (imuBuf.size() != 0 && fuse_imu)
@@ -225,7 +244,10 @@ struct UwbImuBuf
     {
         // copy UIBuf(other buffer) to linktrackBuf, tofBuf, imuBuf
         // if (fuse_tdoa) transferDataOneBuf(tdoaBuf, other.tdoaBuf, other.tdoaBuf_mtx, tmax); 
-        if (fuse_linktrack) transferDataOneBuf(linktrackBuf, other.linktrackBuf, other.linktrackBuf_mtx, tmax);
+        if (fuse_linktrack) transferDataOneBuf(linktrackBuf0, other.linktrackBuf0, other.linktrackBuf_mtx0, tmax);
+        if (fuse_linktrack) transferDataOneBuf(linktrackBuf1, other.linktrackBuf1, other.linktrackBuf_mtx1, tmax);
+        if (fuse_linktrack) transferDataOneBuf(linktrackBuf2, other.linktrackBuf2, other.linktrackBuf_mtx2, tmax);
+        if (fuse_linktrack) transferDataOneBuf(linktrackBuf3, other.linktrackBuf3, other.linktrackBuf_mtx3, tmax);
         if (fuse_tof ) transferDataOneBuf(tofBuf,  other.tofBuf,  other.tofBuf_mtx,  tmax);
         if (fuse_imu ) transferDataOneBuf(imuBuf,  other.imuBuf,  other.imuBuf_mtx,  tmax);
         // transferTDOAData(); 
@@ -246,15 +268,46 @@ struct UwbImuBuf
 
     void transferLinktrackData()
     {
-        linktrack_data.clear();
-        for (const auto &data : linktrackBuf)
+        linktrack_data0.clear();
+        linktrack_data1.clear();
+        linktrack_data2.clear();
+        linktrack_data3.clear();
+        
+        for (const auto &data : linktrackBuf0)
         {
-            LinktrackData linktrack(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+            LinktrackData linktrack0(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
             for (const auto &node : data->nodes)
             {
-                linktrack.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+                linktrack0.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
             }
-            linktrack_data.push_back(linktrack);
+            linktrack_data0.push_back(linktrack0);
+        }
+        for (const auto &data : linktrackBuf1)
+        {
+            LinktrackData linktrack1(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+            for (const auto &node : data->nodes)
+            {
+                linktrack1.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+            }
+            linktrack_data1.push_back(linktrack1);
+        }
+        for (const auto &data : linktrackBuf2)
+        {
+            LinktrackData linktrack2(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+            for (const auto &node : data->nodes)
+            {
+                linktrack2.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+            }
+            linktrack_data2.push_back(linktrack2);
+        }
+        for (const auto &data : linktrackBuf3)
+        {
+            LinktrackData linktrack3(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+            for (const auto &node : data->nodes)
+            {
+                linktrack3.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+            }
+            linktrack_data3.push_back(linktrack3);
         }
     }
 
@@ -289,7 +342,10 @@ struct UwbImuBuf
     void slideForward(double tremove)
     {
         // if (fuse_tdoa) slideForwardOneBuf(tdoaBuf, tremove); 
-        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf, tremove); 
+        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf0, tremove); 
+        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf1, tremove); 
+        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf2, tremove); 
+        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf3, tremove); 
         if (fuse_tof ) slideForwardOneBuf(tofBuf,  tremove);
         if (fuse_imu ) slideForwardOneBuf(imuBuf,  tremove);
     }
@@ -307,7 +363,10 @@ ros::Publisher odom_pub;
 ros::Publisher knot_pub;
 
 // ros::Subscriber tdoaSub;    
-ros::Subscriber linktrackSub;
+ros::Subscriber linktrackSub0;
+ros::Subscriber linktrackSub1;
+ros::Subscriber linktrackSub2;
+ros::Subscriber linktrackSub3;
 ros::Subscriber tofSub ;
 ros::Subscriber imuSub ;
 ros::Subscriber gtSub  ;
@@ -329,11 +388,31 @@ std::string traj_save_path;
 //     UIBuf.tdoaBuf.push_back(msg);
 //     // printf(KCYN "Receive tdoa\n" RESET);
 // }
-void linktrackCb(const LinktrackMsgPtr &msg)
+void linktrackCb0(const LinktrackMsgPtr &msg)
 {
-    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx);
-    UIBuf.linktrackBuf.push_back(msg);
-    std::cout << "linktrack buffer size: " <<  UIBuf.linktrackBuf.size() << std::endl;
+    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx0);
+    UIBuf.linktrackBuf0.push_back(msg);
+    // printf(KCYN "Receive linktrack\n" RESET);
+}
+
+void linktrackCb1(const LinktrackMsgPtr &msg)
+{
+    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx1);
+    UIBuf.linktrackBuf1.push_back(msg);
+    // printf(KCYN "Receive linktrack\n" RESET);
+}
+
+void linktrackCb2(const LinktrackMsgPtr &msg)
+{
+    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx2);
+    UIBuf.linktrackBuf2.push_back(msg);
+    // printf(KCYN "Receive linktrack\n" RESET);
+}
+
+void linktrackCb3(const LinktrackMsgPtr &msg)
+{
+    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx3);
+    UIBuf.linktrackBuf3.push_back(msg);
     // printf(KCYN "Receive linktrack\n" RESET);
 }
 
@@ -425,8 +504,9 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         // gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
         //                 anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
         //                 w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);    
-        gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.linktrack_data, swUIBuf.imu_data, 
-                        anchor_list, P_I_tag0, traj->getNumKnots() >= WINDOW_SIZE, 
+        gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.linktrack_data0, swUIBuf.linktrack_data1, 
+                        swUIBuf.linktrack_data2, swUIBuf.linktrack_data3, swUIBuf.imu_data, 
+                        anchor_list, P_I_tag0, P_I_tag1, P_I_tag2, P_I_tag3, traj->getNumKnots() >= WINDOW_SIZE, 
                         w_linktrack, GYR_N, ACC_N, GYR_W, ACC_W, linktrack_loss_thres, mp_loss_thres);
         tt_solve.Toc();
 
@@ -435,9 +515,10 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         //         traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
                 // UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots()); 
 
-        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
+        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d, %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
-                UIBuf.linktrackBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
+                UIBuf.linktrackBuf0.size(), UIBuf.linktrackBuf1.size(), UIBuf.linktrackBuf2.size(), UIBuf.linktrackBuf3.size(),
+                UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
         // Visualize knots
         pcl::PointCloud<pcl::PointXYZ> est_knots;
         for (int i = 0; i < traj->getNumKnots(); i++) {   
@@ -453,7 +534,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
 
         // Visualize estimated trajectory
         // auto est_pose = traj->pose(swUIBuf.tdoa_data.front().t); 
-        auto est_pose = traj->pose(swUIBuf.linktrack_data.front().timestamp);
+        auto est_pose = traj->pose(swUIBuf.linktrack_data0.front().timestamp);
         Eigen::Vector3d est_pos = est_pose.translation();
         Eigen::Quaterniond est_ort = est_pose.unit_quaternion();
         geometry_msgs::PoseStamped traj_msg;
@@ -568,9 +649,9 @@ int main(int argc, char **argv)
     // Topics to subscribe to
     // string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
     string linktrack_topic0; nh_ptr->getParam("linktrack_topic0", linktrack_topic0);
-    // string linktrack_topic1; nh_ptr->getParam("linktrack_topic1", linktrack_topic1);
-    // string linktrack_topic2; nh_ptr->getParam("linktrack_topic2", linktrack_topic2);
-    // string linktrack_topic3; nh_ptr->getParam("linktrack_topic3", linktrack_topic3);
+    string linktrack_topic1; nh_ptr->getParam("linktrack_topic1", linktrack_topic1);
+    string linktrack_topic2; nh_ptr->getParam("linktrack_topic2", linktrack_topic2);
+    string linktrack_topic3; nh_ptr->getParam("linktrack_topic3", linktrack_topic3);
     string tof_topic;  nh_ptr->getParam("tof_topic", tof_topic);
     string imu_topic;  nh_ptr->getParam("imu_topic", imu_topic);
     string gt_topic;   nh_ptr->getParam("gt_topic", gt_topic);
@@ -581,7 +662,10 @@ int main(int argc, char **argv)
 
     // Subscribe to the topics
     // tdoaSub = nh_ptr->subscribe(tdoa_topic, 10, tdoaCb);
-    linktrackSub = nh_ptr->subscribe(linktrack_topic0, 10, linktrackCb);
+    linktrackSub0 = nh_ptr->subscribe(linktrack_topic0, 10, linktrackCb0);
+    linktrackSub1 = nh_ptr->subscribe(linktrack_topic1, 10, linktrackCb1);
+    linktrackSub2 = nh_ptr->subscribe(linktrack_topic2, 10, linktrackCb2);
+    linktrackSub3 = nh_ptr->subscribe(linktrack_topic3, 10, linktrackCb3);
     tofSub  = nh_ptr->subscribe(tof_topic,  10, tofCb);
     imuSub  = nh_ptr->subscribe(imu_topic,  10, imuCb);
     gtSub   = nh_ptr->subscribe(gt_topic,   10, gtCb);
