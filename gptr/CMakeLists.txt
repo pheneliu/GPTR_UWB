@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   rosbag
   pcl_conversions
   pcl_ros
-  livox_ros_driver
+  # livox_ros_driver
   cf_msgs
 )
 

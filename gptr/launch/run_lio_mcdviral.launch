@@ -109,7 +109,8 @@
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
-        
+        <param name="knnsize"         value="06"     />
+
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
         <param name="max_inner_iter"  value="40"      />

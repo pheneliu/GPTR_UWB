@@ -6,6 +6,7 @@
 #include <pcl/filters/uniform_sampling.h>
 #include <pcl/filters/impl/uniform_sampling.hpp>
 
+// For json parser
 #include <opencv2/opencv.hpp>
 
 // ROS utilities

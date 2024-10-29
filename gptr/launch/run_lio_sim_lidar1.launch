@@ -30,6 +30,7 @@
         
         <!-- Total number of clouds loaded -->
         <param name="MAX_CLOUDS"      value="300" />
+        
         <!-- Time since first pointcloud to skip MAP Opt-->
         <param name="SKIPPED_TIME"    value="4.9" />
         <param name="RECURRENT_SKIP"  value="0" />
@@ -37,6 +38,7 @@
         <!-- Set to '1' to skip optimization -->
         <param name="VIZ_ONLY"        value="0"/>
         
+        <!-- Lidar topics and their settings -->
         <param name="lidar_topic"     value="['/lidar_1/points']" type="yaml" />
         <param name="lidar_type"      value="['livox', 'livox']" type="yaml" />
         <param name="stamp_time"      value="['start', 'start']" type="yaml" />
@@ -93,6 +95,7 @@
         <param name="XTRZ_DENSITY"    value="1"      />
         <param name="min_planarity"   value="0.5"    />
         <param name="max_plane_dis"   value="0.5"    />
+        <param name="knnsize"         value="06"     />
 
         <param name="max_ceres_iter"  value="50"     />
         <param name="max_outer_iter"  value="1"      />
@@ -103,10 +106,10 @@
         <param name="conv_dX_thres"   value="[ -0.05, -0.5, -1.0, -0.05, -0.5, -1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ -15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
-        <param name="fix_time_begin"  value="0.025"    />
+        <param name="fix_time_begin"  value="0.0"    />
         <param name="fix_time_end"    value="0.0"    />
-        <param name="fuse_marg"       value="1"       />
-        <param name="compute_cost"    value="0"       />
+        <param name="fuse_marg"       value="1"      />
+        <param name="compute_cost"    value="0"      />
         
         <!-- Log dir -->
         <param name="log_period"     value="5.0"     />

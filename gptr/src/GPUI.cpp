@@ -13,7 +13,7 @@
 #include "sensor_msgs/PointCloud2.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
-#include "livox_ros_driver/CustomMsg.h"
+// #include "livox_ros_driver/CustomMsg.h"
 
 // Add ikdtree
 #include <ikdTree/ikd_Tree.h>

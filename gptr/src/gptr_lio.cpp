@@ -13,7 +13,7 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include "sensor_msgs/PointCloud2.h"
-#include "livox_ros_driver/CustomMsg.h"
+// #include "livox_ros_driver/CustomMsg.h"
 
 // Add ikdtree
 #include <ikdTree/ikd_Tree.h>
@@ -329,7 +329,7 @@ void VisualizeGndtr(vector<CloudPosePtr> &gndtrCloud)
         // Publish the prior map for visualization
         static int count = 0;
         count++;
-        if (count < 5)
+        if (count < 50)
             Util::publishCloud(pmpub, *priormap, currTime, "world");
 
         // Publish the grountruth
@@ -479,6 +479,32 @@ int main(int argc, char **argv)
         xyzypr_W_L0 = vector<double>(Nlidar*6, 0.0);
     }
 
+    vector<myTf<double>> T_E_G(Nlidar, myTf());
+    vector<double> T_E_G_(Nlidar*6, 0.0);
+    if( nh_ptr->getParam("T_E_G", T_E_G_) )
+    {
+        if (T_E_G_.size() < Nlidar*6)
+        {
+            printf(KYEL "T_E_G_ missing values. Setting all to zeros \n" RESET);
+            T_E_G_ = vector<double>(Nlidar*6, 0.0);
+        }
+        else
+        {
+            printf("T_E_G found: \n");
+            for(int i = 0; i < Nlidar; i++)
+            {
+                T_E_G[i] = myTf(Util::YPR2Quat(T_E_G_[i*6 + 3], xtrz_gndtr[i*6 + 4], xtrz_gndtr[i*6 + 5]),
+                                Vector3d(T_E_G_[i*6 + 0], T_E_G_[i*6 + 1], T_E_G_[i*6 + 2]));
+
+                for(int j = 0; j < 6; j++)
+                    printf("%f, ", xtrz_gndtr[i*6 + j]);
+                cout << endl;
+            }
+        }
+    }
+    else
+        printf("Failed to get T_E_G. Setting all to identity.\n");
+
     /* #endregion Read parameters -----------------------------------------------------------------------------------*/
  
     /* #region Load the priormap ------------------------------------------------------------------------------------*/
@@ -584,7 +610,9 @@ int main(int argc, char **argv)
                       [](const PointOuster& pa, const PointOuster& pb)
                       { return pa.t < pb.t; });
 
-            double sweeptime = (cloudRaw->points.back().t - cloudRaw->points.front().t)/1.0e9; ROS_ASSERT(fabs(sweeptime - 0.1) < 1e-3);
+            double sweeptime = (cloudRaw->points.back().t - cloudRaw->points.front().t)/1.0e9;
+            if(fabs(sweeptime - 0.1) > 1e-3)
+                printf(KYEL "Irregular sweep time: %f, %f\n" RESET, sweeptime, fabs(sweeptime - 0.1));
             double timebase = stamp_time[lidx] == "start" ? timestamp.toSec() : timestamp.toSec() - sweeptime;
 
             // Preserve the start point and end point
@@ -670,10 +698,27 @@ int main(int argc, char **argv)
             CloudPosePtr temp(new CloudPose());
             pcl::io::loadPCDFile<PointPose>(gtr_files[lidx].path().string(), *temp);
 
-            for(auto &pose : temp->points)
+            for(auto pose : temp->points)
             {
                 if (pose.t < cloudstamp.front().back().toSec())
+                {
+                    Vector3d p(pose.x, pose.y, pose.z);
+                    Quaternd q(pose.qw, pose.qx, pose.qy, pose.qz);
+
+                    p = T_E_G[lidx].rot*p + T_E_G[lidx].pos;
+                    q = T_E_G[lidx].rot*q;
+
+                    pose.x = p.x();
+                    pose.y = p.y();
+                    pose.z = p.z();
+
+                    pose.qx = q.x();
+                    pose.qy = q.y();
+                    pose.qz = q.z();
+                    pose.qw = q.w();
+
                     gndtrCloud[lidx]->push_back(pose);
+                }
             }
 
             printf("GNDTR cloud size: %d point(s)\n");
@@ -1065,6 +1110,7 @@ int main(int argc, char **argv)
 
                 // Visualize the result on each trajectory
                 {
+                    static vector<ros::Publisher*> gdntrPub(Nlidar, nullptr);
                     static vector<ros::Publisher*> odomPub(Nlidar, nullptr);
                     static vector<ros::Publisher*> marker_pub(Nlidar, nullptr);
                     static vector<nav_msgs::Odometry> odomMsg(Nlidar, nav_msgs::Odometry());
@@ -1072,6 +1118,18 @@ int main(int argc, char **argv)
                     for(int lidx = 0; lidx < Nlidar; lidx++)
                     {
                         gpmaplo[lidx]->Visualize(tmin, tmax, swCloudCoef[lidx], swCloudUndiInW[lidx].back(), true);
+
+                        // Publish an odom topic for each lidar
+                        if (gdntrPub[lidx] == nullptr)
+                            gdntrPub[lidx] = new ros::Publisher(nh_ptr->advertise<sensor_msgs::PointCloud2>(myprintf("/lidar_%d/gtr_sw", lidx), 1));
+
+                        CloudPose gtrPose;
+                        for(auto &pose : gndtrCloud[lidx]->points)
+                            if(tmin < pose.t && pose.t < tmax)
+                                gtrPose.push_back(pose);
+
+                        if (gtrPose.size() > 0)
+                            Util::publishCloud(*gdntrPub[lidx], gtrPose, ros::Time(gtrPose.points.back().t), "world");
 
                         // Publish an odom topic for each lidar
                         if (odomPub[lidx] == nullptr)
@@ -1333,19 +1391,19 @@ int main(int argc, char **argv)
                     cout << report_opt + report_state + report_xtrs << endl;
                 }
 
-                // Save the pointclouds
-                if (tcloudStart(cidx) - TSTART < 100.0)
-                {
-                    static vector<int> cloud_idx(Nlidar, -1);
-                    for(int lidx = 0; lidx < Nlidar; lidx++)
-                    {
-                        cloud_idx[lidx] += 1;
-                        string cloud_dir = log_dir + "/gptr_deskewed_cloud/";
-                        fs::create_directories(cloud_dir + "/lidar_" + to_string(lidx));
-                        string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "/cloud_" + to_string(cloud_idx[lidx]) + ".pcd";
-                        pcl::io::savePCDFileBinary(cloud_name, *swCloudUndiInW[lidx].back());
-                    }
-                }
+                // // Save the pointclouds
+                // if (tcloudStart(cidx) - TSTART < 100.0)
+                // {
+                //     static vector<int> cloud_idx(Nlidar, -1);
+                //     for(int lidx = 0; lidx < Nlidar; lidx++)
+                //     {
+                //         cloud_idx[lidx] += 1;
+                //         string cloud_dir = log_dir + "/gptr_deskewed_cloud/";
+                //         fs::create_directories(cloud_dir + "/lidar_" + to_string(lidx));
+                //         string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "/cloud_" + to_string(cloud_idx[lidx]) + ".pcd";
+                //         pcl::io::savePCDFileBinary(cloud_name, *swCloudUndiInW[lidx].back());
+                //     }
+                // }
 
                 // if the system has converged and marginalization done, slide window
                 if (converged && report.marginalization_done)
@@ -1414,10 +1472,52 @@ int main(int argc, char **argv)
 
     /* #endregion Do optimization with inter-trajectory factors -----------------------------------------------------*/
  
-    /* #region Create the pose sampling publisher -------------------------------------------------------------------*/
+    /* #region Create some logs for visualization -------------------------------------------------------------------*/
 
+    for(int lidx = 0; lidx < Nlidar; lidx++)
+    {
+        CloudXYZIPtr cloudMergedUndi(new CloudXYZI());
+        CloudXYZITPtr cloudMergedRaw(new CloudXYZIT());
+        for(int cidx = 0; cidx < cloudsx[lidx].size(); cidx++)
+        {
+            if (tcloudStart(cidx) - TSTART < 5.0)
+                continue;
+
+            GaussianProcessPtr &traj = gpmaplo[lidx]->GetTraj();
+            CloudXYZITPtr &cloudRaw = cloudsx[lidx][cidx];
+
+            CloudXYZIPtr cloudUndi(new CloudXYZI());
+            gpmaplo[lidx]->Deskew(traj, cloudsx[lidx][cidx], cloudUndi);
+
+            SE3d pose = traj->pose(cloudRaw->points.back().t);
+            pcl::transformPointCloud(*cloudUndi, *cloudUndi, pose.translation(), pose.so3().unit_quaternion());
+            pcl::transformPointCloud(*cloudRaw, *cloudRaw, pose.translation(), pose.so3().unit_quaternion());
+            
+            *cloudMergedUndi += *cloudUndi;
+            *cloudMergedRaw += *cloudRaw;
+
+            if (tcloudStart(cidx) - TSTART > 100.0)
+                break;
+        }
+
+        string cloud_dir = log_dir + "/gptr_deskewed_cloud/";
+        fs::create_directories(cloud_dir);
+
+        {
+            string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + ".pcd";
+            printf("Saving cloud %s\n", cloud_name.c_str());
+            pcl::io::savePCDFileBinary(cloud_name, *cloudMergedUndi);
+        }
+
+        {
+            string cloud_name = cloud_dir + "/lidar_" + to_string(lidx) + "_raw.pcd";
+            printf("Saving cloud %s\n", cloud_name.c_str());
+            pcl::io::savePCDFileBinary(cloud_name, *cloudMergedRaw);
+        }
+    }
+    
     exit(0);
 
-    /* #endregion Create the pose sampling publisher ----------------------------------------------------------------*/
+    /* #endregion Create some logs for visualization ----------------------------------------------------------------*/
  
 }
