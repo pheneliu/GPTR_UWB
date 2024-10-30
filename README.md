@@ -2,8 +2,9 @@
 
 * Please catkin build [SFUISE](https://github.com/KIT-ISAS/SFUISE) in your workspace to have the cf_msg, which is required in gptr.
 * Please install Ceres 2.1.0 to run the examples and tests.
-
-Please raise an issue should you have any issue with the dataset.
+* Git clone and catkin build the repo.
+  
+Please raise an issue should you encounter any issue with the compilation of the package.
 
 # Testing the lidar pipeline:
 
