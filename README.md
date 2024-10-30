@@ -1,6 +1,6 @@
 # Preresiquite
 
-* Please catkin build [SFUISE](https://github.com/KIT-ISAS/SFUISE) in your workspace to have the cf_msg, which is required in gptr.
+* Please catkin build [SFUISE](https://github.com/ASIG-X/SFUISE) in your workspace to have the cf_msg, which is required in gptr.
 * Please install Ceres 2.1.0 to run the examples and tests.
 * Git clone and catkin build the repo.
   
