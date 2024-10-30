@@ -1,24 +1,38 @@
-# Presiquite
+# Preresiquite
 
 * Please catkin build [SFUISE](https://github.com/KIT-ISAS/SFUISE) in your workspace to have the cf_msg, which is required in gptr.
 * Please install Ceres 2.1.0 to run the examples and tests.
+
+Please raise an issue should you have any issue with the dataset.
 
 # Testing the lidar pipeline:
 
 ## With synthetic data
 
+You can download and unzip the file `cloud_avia_mid_dynamic_extrinsics` from [here](https://drive.google.com/file/d/1Q5fTn5OvWd_I2RvVfiUKir90q5HshzQM/view?usp=sharing). It contains the pointclouds and the prior map for the experiment.
 
+After that, modify the path to the data and prior map in `run_sim.launch` and launch it. You should see the following visualization from rviz.
 
-After successful compilation please modify the path to the data in `run_sim.launch', then launch it.
+<img src="docs/sim.gif" alt="synthetic_exp" width="600"/>
 
-The data can be downloaded here:
+## With handheld setup
 
-[rosbag](https://drive.google.com/file/d/1LrXRM73KUA1I1cU5NvOVeRSOPkXpkDKB/view?usp=drive_link)
+Similar to the synthetic dataset, please download the data and the prior map from [here](https://drive.google.com/file/d/1QId8X4LFxYdYewHSBXiDEAvpIFD8w-ei/view?usp=sharing).
 
-[map](https://drive.google.com/file/d/19bfNp-ljfxNjLngdhIvIxfoClPygXRqC/view?usp=sharing)
+Then specify the paths to the data and prior map in `gptr/launch/run_lio_cathhs_iot.launch` before roslaunch. You should see the following illustration.
+
+<img src="docs/cathhs.gif" alt="cathhs_exp" width="600"/>
+
+## Evaluation
+
+Please use the scripts `analysis_cathhs.ipynb` and `analysis_sim.ipynb` to evaluate the result.
+
+<br/>
 
 # Testing on UWB-inertial fusion
-Example for testing on [UTIL](https://utiasdsl.github.io/util-uwb-dataset/) (TDoA-inertial):
+
+Please download the [UTIL](https://utiasdsl.github.io/util-uwb-dataset/) (TDoA-inertial) dataset.
+
 ```
 # Change bag_file and anchor_pose_path in `launch/run_util.launch` according to the path to the data
 roslaunch gptr run_util.launch
