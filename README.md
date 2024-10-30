@@ -36,18 +36,26 @@ Please use the scripts `analysis_cathhs.ipynb` and `analysis_sim.ipynb` to evalu
 
 Please download the [UTIL](https://utiasdsl.github.io/util-uwb-dataset/) (TDoA-inertial) dataset.
 
+Change `bag_file` and `anchor_path` in `gptr/launch/run_util.launch` according to your own path.
 ```
-# Change bag_file and anchor_pose_path in `launch/run_util.launch` according to the path to the data
 roslaunch gptr run_util.launch
 ```
-Baseline approach for comparison is the ESKF presented by the UTIL paper
-Evaluation using [evo](https://github.com/MichaelGrupp/evo) package
+Below is an exemplary run on sequence `const2-trial4-tdoa2`
+<img src="/docs/ui_video.gif" width="600"/>
+
+### Evaluation
+Please set `if_save_traj` in `gptr/launch/run_util.launch` to `1` and change `result_save_path` accordingly. 
+
 ```
-# Set if_save_traj in `launch/run_util.launch` to `1` and change traj_save_path accordingly
-roslaunch gptr run_util.launch
 evo_ape tum /traj_save_path/gt.txt /traj_save_path/traj.txt -a --plot
 ```
-Check the analytic Jacobian of IMU factor
+For comparison, a baseline approach based on ESKF is available in the paper of UTIL dataset.
+
+## Testing on visual-inertial estimation and calibration
+<img src="/docs/vicalib.gif" width="600"/>
+Run the following command from terminal
+
 ```
-roslaunch gptr run_testui.launch
-``` 
+roslaunch gptr run_vicalib.launch
+```
+This dataset is converted from the original one in [here](https://gitlab.com/tum-vision/lie-spline-experiments).
