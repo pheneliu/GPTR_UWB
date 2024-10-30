@@ -2,7 +2,7 @@
 <launch>
 
     <!-- Name of the UWB sequence -->
-    <arg name="bag_file" default="/home/kailai/Documents/100_dataset/util/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
+    <arg name="bag_file" default="/media/tmn/mySataSSD1/DATASETS/UTIL_DATASETS/dataset/flight-dataset/rosbag-data/const1/const1-trial1-tdoa2.bag"/>
     <arg name="result_save_path" default="/home/kailai/Documents/results/gptr/c1/"/>
     <arg name="anchor_path" default="/home/kailai/Documents/100_dataset/util/flight-dataset/survey-results/anchor_const1_survey.txt"/>
 
@@ -21,9 +21,9 @@
         <!-- UWB anchor position -->
         <param name="anchor_pose_path" value="$(arg anchor_path)"/>
         <param name="tdoa_topic" value="/tdoa_data"/>
-        <param name="tof_topic"  value="/tof_data" />
-        <param name="imu_topic"  value="/imu_data" />
-        <param name="gt_topic"   value="/pose_data" />
+        <param name="tof_topic"  value="/tof_data"/>
+        <param name="imu_topic"  value="/imu_data"/>
+        <param name="gt_topic"   value="/pose_data"/>
         <param name="fuse_tdoa"  value="1"/>
         <param name="fuse_tof"   value="1"/>
         <param name="fuse_imu"   value="1"/>
@@ -43,7 +43,7 @@
 
    <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_ui" output="log" required="true"
-        args="-d $(find gptr)/launch/gptr_ui.rviz" />        
+        args="-d $(find gptr)/launch/gptr_ui.rviz"/>        
 
     <!-- Play the bag file -->
     <node required="true" pkg="rosbag" type="play" name="rosbag_player"

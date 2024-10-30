@@ -33,6 +33,6 @@
 
    <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz" output="log" required="true"
-          args="-d $(find gptr)/launch/gptr_vicalib.rviz" />      
+          args="-d $(find gptr)/launch/gptr_vicalib.rviz"/>      
 
 </launch>
