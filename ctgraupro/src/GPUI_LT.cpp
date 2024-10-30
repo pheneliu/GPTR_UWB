@@ -95,6 +95,7 @@ std::map<uint16_t, Eigen::Vector3d> getAnchorListFromUTIL(const std::string& anc
         if (tmp2 == 'p') {
             anchor_list[anchor_id] = Eigen::Vector3d(x, y, z);
         }
+        ROS_INFO("Published anchor ID: %d at position: (%f, %f, %f)", anchor_id, x, y, z);
     }
     infile.close();
     return anchor_list;
@@ -136,7 +137,7 @@ GaussianProcessPtr traj;
 // bool fuse_tdoa = true;
 bool fuse_linktrack = true;
 bool fuse_tof  = false;
-bool fuse_imu  = false;
+bool fuse_imu  = true;
 
 bool acc_ratio = true;
 bool gyro_unit = true;
@@ -186,7 +187,7 @@ struct UwbImuBuf
         return tmin;
     }
 
-    double initial_local_time = -1.0; 
+    // double initial_local_time = -1.0; 
     
     double maxTime()
     {
@@ -379,6 +380,8 @@ const Eigen::Vector3d P_I_tag1 = Eigen::Vector3d(-0.00,0.149459,0.0133345);
 const Eigen::Vector3d P_I_tag2 = Eigen::Vector3d(-0.00688941,-0.13412,0.0131574);
 const Eigen::Vector3d P_I_tag3 = Eigen::Vector3d(-0.222379,-0.128724,0.00885931);
 
+
+
 bool if_save_traj;
 std::string traj_save_path;
 
@@ -430,11 +433,15 @@ void imuCb(const ImuMsgPtr &msg)
     // printf(KMAG "Receive imu\n" RESET);
 }
 
-void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
+void gtCb(const geometry_msgs::TransformStampedConstPtr& gt_msg)
 {
-    Eigen::Quaterniond q(gt_msg->pose.pose.orientation.w, gt_msg->pose.pose.orientation.x,
-                            gt_msg->pose.pose.orientation.y, gt_msg->pose.pose.orientation.z);
-    Eigen::Vector3d pos(gt_msg->pose.pose.position.x, gt_msg->pose.pose.position.y, gt_msg->pose.pose.position.z);
+    // Eigen::Quaterniond q(gt_msg->pose.pose.orientation.w, gt_msg->pose.pose.orientation.x,
+    //                         gt_msg->pose.pose.orientation.y, gt_msg->pose.pose.orientation.z);
+    // Eigen::Vector3d pos(gt_msg->pose.pose.position.x, gt_msg->pose.pose.position.y, gt_msg->pose.pose.position.z);
+
+    Eigen::Quaterniond q(gt_msg->transform.rotation.w, gt_msg->transform.rotation.x,
+                            gt_msg->transform.rotation.y, gt_msg->transform.rotation.z);
+    Eigen::Vector3d pos(gt_msg->transform.translation.x, gt_msg->transform.translation.y, gt_msg->transform.translation.z);
     gtBuf.push_back(pos);    
 
     nav_msgs::Odometry odom_msg;
@@ -475,7 +482,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         double newMaxTime = traj->getMaxTime() + SLIDE_SIZE*gpDt;
         ros::Time timeout = ros::Time::now();
         double maxtime = UIBuf.maxTime();
-        std::cout << "UIBuf max time: " << maxtime << ", new max time: " << newMaxTime << std::endl;
+        // std::cout << "UIBuf max time: " << maxtime << ", new max time: " << newMaxTime << std::endl;
         if(maxtime < newMaxTime)
         {
             if(auto_exit && (ros::Time::now() - timeout).toSec() > 20.0)
@@ -524,7 +531,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         for (int i = 0; i < traj->getNumKnots(); i++) {   
             Eigen::Vector3d knot_pos = traj->getKnotPose(i).translation();
             est_knots.points.push_back(pcl::PointXYZ(knot_pos.x(), knot_pos.y(), knot_pos.z()));
-            std::cout << "xyz: " << knot_pos.x() << knot_pos.y() << knot_pos.z() << std::endl;
+            // std::cout << "xyz: " << knot_pos.x() << knot_pos.y() << knot_pos.z() << std::endl;
         }
         sensor_msgs::PointCloud2 knot_msg;
         pcl::toROSMsg(est_knots, knot_msg);
@@ -714,12 +721,11 @@ int main(int argc, char **argv)
 
         // Set initial pose
         SE3d initial_pose;
-        initial_pose.translation() = Eigen::Vector3d(1.25, 0.0, 0.07);
+        initial_pose.translation() = Eigen::Vector3d(1.12086, -0.50173, 0.60591); // 1.120758, -0.51873, 0.606064
         traj->setKnot(0, GPState(t0, initial_pose));
         break;
     }
     printf(KGRN "Start time: %f\n" RESET, traj->getMinTime());
-    std::cout << "check04" << std::endl;
     // Start polling and processing the data
     thread pdthread(processData, traj, gpmui, anc_pose_);
 

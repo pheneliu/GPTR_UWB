@@ -314,7 +314,7 @@ public:
         int kidxmax = usmax.first+1;        
         for (auto &linktrack : linktrackData)
         {
-            std::cout << "Linktrack timestamp: " << linktrack.timestamp << std::endl;
+            // std::cout << "Linktrack timestamp: " << linktrack.timestamp << std::endl;
             if (!traj->TimeInInterval(linktrack.timestamp, 1e-6)) {
                 continue;
             }
@@ -327,7 +327,7 @@ public:
                 continue;
             }
 
-            std::cout << "LinktrackData size: " << linktrackData.size() << std::endl;
+            // std::cout << "LinktrackData size: " << linktrackData.size() << std::endl;
             for (const auto &node : linktrack.nodes) 
             {
                 if (pos_anchors.find(node.id) == pos_anchors.end())
@@ -336,6 +336,8 @@ public:
                 }
 
                 Eigen::Vector3d pos_an_A = pos_anchors[node.id];
+
+                // std::cout << "id: " << static_cast<int>(node.id) << " distance: " << node.dis << std::endl;
 
                 vector<double *> factor_param_blocks;
                 factorMeta.coupled_params.push_back(vector<ParamInfo>());
@@ -358,16 +360,16 @@ public:
                     factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);             
                 }
                 ceres::LossFunction *linktrack_loss_function = linktrack_loss_thres == -1 ? NULL : new ceres::HuberLoss(linktrack_loss_thres);
-                std::cout << "node.dis: " << node.dis << " P_I_tag: " << P_I_tag[0] << " " << P_I_tag[1] << " " << P_I_tag[2] 
-                    << " pos_an_A: " << pos_an_A[0] << " " << pos_an_A[1] << " " << pos_an_A[2] << std::endl;
+                // std::cout << "node.dis: " << node.dis << " P_I_tag: " << P_I_tag[0] << " " << P_I_tag[1] << " " << P_I_tag[2] 
+                    // << " pos_an_A: " << pos_an_A[0] << " " << pos_an_A[1] << " " << pos_an_A[2] << std::endl;
                 ceres::CostFunction *cost_function = new GPLTFactor(node.dis, pos_an_A, P_I_tag, w_linktrack, traj->getGPMixerPtr(), s);
                 // GPLTFactor(double linktrack_, const Vector3d &pos_anchor_i_, const Vector3d &offset_,
                 //      double w_, GPMixerPtr gpm_, double s_)
-                std::cout << "Adding linktrack factor for timestamp: " << linktrack.timestamp << std::endl;
+                // std::cout << "Adding linktrack factor for timestamp: " << linktrack.timestamp << std::endl;
                 auto res = problem.AddResidualBlock(cost_function, linktrack_loss_function, factor_param_blocks);
                 // Record the residual block
                 factorMeta.res.push_back(res);
-                std::cout << "Number of residuals added to factorMeta: " << factorMeta.res.size() << std::endl;
+                // std::cout << "Number of residuals added to factorMeta: " << factorMeta.res.size() << std::endl;
                 // std::cout << summary.FullReport() << std::endl;
 
 
@@ -869,7 +871,7 @@ public:
         AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData1, pos_anchors, P_I_tag1, tmin, tmax, w_linktrack, linktrack_loss_thres);
         AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData2, pos_anchors, P_I_tag2, tmin, tmax, w_linktrack, linktrack_loss_thres);
         AddLinktrackFactors(problem, traj, paramInfoMap, factorMetaLT, linktrackData3, pos_anchors, P_I_tag3, tmin, tmax, w_linktrack, linktrack_loss_thres);
-        std::cout << "Initial cost (Linktrack): " << cost_linktrack_init << ", Final cost (Linktrack): " << cost_linktrack_final << std::endl;
+        // std::cout << "Initial cost (Linktrack): " << cost_linktrack_init << ", Final cost (Linktrack): " << cost_linktrack_final << std::endl;
 
         FactorMeta factorMetaIMU;
         double cost_imu_init = -1; double cost_imu_final = -1;

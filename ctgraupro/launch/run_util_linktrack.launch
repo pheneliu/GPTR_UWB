@@ -2,9 +2,9 @@
 <launch>
 
     <!-- Name of the UWB sequence -->
-    <arg name="bag_file" default="/home/xy/DATASETS/CTGAUPRO_TWR/modified_linktrack_data_line2.bag"/>
+    <arg name="bag_file" default="/home/xy/DATASETS/CTGAUPRO_LT_IMU/modified_linktrack_data_origin_static_2024-10-30-15-04-15.bag"/>
     <arg name="result_save_path" default="/home/kailai/Documents/results/ctgaupro/c1/"/>
-    <arg name="anchor_path" default="/home/xy/DATASETS/CTGAUPRO_TWR/anchor_const1_survey.txt"/>
+    <arg name="anchor_path" default="/home/xy/DATASETS/CTGAUPRO_LT_IMU/anchor_const1_survey.txt"/>
     
 
     <!-- Launch the uwb imu fusion node -->
@@ -26,11 +26,11 @@
         <param name="linktrack_topic2" value="/nlink_linktrack_nodeframe3_tag2"/>
         <param name="linktrack_topic3" value="/nlink_linktrack_nodeframe3_tag3"/>
         <param name="tof_topic"  value="/tof_data" />
-        <param name="imu_topic"  value="/imu_data" />
-        <param name="gt_topic"   value="/pose_data" /> 
+        <param name="imu_topic"  value="/imu/data" />
+        <param name="gt_topic"   value="/vicon/uwbtags/uwbtags" /> 
         <param name="fuse_linktrack"  value="1"/>
         <param name="fuse_tof"   value="0"/>
-        <param name="fuse_imu"   value="0"/>
+        <param name="fuse_imu"   value="1"/>
 
         <!-- Parameters for the solver  -->
         <param name="SLIDE_SIZE"  value="2"/> <!-- How many knots to slide -->
