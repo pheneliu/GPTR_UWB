@@ -1,4 +1,5 @@
 *.pcd
 *.bag
 *.pkl
+*.jpg
 log/*
