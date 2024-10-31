@@ -171,15 +171,15 @@ target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-i
 target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
 # Lidar fusion
-add_executable(${PROJECT_NAME}_lio src/GPLIO.cpp include/ikdTree/ikd_Tree.cpp)
-add_dependencies(${PROJECT_NAME}_lio ${catkin_EXPORTED_TARGETS})
-target_compile_options(${PROJECT_NAME}_lio PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_lio ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+add_executable(${PROJECT_NAME}_lo src/GPLO.cpp include/ikdTree/ikd_Tree.cpp)
+add_dependencies(${PROJECT_NAME}_lo ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_lo PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_lo ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
-add_executable(${PROJECT_NAME}_lio_test src/testLIO.cpp include/ikdTree/ikd_Tree.cpp)
-add_dependencies(${PROJECT_NAME}_lio_test ${catkin_EXPORTED_TARGETS})
-target_compile_options(${PROJECT_NAME}_lio_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_lio_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+add_executable(${PROJECT_NAME}_lo_test src/testLIO.cpp include/ikdTree/ikd_Tree.cpp)
+add_dependencies(${PROJECT_NAME}_lo_test ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_lo_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_lo_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
 # A vizualization node
 catkin_install_python(PROGRAMS

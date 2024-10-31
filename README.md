@@ -65,8 +65,13 @@ This dataset is converted from the original one in [here](https://gitlab.com/tum
 
 The heart of our toolkit is the [GaussianProcess.hpp](gptr/include/GaussianProcess.hpp) header file which contains the abstraction of the continuous-time trajectory represented by a third-order `GaussianProcess`.
 
-The `GaussianProcess` object provides methods to create, initialize, extend,, and query information from the trajectory.
+The `GaussianProcess` object provides methods to create, initialize, extend, and query information from the trajectory.
 
+The toolkit contains three main examples:
+
+* Visual-Inertial Calibration: a batch optimization problem where visual-inertial factors are combined to estimate the trajectory and extrinsics of a camera-imu pair, encapsulated in the `GPVICalib.cpp` file.
+* UWB-Inertial Localization: a sliding-window Maximum A Posteriori (MAP) optimization problem featuring TDOA UWB measurements and IMU, presented in the `GPUI.cpp` file.
+* Multi-lidar Coupled-Motion Estimation: a sliding-window MAP optimization problem with lidar-only observation, featuring multiple trajectories with extrinsic factors providing a connection between these trajectories, implemented in the `GPLO.cpp` trajectory.
 
 ## Publication
 

@@ -32,7 +32,7 @@
                                      39.49, 23.48,  6.54,  36,  3, 1 ]" if="$(eval 'ntu_day_10' in sequence)"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="true" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
+    <node required="true" pkg="gptr" type="gptr_lo" name="gptr_lo" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
@@ -133,6 +133,6 @@
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-          args="-d $(find gptr)/launch/gptr_lio_mcdviral.rviz"/>
+          args="-d $(find gptr)/launch/gptr_lo_mcdviral.rviz"/>
 
 </launch>

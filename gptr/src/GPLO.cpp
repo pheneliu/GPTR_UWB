@@ -29,7 +29,7 @@
 #include "GaussianProcess.hpp"
 #include "i2EKFLO.hpp"
 #include "LOAM.hpp"
-#include "GPLIO.hpp"
+#include "GPLO.hpp"
 
 // Factor for optimization
 // #include "factor/GPExtrinsicFactor.h"

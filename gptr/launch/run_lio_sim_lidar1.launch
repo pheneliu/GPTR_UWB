@@ -21,7 +21,7 @@
     <arg name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_lidar0_$(arg sequence)/"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="false" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
+    <node required="false" pkg="gptr" type="gptr_lo" name="gptr_lo" output="screen"
           launch-prefix="bash -c 'cp -r $(find gptr)/launch $(arg log_dir); sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
@@ -127,6 +127,6 @@
 
     <!-- Visualize -->
     <node pkg="rviz" type="rviz" name="rviz_odom" output="log" required="true"
-        args="-d $(find gptr)/launch/gptr_lio_sim.rviz"/>
+        args="-d $(find gptr)/launch/gptr_lo_sim.rviz"/>
 
 </launch>
