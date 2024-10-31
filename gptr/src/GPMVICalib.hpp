@@ -1,11 +1,24 @@
 #pragma once
 
-#include "GPMUI.hpp"
 #include "camera.hpp"
+#include "GaussNewtonUtilities.hpp"
+
+#include "factor/GPMotionPriorTwoKnotsFactorUI.h"
+#include "factor/GPIMUFactor.h"
 #include "factor/GPProjectionFactor.h"
 
-class GPMVICalib : public GPMUI
+class GPMVICalib
 {
+
+private:
+
+    // Node handle to get information needed
+    ros::NodeHandlePtr nh;
+
+    // Map of traj-kidx and parameter id
+    map<pair<int, int>, int> tk2p;
+    map<double*, ParamInfo> paramInfoMap;
+    MarginalizationInfoPtr margInfo;
 
 public:
 
@@ -13,9 +26,159 @@ public:
    ~GPMVICalib() {};
    
     // Constructor
-    GPMVICalib(ros::NodeHandlePtr &nh_) : GPMUI(nh_)
-    {
+    GPMVICalib(ros::NodeHandlePtr &nh_) : nh(nh_) {};
 
+    void AddTrajParams(ceres::Problem &problem,
+        GaussianProcessPtr &traj, int tidx,
+        map<double*, ParamInfo> &paramInfoMap,
+        double tmin, double tmax, double tmid)
+    {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;
+
+        // Create local parameterization for so3
+        ceres::LocalParameterization *so3parameterization = new GPSO3dLocalParameterization();
+
+        int pidx = -1;
+
+        for (int kidx = 0; kidx < traj->getNumKnots(); kidx++)
+        {
+            if (kidx < kidxmin || kidx > kidxmax)
+                continue;
+
+            problem.AddParameterBlock(traj->getKnotSO3(kidx).data(), 4, so3parameterization);
+            problem.AddParameterBlock(traj->getKnotOmg(kidx).data(), 3);
+            problem.AddParameterBlock(traj->getKnotAlp(kidx).data(), 3);
+            problem.AddParameterBlock(traj->getKnotPos(kidx).data(), 3);
+            problem.AddParameterBlock(traj->getKnotVel(kidx).data(), 3);
+            problem.AddParameterBlock(traj->getKnotAcc(kidx).data(), 3);
+
+            // Log down the information of the params
+            paramInfoMap.insert(make_pair(traj->getKnotSO3(kidx).data(), ParamInfo(traj->getKnotSO3(kidx).data(), ParamType::SO3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 0)));
+            paramInfoMap.insert(make_pair(traj->getKnotOmg(kidx).data(), ParamInfo(traj->getKnotOmg(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 1)));
+            paramInfoMap.insert(make_pair(traj->getKnotAlp(kidx).data(), ParamInfo(traj->getKnotAlp(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 2)));
+            paramInfoMap.insert(make_pair(traj->getKnotPos(kidx).data(), ParamInfo(traj->getKnotPos(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 3)));
+            paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
+            paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
+        }
+    }
+
+    void AddMP2KFactorsUI(
+        ceres::Problem &problem, GaussianProcessPtr &traj,
+        map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
+        double tmin, double tmax, double mp_loss_thres)
+    {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;      
+        // Add the GP factors based on knot difference
+        for (int kidx = 0; kidx < traj->getNumKnots() - 1; kidx++)
+        {
+            if (kidx < kidxmin || kidx+1 > kidxmax) {        
+                continue;
+            }
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            
+            // Add the parameter blocks
+            for (int kidx_ = kidx; kidx_ < kidx + 2; kidx_++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx_).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx_).data());
+
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx_).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx_).data()]);
+            }
+            
+            // Create the factors
+            ceres::LossFunction *mp_loss_function = mp_loss_thres <= 0 ? NULL : new ceres::HuberLoss(mp_loss_thres);
+            ceres::CostFunction *cost_function = new GPMotionPriorTwoKnotsFactorUI(traj->getGPMixerPtr());
+            auto res_block = problem.AddResidualBlock(cost_function, mp_loss_function, factor_param_blocks);
+            
+            // Record the residual block
+            factorMeta.res.push_back(res_block);
+            
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(traj->getKnotTime(kidx+1));
+        }
+    }
+
+    void AddIMUFactors(ceres::Problem &problem, GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
+        map<double*, ParamInfo> &paramInfo, FactorMeta &factorMeta,
+        const vector<IMUData> &imuData, double tmin, double tmax, 
+        double wGyro, double wAcce, double wBiasGyro, double wBiasAcce)
+    {
+        auto usmin = traj->computeTimeIndex(tmin);
+        auto usmax = traj->computeTimeIndex(tmax);
+
+        int kidxmin = usmin.first;
+        int kidxmax = usmax.first+1;  
+        for (auto &imu : imuData)
+        {
+            if (!traj->TimeInInterval(imu.t, 1e-6)) {
+                continue;
+            }
+            
+            auto   us = traj->computeTimeIndex(imu.t);
+            int    u  = us.first;
+            double s  = us.second;
+
+            if (u < kidxmin || u+1 > kidxmax) {
+                continue;
+            }
+      
+            vector<double *> factor_param_blocks;
+            factorMeta.coupled_params.push_back(vector<ParamInfo>());
+            // Add the parameter blocks for rotation
+            for (int kidx = u; kidx < u + 2; kidx++)
+            {
+                factor_param_blocks.push_back(traj->getKnotSO3(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotOmg(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAlp(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotPos(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotVel(kidx).data());
+                factor_param_blocks.push_back(traj->getKnotAcc(kidx).data());
+
+                // Record the param info
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotSO3(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotOmg(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAlp(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotPos(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotVel(kidx).data()]);
+                factorMeta.coupled_params.back().push_back(paramInfoMap[traj->getKnotAcc(kidx).data()]);               
+            }
+            factor_param_blocks.push_back(XBIG.data());
+            factor_param_blocks.push_back(XBIA.data());  
+            factor_param_blocks.push_back(g.data());  
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIG.data()]);
+            factorMeta.coupled_params.back().push_back(paramInfoMap[XBIA.data()]);          
+            // factorMeta.coupled_params.back().push_back(paramInfoMap[g.data()]);                       
+
+            double imu_loss_thres = -1.0;
+            ceres::LossFunction *imu_loss_function = imu_loss_thres == -1 ? NULL : new ceres::HuberLoss(imu_loss_thres);
+            ceres::CostFunction *cost_function = new GPIMUFactor(imu.acc, imu.gyro, XBIA, XBIG, wGyro, wAcce, wBiasGyro, wBiasAcce, traj->getGPMixerPtr(), s);
+            auto res = problem.AddResidualBlock(cost_function, imu_loss_function, factor_param_blocks);
+
+            // Record the residual block
+            factorMeta.res.push_back(res);                
+
+            // Record the time stamp of the factor
+            factorMeta.stamp.push_back(imu.t);
+        }
     }
 
     void AddProjFactors(
@@ -80,13 +243,13 @@ public:
             // Record the time stamp of the factor
             factorMeta.stamp.push_back(corners.t);
         }
-    }    
+    }
 
     void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g, CameraCalibration *cam_calib,
-                  double tmin, double tmax, double tmid,
-                  const vector<CornerData> &corner_data_cam0, const vector<CornerData> &corner_data_cam1, const vector<IMUData> &imuData,
-                  std::map<int, Eigen::Vector3d> &corner_pos_3d, 
-                  bool do_marginalization, double w_corner, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double corner_loss_thres, double mp_loss_thres)
+        double tmin, double tmax, double tmid,
+        const vector<CornerData> &corner_data_cam0, const vector<CornerData> &corner_data_cam1, const vector<IMUData> &imuData,
+        std::map<int, Eigen::Vector3d> &corner_pos_3d, 
+        bool do_marginalization, double w_corner, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double corner_loss_thres, double mp_loss_thres)
     {
         static int cnt = 0;
         TicToc tt_build;
