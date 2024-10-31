@@ -26,7 +26,7 @@
 // Custom built utilities
 #include "utility.h"
 #include "GaussianProcess.hpp"
-#include "GPMVICalib.hpp"
+#include "GPVICalib.hpp"
 
 using namespace std;
 
