@@ -1,11 +1,6 @@
 #include "unistd.h"
 #include <algorithm>  // for std::sort
 
-// PCL utilities
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/filters/uniform_sampling.h>
-#include <pcl/filters/impl/uniform_sampling.hpp>
-
 // ROS utilities
 #include "ros/ros.h"
 #include <rosbag/bag.h>
@@ -13,21 +8,11 @@
 #include "sensor_msgs/PointCloud2.h"
 #include "nav_msgs/Odometry.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
-// #include "livox_ros_driver/CustomMsg.h"
-
-// Add ikdtree
-#include <ikdTree/ikd_Tree.h>
-
-// Basalt
-#include "basalt/spline/se3_spline.h"
-#include "basalt/spline/ceres_spline_helper.h"
-#include "basalt/spline/ceres_local_param.hpp"
-#include "basalt/spline/posesplinex.h"
 
 // Custom built utilities
 #include "utility.h"
 #include "GaussianProcess.hpp"
-#include "GPMUI.hpp"
+#include "GPUI.hpp"
 
 // Topics
 #include "cf_msgs/Tdoa.h"
@@ -36,42 +21,6 @@
 using namespace std;
 
 boost::shared_ptr<ros::NodeHandle> nh_ptr;
-
-template <typename Scalar = double, int RowSize = Dynamic, int ColSize = Dynamic>
-Matrix<Scalar, RowSize, ColSize> load_dlm(const std::string &path, string dlm, int r_start = 0, int col_start = 0)
-{
-    std::ifstream indata;
-    indata.open(path);
-    std::string line;
-    std::vector<double> values;
-    int row_idx = -1;
-    int rows = 0;
-    while (std::getline(indata, line))
-    {
-        row_idx++;
-        if (row_idx < r_start)
-            continue;
-
-        std::stringstream lineStream(line);
-        std::string cell;
-        int col_idx = -1;
-        while (std::getline(lineStream, cell, dlm[0]))
-        {
-            if (cell == dlm || cell.size() == 0)
-                continue;
-
-            col_idx++;
-            if (col_idx < col_start)
-                continue;
-
-            values.push_back(std::stod(cell));
-        }
-
-        rows++;
-    }
-
-    return Map<const Matrix<Scalar, RowSize, ColSize, RowMajor>>(values.data(), rows, values.size() / rows);
-}
 
 std::map<uint16_t, Eigen::Vector3d> getAnchorListFromUTIL(const std::string& anchor_path)
 {
@@ -355,9 +304,9 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         // Step 3: Optimization
         TicToc tt_solve;          
         double tmin = traj->getKnotTime(traj->getNumKnots() - WINDOW_SIZE) + 1e-3;     // Start time of the sliding window
-        double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;      // End time of the sliding window              
-        double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;     // Next start time of the sliding window,
-                                               // also determines the marginalization time limit          
+        double tmax = traj->getKnotTime(traj->getNumKnots() - 1) + 1e-3;               // End time of the sliding window              
+        double tmid = tmin + SLIDE_SIZE*traj->getDt() + 1e-3;                          // Next start time of the sliding window,
+                                                                                       // also determines the marginalization time limit          
         gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
                         anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
                         w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);

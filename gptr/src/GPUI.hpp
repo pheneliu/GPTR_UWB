@@ -1,6 +1,9 @@
 #pragma once
 
-#include "GPMLC.h"
+#include <Eigen/Sparse>
+
+#include "GaussNewtonUtilities.hpp"
+
 #include "factor/GPTDOAFactor.h"
 #include "factor/GPIMUFactor.h"
 #include "factor/GPTDOAFactorAutodiff.h"
@@ -8,8 +11,18 @@
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
 #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
 
-class GPMUI : public GPMLC
+class GPMUI
 {
+
+private:
+
+    // Node handle to get information needed
+    ros::NodeHandlePtr nh;
+
+    // Map of traj-kidx and parameter id
+    map<pair<int, int>, int> tk2p;
+    map<double*, ParamInfo> paramInfoMap;
+    MarginalizationInfoPtr margInfo;
 
 public:
 
@@ -17,15 +30,12 @@ public:
    ~GPMUI() {};
    
     // Constructor
-    GPMUI(ros::NodeHandlePtr &nh_) : GPMLC(nh_, 1)
-    {
-
-    }
+    GPMUI(ros::NodeHandlePtr &nh_) : nh(nh_) {};
 
     void AddTrajParams(ceres::Problem &problem,
-                              GaussianProcessPtr &traj, int tidx,
-                              map<double*, ParamInfo> &paramInfoMap,
-                              double tmin, double tmax, double tmid)
+        GaussianProcessPtr &traj, int tidx,
+        map<double*, ParamInfo> &paramInfoMap,
+        double tmin, double tmax, double tmid)
     {
         auto usmin = traj->computeTimeIndex(tmin);
         auto usmax = traj->computeTimeIndex(tmax);
@@ -57,33 +67,13 @@ public:
             paramInfoMap.insert(make_pair(traj->getKnotPos(kidx).data(), ParamInfo(traj->getKnotPos(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 3)));
             paramInfoMap.insert(make_pair(traj->getKnotVel(kidx).data(), ParamInfo(traj->getKnotVel(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 4)));
             paramInfoMap.insert(make_pair(traj->getKnotAcc(kidx).data(), ParamInfo(traj->getKnotAcc(kidx).data(), ParamType::RV3, ParamRole::GPSTATE, paramInfoMap.size(), tidx, kidx, 5)));
-            
-            // if (kidx == kidxmin && fix_kidxmin) 
-            // {
-            //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotVel(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmin).data());
-            // }
-
-            // if (kidx == kidxmax && fix_kidxmax)
-            // {
-            //     problem.SetParameterBlockConstant(traj->getKnotSO3(kidxmax).data());
-            //     // problem.SetParameterBlockConstant(traj->getKnotOmg(kidxmax).data());
-            //     // problem.SetParameterBlockConstant(traj->getKnotAlp(kidxmin).data());
-            //     problem.SetParameterBlockConstant(traj->getKnotPos(kidxmax).data());
-            //     // problem.SetParameterBlockConstant(traj->getKnotVel(kidxmax).data());
-            //     // problem.SetParameterBlockConstant(traj->getKnotAcc(kidxmax).data());
-            // }
         }
     }    
 
     void AddMP2KFactorsUI(
-            ceres::Problem &problem, GaussianProcessPtr &traj,
-            map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
-            double tmin, double tmax, double mp_loss_thres)
+        ceres::Problem &problem, GaussianProcessPtr &traj,
+        map<double*, ParamInfo> &paramInfoMap, FactorMeta &factorMeta,
+        double tmin, double tmax, double mp_loss_thres)
     {
         auto usmin = traj->computeTimeIndex(tmin);
         auto usmax = traj->computeTimeIndex(tmax);
@@ -425,10 +415,10 @@ public:
     }
 
     void Marginalize(ceres::Problem &problem, GaussianProcessPtr &traj,
-                            double tmin, double tmax, double tmid,
-                            map<double*, ParamInfo> &paramInfoMap,
-                            FactorMeta &factorMetaMp2k, FactorMeta &factorMetaTDOA, 
-                            FactorMeta &factorMetaIMU, FactorMeta &factorMetaPrior)
+        double tmin, double tmax, double tmid,
+        map<double*, ParamInfo> &paramInfoMap,
+        FactorMeta &factorMetaMp2k, FactorMeta &factorMetaTDOA, 
+        FactorMeta &factorMetaIMU, FactorMeta &factorMetaPrior)
     {
         // Deskew, Transform and Associate
         auto FindRemovedFactors = [&tmid](FactorMeta &factorMeta, FactorMeta &factorMetaRemoved, FactorMeta &factorMetaRetained) -> void
@@ -752,10 +742,10 @@ public:
     }    
 
     void Evaluate(GaussianProcessPtr &traj, Vector3d &XBIG, Vector3d &XBIA, Vector3d &g,
-                  double tmin, double tmax, double tmid,
-                  const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
-                  std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
-                  bool do_marginalization, double w_tdoa, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double tdoa_loss_thres, double mp_loss_thres)
+        double tmin, double tmax, double tmid,
+        const vector<TDOAData> &tdoaData, const vector<IMUData> &imuData,
+        std::map<uint16_t, Eigen::Vector3d>& pos_anchors, const Vector3d &P_I_tag, 
+        bool do_marginalization, double w_tdoa, double wGyro, double wAcce, double wBiasGyro, double wBiasAcce, double tdoa_loss_thres, double mp_loss_thres)
     {
         static int cnt = 0;
         TicToc tt_build;

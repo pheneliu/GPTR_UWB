@@ -154,6 +154,23 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collidelibraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} fmt)
 
+# UWB fusion
+add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp)
+add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
+add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
+add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})
+target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
+# # Visual-inertial calibration
+# add_executable(${PROJECT_NAME}_gpvicalib src/GPVICalib.cpp)
+# add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
+# target_compile_options(${PROJECT_NAME}_gpvicalib PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
+# target_link_libraries(${PROJECT_NAME}_gpvicalib ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
+
 # Lidar fusion
 add_executable(${PROJECT_NAME}_lio src/GPLIO.cpp src/GNSolver.cpp include/ikdTree/ikd_Tree.cpp src/GPMLC.cpp)
 add_dependencies(${PROJECT_NAME}_lio ${catkin_EXPORTED_TARGETS})
@@ -164,23 +181,6 @@ add_executable(${PROJECT_NAME}_lio_test src/testLIO.cpp include/ikdTree/ikd_Tree
 add_dependencies(${PROJECT_NAME}_lio_test ${catkin_EXPORTED_TARGETS})
 target_compile_options(${PROJECT_NAME}_lio_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
 target_link_libraries(${PROJECT_NAME}_lio_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
-
-# UWB fusion
-add_executable(${PROJECT_NAME}_gpui src/GPUI.cpp src/GPMLC.cpp)
-add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
-target_compile_options(${PROJECT_NAME}_gpui PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpui ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
-
-add_executable(${PROJECT_NAME}_gpui_test src/testUI.cpp)
-add_dependencies(${PROJECT_NAME}_gpui_test ${catkin_EXPORTED_TARGETS})
-target_compile_options(${PROJECT_NAME}_gpui_test PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpui_test ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
-
-# Visual-inertial calibration
-add_executable(${PROJECT_NAME}_gpvicalib src/GPVICalib.cpp src/GPMLC.cpp)
-add_dependencies(${PROJECT_NAME}_gpui ${catkin_EXPORTED_TARGETS})
-target_compile_options(${PROJECT_NAME}_gpvicalib PRIVATE ${OpenMP_CXX_FLAGS} "-isystem ${PCL_INCLUDE_DIRS}")
-target_link_libraries(${PROJECT_NAME}_gpvicalib ${catkin_LIBRARIES} ${CERES_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS})
 
 # A vizualization node
 catkin_install_python(PROGRAMS
