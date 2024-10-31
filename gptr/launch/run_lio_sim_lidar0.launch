@@ -10,20 +10,23 @@
 
     <!-- Bag file -->
     <arg name="lidar_bag_file" value="/media/tmn/mySataSSD1/Experiments/gptr/$(arg sequence)/"/>
-                                     
+                                                                
     <!-- Initial start time of each sequence -->
     <arg name="skipped_time" value="0"/>
 
     <!-- Initial pose in each sequence -->
     <arg name="xyzypr_W_L0" value="[ 0,    0,   0.70,  43,  48, 0]"/>
 
+    <!-- Direction to log the exp -->
+    <arg name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_$(arg sequence)/"/>
+
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
-          launch-prefix="bash -c 'sleep 3; $0 $@' ">
+          launch-prefix="bash -c 'cp -r $(find gptr)/launch $(arg log_dir); sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->
-        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/priormap.pcd"/>
+        <param name="priormap_file"   value="/media/tmn/mySataSSD1/Experiments/gptr/sim_priormap.pcd"/>
 
         <!-- Location of bag file -->
         <param name="lidar_bag_file"  value="$(arg lidar_bag_file)"/>
@@ -91,7 +94,7 @@
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"/>
         <param name="SW_CLOUDSTEP"    value="05"/>
-        <param name="max_lidarcoefs"  value="2000"/>
+        <param name="max_lidarcoefs"  value="8000"/>
         <param name="XTRZ_DENSITY"    value="1"/>
         <param name="min_planarity"   value="0.5"/>
         <param name="max_plane_dis"   value="0.5"/>
@@ -100,20 +103,20 @@
         <param name="max_ceres_iter"  value="50"/>
         <param name="max_outer_iter"  value="1"/>
         <param name="max_inner_iter"  value="40"/>
-        <param name="min_inner_iter"  value="20"/>
-        <param name="conv_thres"      value="20"/>
+        <param name="min_inner_iter"  value="3"/>
+        <param name="conv_thres"      value="3"/>
         <param name="dJ_conv_thres"   value="10"/>
         <param name="conv_dX_thres"   value="[ -0.05, -0.5, -1.0, -0.05, -0.5, -1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ -15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
         <param name="fix_time_begin"  value="0.0"/>
         <param name="fix_time_end"    value="0.0"/>
-        <param name="fuse_marg"       value="1"/>
+        <param name="fuse_marg"       value="0"/>
         <param name="compute_cost"    value="0"/>
         
         <!-- Log dir -->
         <param name="log_period"      value="5.0"/>
-        <param name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_$(arg sequence)"/>
+        <param name="log_dir"         value="$(arg log_dir)"/>
 
     </node>
 

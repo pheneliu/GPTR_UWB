@@ -1,6 +1,6 @@
 #include "utility.h"
 #include "GaussianProcess.hpp"
-// #include "GPKFLO.hpp"
+// #include "i2EKFLO.hpp"
 // #include "GPMAPLO.hpp"
 
 #include "factor/GPPointToPlaneFactor.h"

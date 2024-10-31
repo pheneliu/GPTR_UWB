@@ -194,7 +194,7 @@ public:
     }
 };
 
-class GPKFLO
+class i2EKFLO
 {
 private:
 
@@ -238,10 +238,10 @@ private:
 public:
 
     // Destructor
-   ~GPKFLO() {};
+   ~i2EKFLO() {};
 
     // Constructor
-    GPKFLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
+    i2EKFLO(int lidx_, const StateWithCov &X0, double Rw_, double Rv_, double minKnnSqDis_, double minKnnNbrDis_, NodeHandlePtr &nh_ptr_, mutex &nh_mtx)
     : lidx(lidx_), Xhatprev(X0), Xhat(X0), Rw(Rw_), Rv(Rv_), minKnnSqDis(minKnnSqDis_), minKnnNbrDis(minKnnNbrDis_), nh_ptr(nh_ptr_), trajEst(CloudPosePtr(new CloudPose()))
     {
 

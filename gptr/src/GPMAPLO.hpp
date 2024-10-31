@@ -342,220 +342,220 @@ public:
         Util::publishCloud(deskewedCloudPub, *cloudUndiInW, ros::Time::now(), "world");
     }
 
-    void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
-    {
-        deque<CloudXYZITPtr> swCloudSeg;
-        deque<CloudXYZIPtr > swCloudSegUndi;
-        deque<CloudXYZIPtr > swCloudSegUndiInW;
-        deque<vector<LidarCoef>> swCloudCoef;
+    // void FindTraj(const KdFLANNPtr &kdTreeMap, const CloudXYZIPtr &priormap, double t0)
+    // {
+    //     deque<CloudXYZITPtr> swCloudSeg;
+    //     deque<CloudXYZIPtr > swCloudSegUndi;
+    //     deque<CloudXYZIPtr > swCloudSegUndiInW;
+    //     deque<vector<LidarCoef>> swCloudCoef;
 
-        double timeout = -1;
-        // Check the buffer
-        while(ros::ok())
-        {
-            // Step 0: Poll and Extract the cloud segment -------------------------------------------------------------
+    //     double timeout = -1;
+    //     // Check the buffer
+    //     while(ros::ok())
+    //     {
+    //         // Step 0: Poll and Extract the cloud segment -------------------------------------------------------------
             
-            // Exit this thread if no data has been sent for more than 5 seconds
-            if(timeout > 0 && ros::Time::now().toSec() - timeout > 2.0)
-            {
-                printf(KGRN "GPMAPLO %d completed.\n" RESET, LIDX);
-                break;
-            }
+    //         // Exit this thread if no data has been sent for more than 5 seconds
+    //         if(timeout > 0 && ros::Time::now().toSec() - timeout > 2.0)
+    //         {
+    //             printf(KGRN "GPMAPLO %d completed.\n" RESET, LIDX);
+    //             break;
+    //         }
 
-            CloudXYZITPtr cloudSeg;
-            if(cloud_seg_buf.size() != 0)
-            {
-                std::lock_guard<mutex> lg(cloud_seg_buf_mtx);
-                cloudSeg = cloud_seg_buf.front();
-                cloud_seg_buf.pop_front();
+    //         CloudXYZITPtr cloudSeg;
+    //         if(cloud_seg_buf.size() != 0)
+    //         {
+    //             std::lock_guard<mutex> lg(cloud_seg_buf_mtx);
+    //             cloudSeg = cloud_seg_buf.front();
+    //             cloud_seg_buf.pop_front();
 
-                timeout = ros::Time::now().toSec();
-            }
-            else
-            {
-                this_thread::sleep_for(chrono::milliseconds(10));
-                continue;
-            }
+    //             timeout = ros::Time::now().toSec();
+    //         }
+    //         else
+    //         {
+    //             this_thread::sleep_for(chrono::milliseconds(10));
+    //             continue;
+    //         }
 
-            TicToc tt_loop;
-            TicToc tt_preopt;
-
-
-
-            // Step 1: Extend the trajectory to the new end time, trim the time by millisecond ------------------------
-
-            double TSWEND = cloudSeg->points.back().t;
-            // Extend the knot by propagation
-            while(traj->getMaxTime() < TSWEND)
-                traj->extendOneKnot();
-
-            // Downsample the input pointcloud
-            pcl::UniformSampling<PointXYZIT> downsampler;
-            downsampler.setRadiusSearch(ds_size);
-            downsampler.setInputCloud(cloudSeg);
-            downsampler.filter(*cloudSeg);
+    //         TicToc tt_loop;
+    //         TicToc tt_preopt;
 
 
 
-            // Step 2: Admit the cloud segment ------------------------------------------------------------------------
+    //         // Step 1: Extend the trajectory to the new end time, trim the time by millisecond ------------------------
 
-            swCloudSeg.push_back(cloudSeg);
-            swCloudSegUndi.push_back(CloudXYZIPtr(new CloudXYZI()));
-            swCloudSegUndiInW.push_back(CloudXYZIPtr(new CloudXYZI()));
-            swCloudCoef.push_back(vector<LidarCoef>());
+    //         double TSWEND = cloudSeg->points.back().t;
+    //         // Extend the knot by propagation
+    //         while(traj->getMaxTime() < TSWEND)
+    //             traj->extendOneKnot();
 
-            // No need to deskew for the first interval
-            pcl::copyPointCloud(*swCloudSeg.back(), *swCloudSegUndi.back());
-
-            // Transform cloud to the world frame for association
-            SE3d pose = traj->pose(TSWEND);
-            pcl::transformPointCloud(*swCloudSegUndi.back(), *swCloudSegUndiInW.back(), pose.translation(), pose.so3().unit_quaternion());
-
-            // Step 2.1: Deskew the cloud segment
-            Deskew(traj, swCloudSeg.back(), swCloudSegUndi.back());
-
-            // Step 2.2: Associate the last pointcloud with the map
-            Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
-
-            // Step 2.3: Create a local trajectory for optimization
-            GaussianProcessPtr swTraj(new GaussianProcess(deltaT, traj->getSigGa(), traj->getSigNu()));
-            int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
-            double tmin = traj->getKnotTime(umin);
-            double tmax = min(traj->getMaxTime(), TSWEND);
-            // Copy the knots {umin, umin+1, ...} from traj to swTraj
-            for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
-                swTraj->extendOneKnot(traj->getKnot(kidx));
-            // Reset the start time
-            swTraj->setStartTime(tmin);
-            // Effective length of the sliding window
-            int WDZ = min(int(swCloudSeg.size()), WINDOW_SIZE);
-
-            tt_preopt.Toc();
+    //         // Downsample the input pointcloud
+    //         pcl::UniformSampling<PointXYZIT> downsampler;
+    //         downsampler.setRadiusSearch(ds_size);
+    //         downsampler.setInputCloud(cloudSeg);
+    //         downsampler.filter(*cloudSeg);
 
 
 
-            // Step 3: iterative optimization -------------------------------------------------------------------------
+    //         // Step 2: Admit the cloud segment ------------------------------------------------------------------------
 
-            // Sample the state before optimization 
-            GPState Xts0 = traj->getStateAt(tmin);
-            GPState Xte0 = traj->getStateAt(tmax);
+    //         swCloudSeg.push_back(cloudSeg);
+    //         swCloudSegUndi.push_back(CloudXYZIPtr(new CloudXYZI()));
+    //         swCloudSegUndiInW.push_back(CloudXYZIPtr(new CloudXYZI()));
+    //         swCloudCoef.push_back(vector<LidarCoef>());
 
-            vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
+    //         // No need to deskew for the first interval
+    //         pcl::copyPointCloud(*swCloudSeg.back(), *swCloudSegUndi.back());
 
-            int optnum = -1; optnum++;
-            int gniter = 0;
-            while(gniter < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
-            {
-                TicToc tt_solve;
+    //         // Transform cloud to the world frame for association
+    //         SE3d pose = traj->pose(TSWEND);
+    //         pcl::transformPointCloud(*swCloudSegUndi.back(), *swCloudSegUndiInW.back(), pose.translation(), pose.so3().unit_quaternion());
 
-                // Check for the next base for marginalization
-                deque<int> swAbsKidx;
-                for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
-                    swAbsKidx.push_back(kidx);
-                int swNextBaseKnot = -1;
-                if (swCloudSeg.size() >= WINDOW_SIZE)
-                    swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
+    //         // Step 2.1: Deskew the cloud segment
+    //         Deskew(traj, swCloudSeg.back(), swCloudSegUndi.back());
 
-                // Solve
-                mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
+    //         // Step 2.2: Associate the last pointcloud with the map
+    //         Associate(traj, kdTreeMap, priormap, swCloudSeg.back(), swCloudSegUndi.back(), swCloudSegUndiInW.back(), swCloudCoef.back());          
 
-                // Get the report
-                GNSolverReport gnreport = mySolver->GetReport();
-                // Calculate the cost
-                double J0 = gnreport.J0prior + gnreport.J0lidar + gnreport.J0mp2k;
-                double JK = gnreport.JKprior + gnreport.JKlidar + gnreport.JKmp2k;
-                JK = JK < 0 ? -1 : JK;
+    //         // Step 2.3: Create a local trajectory for optimization
+    //         GaussianProcessPtr swTraj(new GaussianProcess(deltaT, traj->getSigGa(), traj->getSigNu()));
+    //         int    umin = traj->computeTimeIndex(max(traj->getMinTime(), swCloudSeg.front()->points.front().t)).first;
+    //         double tmin = traj->getKnotTime(umin);
+    //         double tmax = min(traj->getMaxTime(), TSWEND);
+    //         // Copy the knots {umin, umin+1, ...} from traj to swTraj
+    //         for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
+    //             swTraj->extendOneKnot(traj->getKnot(kidx));
+    //         // Reset the start time
+    //         swTraj->setStartTime(tmin);
+    //         // Effective length of the sliding window
+    //         int WDZ = min(int(swCloudSeg.size()), WINDOW_SIZE);
 
-                // Get the covariance
-                SparseMatrix<double> InvCov_ = mySolver->GetInvCov();
-                MatrixXd InvCov = InvCov_.toDense();
+    //         tt_preopt.Toc();
 
-                tt_solve.Toc();
+
+
+    //         // Step 3: iterative optimization -------------------------------------------------------------------------
+
+    //         // Sample the state before optimization 
+    //         GPState Xts0 = traj->getStateAt(tmin);
+    //         GPState Xte0 = traj->getStateAt(tmax);
+
+    //         vector<string> report(max_gniter);  // A report to provide info on the internal of the optimization
+
+    //         int optnum = -1; optnum++;
+    //         int gniter = 0;
+    //         while(gniter < max_gniter && traj->getMaxTime() > SKIPPED_TIME)
+    //         {
+    //             TicToc tt_solve;
+
+    //             // Check for the next base for marginalization
+    //             deque<int> swAbsKidx;
+    //             for(int kidx = umin; kidx < traj->getNumKnots(); kidx++)
+    //                 swAbsKidx.push_back(kidx);
+    //             int swNextBaseKnot = -1;
+    //             if (swCloudSeg.size() >= WINDOW_SIZE)
+    //                 swNextBaseKnot = traj->computeTimeIndex(swCloudSeg[1]->points.front().t).first;
+
+    //             // Solve
+    //             mySolver->Solve(swTraj, swCloudCoef, gniter, swAbsKidx, swNextBaseKnot);
+
+    //             // Get the report
+    //             GNSolverReport gnreport = mySolver->GetReport();
+    //             // Calculate the cost
+    //             double J0 = gnreport.J0prior + gnreport.J0lidar + gnreport.J0mp2k;
+    //             double JK = gnreport.JKprior + gnreport.JKlidar + gnreport.JKmp2k;
+    //             JK = JK < 0 ? -1 : JK;
+
+    //             // Get the covariance
+    //             SparseMatrix<double> InvCov_ = mySolver->GetInvCov();
+    //             MatrixXd InvCov = InvCov_.toDense();
+
+    //             tt_solve.Toc();
                 
-                TicToc tt_aftop;
-                // Step X: Copy the knots on the sliding window back to the global trajectory
-                {
-                    for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
-                    {
-                        double tgb = traj->getKnotTime(kidx + umin);
-                        double tlc = swTraj->getKnotTime(kidx);
-                        double ter = fabs(tlc - tgb);
-                        ROS_ASSERT_MSG(ter < 1e-3, "Knot Time: %f, %f. Diff: %f.\n", tlc, tgb, ter);
-                        traj->setKnot(kidx + umin, swTraj->getKnot(kidx));
-                        traj->setKnotCovariance(kidx + umin, InvCov.block<STATE_DIM, STATE_DIM>(kidx*STATE_DIM, kidx*STATE_DIM));
-                    }
-                }
+    //             TicToc tt_aftop;
+    //             // Step X: Copy the knots on the sliding window back to the global trajectory
+    //             {
+    //                 for(int kidx = 0; kidx < swTraj->getNumKnots(); kidx++)
+    //                 {
+    //                     double tgb = traj->getKnotTime(kidx + umin);
+    //                     double tlc = swTraj->getKnotTime(kidx);
+    //                     double ter = fabs(tlc - tgb);
+    //                     ROS_ASSERT_MSG(ter < 1e-3, "Knot Time: %f, %f. Diff: %f.\n", tlc, tgb, ter);
+    //                     traj->setKnot(kidx + umin, swTraj->getKnot(kidx));
+    //                     traj->setKnotCovariance(kidx + umin, InvCov.block<STATE_DIM, STATE_DIM>(kidx*STATE_DIM, kidx*STATE_DIM));
+    //                 }
+    //             }
 
-                // Deskew the point cloud and make new association
-                for(int widx = 0; widx < WDZ; widx++)
-                {
-                    Deskew(traj, swCloudSeg[widx], swCloudSegUndi[widx]);
+    //             // Deskew the point cloud and make new association
+    //             for(int widx = 0; widx < WDZ; widx++)
+    //             {
+    //                 Deskew(traj, swCloudSeg[widx], swCloudSegUndi[widx]);
 
-                    // Transform pointcloud to the world frame
-                    double tend = swCloudSeg[widx]->points.back().t;
-                    myTf tf_W_Be(traj->pose(tend));
-                    pcl::transformPointCloud(*swCloudSegUndi[widx],
-                                             *swCloudSegUndiInW[widx],
-                                              tf_W_Be.pos, tf_W_Be.rot);
+    //                 // Transform pointcloud to the world frame
+    //                 double tend = swCloudSeg[widx]->points.back().t;
+    //                 myTf tf_W_Be(traj->pose(tend));
+    //                 pcl::transformPointCloud(*swCloudSegUndi[widx],
+    //                                          *swCloudSegUndiInW[widx],
+    //                                           tf_W_Be.pos, tf_W_Be.rot);
 
-                    // Associate between feature and map
-                    Associate(traj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
-                }
+    //                 // Associate between feature and map
+    //                 Associate(traj, kdTreeMap, priormap, swCloudSeg[widx], swCloudSegUndi[widx], swCloudSegUndiInW[widx], swCloudCoef[widx]);
+    //             }
 
-                // Visualize the result on the sliding window
-                Visualize(tmin, tmax, swCloudCoef, swCloudSegUndiInW.back());
+    //             // Visualize the result on the sliding window
+    //             Visualize(tmin, tmax, swCloudCoef, swCloudSegUndiInW.back());
 
-                tt_aftop.Toc();
+    //             tt_aftop.Toc();
 
-                // Make report
-                gniter++;
-                // Print a report
-                GPState XtsK = traj->getStateAt(tmin);
-                GPState XteK = traj->getStateAt(tmax);
-                double swTs = swCloudSeg.front()->points.front().t;
-                double swTe = swCloudSeg.back()->points.back().t;
-                report[gniter-1] = 
-                myprintf("%sGPMAP%dLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
-                         "Tprop: %2.0f. Tslv: %2.0f. Taftop: %2.0f. Tlp: %3.0f.\n"
-                         "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
-                         "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
-                         "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
-                         "Poss0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
-                         "PossK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
-                         "Pose0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
-                         "PoseK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
-                         RESET,
-                         gniter == max_gniter ? KGRN : "", LIDX, optnum,
-                         gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
-                         tt_preopt.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
-                         gniter == max_gniter ? tt_loop.Toc() : -1.0,
-                         gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
-                         J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
-                         JK, gnreport.JKlidar, gnreport.JKprior, gnreport.JKmp2k,
-                         Xts0.P.x(), Xts0.P.y(), Xts0.P.z(), Xts0.V.x(), Xts0.V.y(), Xts0.V.z(), Xts0.A.x(), Xts0.A.y(), Xts0.A.z(), Xts0.yaw(), Xts0.pitch(), Xts0.roll(),
-                         XtsK.P.x(), XtsK.P.y(), XtsK.P.z(), XtsK.V.x(), XtsK.V.y(), XtsK.V.z(), XtsK.A.x(), XtsK.A.y(), XtsK.A.z(), XtsK.yaw(), XtsK.pitch(), XtsK.roll(),
-                         Xte0.P.x(), Xte0.P.y(), Xte0.P.z(), Xte0.V.x(), Xte0.V.y(), Xte0.V.z(), Xte0.A.x(), Xte0.A.y(), Xte0.A.z(), Xte0.yaw(), Xte0.pitch(), Xte0.roll(),
-                         XteK.P.x(), XteK.P.y(), XteK.P.z(), XteK.V.x(), XteK.V.y(), XteK.V.z(), XteK.A.x(), XteK.A.y(), XteK.A.z(), XteK.yaw(), XteK.pitch(), XteK.roll());
-            }
+    //             // Make report
+    //             gniter++;
+    //             // Print a report
+    //             GPState XtsK = traj->getStateAt(tmin);
+    //             GPState XteK = traj->getStateAt(tmax);
+    //             double swTs = swCloudSeg.front()->points.front().t;
+    //             double swTe = swCloudSeg.back()->points.back().t;
+    //             report[gniter-1] = 
+    //             myprintf("%sGPMAP%dLO#%d. OItr: %2d / %2d. GNItr: %2d. Umin: %4d. TKnot: %6.3f -> %6.3f. TCloud: %6.3f -> %6.3f.\n"
+    //                      "Tprop: %2.0f. Tslv: %2.0f. Taftop: %2.0f. Tlp: %3.0f.\n"
+    //                      "Factors: Lidar: %4d. Prior: %4d. Motion prior: %4d. Knots: %d / %d.\n"
+    //                      "J0: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
+    //                      "JK: %12.3f. Ldr: %9.3f. Prior: %9.3f. MP: %f.\n"
+    //                      "Poss0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+    //                      "PossK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+    //                      "Pose0: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+    //                      "PoseK: %6.3f, %6.3f, %6.3f. Vel: %6.3f, %6.3f, %6.3f. Acc: %6.3f, %6.3f, %6.3f. YPR: %6.3f, %6.3f, %6.3f.\n"
+    //                      RESET,
+    //                      gniter == max_gniter ? KGRN : "", LIDX, optnum,
+    //                      gniter, max_gniter, 1, umin, tmin, tmax, swTs, swTe,
+    //                      tt_preopt.GetLastStop(), tt_solve.GetLastStop(), tt_aftop.GetLastStop(),
+    //                      gniter == max_gniter ? tt_loop.Toc() : -1.0,
+    //                      gnreport.lidarFactors, gnreport.priorFactors, gnreport.mp2kFactors, swTraj->getNumKnots(), traj->getNumKnots(),
+    //                      J0, gnreport.J0lidar, gnreport.J0prior, gnreport.J0mp2k,
+    //                      JK, gnreport.JKlidar, gnreport.JKprior, gnreport.JKmp2k,
+    //                      Xts0.P.x(), Xts0.P.y(), Xts0.P.z(), Xts0.V.x(), Xts0.V.y(), Xts0.V.z(), Xts0.A.x(), Xts0.A.y(), Xts0.A.z(), Xts0.yaw(), Xts0.pitch(), Xts0.roll(),
+    //                      XtsK.P.x(), XtsK.P.y(), XtsK.P.z(), XtsK.V.x(), XtsK.V.y(), XtsK.V.z(), XtsK.A.x(), XtsK.A.y(), XtsK.A.z(), XtsK.yaw(), XtsK.pitch(), XtsK.roll(),
+    //                      Xte0.P.x(), Xte0.P.y(), Xte0.P.z(), Xte0.V.x(), Xte0.V.y(), Xte0.V.z(), Xte0.A.x(), Xte0.A.y(), Xte0.A.z(), Xte0.yaw(), Xte0.pitch(), Xte0.roll(),
+    //                      XteK.P.x(), XteK.P.y(), XteK.P.z(), XteK.V.x(), XteK.V.y(), XteK.V.z(), XteK.A.x(), XteK.A.y(), XteK.A.z(), XteK.yaw(), XteK.pitch(), XteK.roll());
+    //         }
 
-            // Print the report
-            if(traj->getMaxTime() > SKIPPED_TIME)
-            {
-                for(string &rep : report)
-                    cout << rep;
-                cout << endl;
-            }
+    //         // Print the report
+    //         if(traj->getMaxTime() > SKIPPED_TIME)
+    //         {
+    //             for(string &rep : report)
+    //                 cout << rep;
+    //             cout << endl;
+    //         }
 
-            // Step 4: Shift the sliding window if length exceeds threshold
-            if (swCloudSeg.size() >= WINDOW_SIZE)
-            {
-                swCloudSeg.pop_front();
-                swCloudSegUndi.pop_front();
-                swCloudSegUndiInW.pop_front();
-                swCloudCoef.pop_front();
-            }
-        }
-    }
+    //         // Step 4: Shift the sliding window if length exceeds threshold
+    //         if (swCloudSeg.size() >= WINDOW_SIZE)
+    //         {
+    //             swCloudSeg.pop_front();
+    //             swCloudSegUndi.pop_front();
+    //             swCloudSegUndiInW.pop_front();
+    //             swCloudCoef.pop_front();
+    //         }
+    //     }
+    // }
 
     GaussianProcessPtr &GetTraj()
     {

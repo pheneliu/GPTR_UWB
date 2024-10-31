@@ -24,7 +24,7 @@
 
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
-          launch-prefix="bash -c 'sleep 3; $0 $@' ">
+          launch-prefix="bash -c 'cp -r $(find gptr)/launch $(arg log_dir); sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
         <!-- Location of the prior map -->

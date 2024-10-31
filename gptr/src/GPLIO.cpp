@@ -28,7 +28,7 @@
 #include "CloudMatcher.hpp"
 #include "utility.h"
 #include "GaussianProcess.hpp"
-#include "GPKFLO.hpp"
+#include "i2EKFLO.hpp"
 #include "GPMAPLO.hpp"
 #include "GPMLC.h"
 
@@ -123,7 +123,7 @@ mutex nh_mtx;
 typedef std::shared_ptr<GPMAPLO> GPMAPLOPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
-// vector<GPKFLOPtr> gpkflo;
+// vector<i2EKFLOPtr> i2EKFLO;
 vector<GPMAPLOPtr> gpmaplo;
 
 template <typename Scalar = double, int RowSize = Dynamic, int ColSize = Dynamic>
@@ -875,9 +875,9 @@ int main(int argc, char **argv)
     
     if(runkf)
     {
-        typedef std::shared_ptr<GPKFLO> GPKFLOPtr;
+        typedef std::shared_ptr<i2EKFLO> i2EKFLOPtr;
         // Find a preliminary trajectory for each lidar sequence
-        vector<GPKFLOPtr> gpkflo;
+        vector<i2EKFLOPtr> i2kflo;
         vector<thread> trajEst;
         vector<CloudPosePtr> posePrior(Nlidar);
         double UW_NOISE = 100.0, UV_NOISE = 100.0;
@@ -886,11 +886,11 @@ int main(int argc, char **argv)
             // Creating the trajectory estimator
             StateWithCov Xhat0(cloudstamp[lidx].front().toSec(), tf_W_Li0[lidx].rot, tf_W_Li0[lidx].pos, Vector3d(0, 0, 0), Vector3d(0, 0, 0), 1.0);
 
-            gpkflo.push_back(GPKFLOPtr(new GPKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.4, nh_ptr, nh_mtx)));
+            i2kflo.push_back(i2EKFLOPtr(new i2EKFLO(lidx, Xhat0, UW_NOISE, UV_NOISE, 0.5*0.5, 0.4, nh_ptr, nh_mtx)));
 
             // Estimate the trajectory
             posePrior[lidx] = CloudPosePtr(new CloudPose());
-            trajEst.push_back(thread(std::bind(&GPKFLO::FindTraj, gpkflo[lidx],
+            trajEst.push_back(thread(std::bind(&i2EKFLO::FindTraj, i2kflo[lidx],
                                                 std::ref(kdTreeMap), std::ref(priormap),
                                                 std::ref(clouds[lidx]), std::ref(cloudstamp[lidx]),
                                                 std::ref(posePrior[lidx]))));
@@ -910,7 +910,7 @@ int main(int argc, char **argv)
         }
 
         trajEst.clear();
-        gpkflo.clear();
+        i2kflo.clear();
 
         // Clear the clouds data to free memory
         for(auto &cs : clouds)
