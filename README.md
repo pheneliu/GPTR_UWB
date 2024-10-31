@@ -70,11 +70,9 @@ The `GaussianProcess` object provides methods to create, initialize, extend,, an
 
 ## Publication
 
-For the theorectical foundation, please find our paper at:
+For the theorectical foundation, please find our paper at [arxiv](https://arxiv.org/pdf/2410.22931)
 
-[arxiv](https://arxiv.org/pdf/2410.22931)
-
-If you use the source code of our work, please cite us as
+If you use the source code of our work, please cite us as follows:
 
 ```
 @article{nguyen2024gptr,
