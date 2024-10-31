@@ -18,53 +18,9 @@ typedef Matrix3d Mat3;
 using namespace std;
 using namespace Eigen;
 
-// Local parameterization when using ceres
-template <class Groupd>
-class GPSO3LocalParameterization : public ceres::LocalParameterization
-{
-public:
-    virtual ~GPSO3LocalParameterization() {}
 
-    using Tangentd = typename Groupd::Tangent;
+/* #region Define the states for convenience in initialization and copying ------------------------------------------*/
 
-    /// @brief plus operation for Ceres
-    ///
-    ///  T * exp(x)
-    ///
-    virtual bool Plus(double const *T_raw, double const *delta_raw,
-                      double *T_plus_delta_raw) const
-    {
-        Eigen::Map<Groupd const> const T(T_raw);
-        Eigen::Map<Tangentd const> const delta(delta_raw);
-        Eigen::Map<Groupd> T_plus_delta(T_plus_delta_raw);
-        T_plus_delta = T * Groupd::exp(delta);
-        return true;
-    }
-
-    virtual bool ComputeJacobian(double const *T_raw,
-                                 double *jacobian_raw) const
-    {
-        Eigen::Map<Groupd const> T(T_raw);
-        Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF, Eigen::RowMajor>>
-        
-        jacobian(jacobian_raw);
-        jacobian.setZero();
-
-        jacobian(0, 0) = 1;
-        jacobian(1, 1) = 1;
-        jacobian(2, 2) = 1;
-        return true;
-    }
-
-    ///@brief Global size
-    virtual int GlobalSize() const { return Groupd::num_parameters; }
-
-    ///@brief Local size
-    virtual int LocalSize() const { return Groupd::DoF; }
-};
-typedef GPSO3LocalParameterization<SO3d> GPSO3dLocalParameterization;
-
-// Define the states for convenience in initialization and copying
 #define STATE_DIM 18
 template <class T = double>
 class GPState
@@ -159,7 +115,11 @@ public:
     }
 };
 
-// Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, J_r, H_r, Hprime_r ...
+/* #endregion Define the states for convenience in initialization and copying ---------------------------------------*/
+
+
+/* #region Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, J_r, H_r, Hprime_r.. ---*/
+
 class GPMixer
 {
 private:
@@ -938,7 +898,11 @@ public:
 // Define the shared pointer
 typedef std::shared_ptr<GPMixer> GPMixerPtr;
 
-// Managing control points: cration, extension, queries, ...
+/* #endregion Utility for propagation and interpolation matrices, elementary jacobians dXt/dXk, J_r, H_r, Hprime_r.. */
+
+
+/* #region Managing control points: cration, extension, queries, ... ------------------------------------------------*/
+
 class GaussianProcess
 {
     using CovM = Eigen::Matrix<double, STATE_DIM, STATE_DIM>;
@@ -1542,3 +1506,55 @@ public:
 };
 // Define the shared pointer
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
+
+/* #endregion Managing control points: cration, extension, queries, ... ---------------------------------------------*/
+
+
+/* #region Local parameterization when using ceres ------------------------------------------------------------------*/
+
+template <class Groupd>
+class GPSO3LocalParameterization : public ceres::LocalParameterization
+{
+public:
+    virtual ~GPSO3LocalParameterization() {}
+
+    using Tangentd = typename Groupd::Tangent;
+
+    /// @brief plus operation for Ceres
+    ///
+    ///  T * exp(x)
+    ///
+    virtual bool Plus(double const *T_raw, double const *delta_raw,
+                      double *T_plus_delta_raw) const
+    {
+        Eigen::Map<Groupd const> const T(T_raw);
+        Eigen::Map<Tangentd const> const delta(delta_raw);
+        Eigen::Map<Groupd> T_plus_delta(T_plus_delta_raw);
+        T_plus_delta = T * Groupd::exp(delta);
+        return true;
+    }
+
+    virtual bool ComputeJacobian(double const *T_raw,
+                                 double *jacobian_raw) const
+    {
+        Eigen::Map<Groupd const> T(T_raw);
+        Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF, Eigen::RowMajor>>
+        
+        jacobian(jacobian_raw);
+        jacobian.setZero();
+
+        jacobian(0, 0) = 1;
+        jacobian(1, 1) = 1;
+        jacobian(2, 2) = 1;
+        return true;
+    }
+
+    ///@brief Global size
+    virtual int GlobalSize() const { return Groupd::num_parameters; }
+
+    ///@brief Local size
+    virtual int LocalSize() const { return Groupd::DoF; }
+};
+typedef GPSO3LocalParameterization<SO3d> GPSO3dLocalParameterization;
+
+/* #endregion Local parameterization when using ceres ----------------------------------------------------------------*/

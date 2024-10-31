@@ -59,3 +59,28 @@ Run the following command from terminal
 roslaunch gptr run_vicalib.launch
 ```
 This dataset is converted from the original one in [here](https://gitlab.com/tum-vision/lie-spline-experiments).
+
+
+## Importing GPTR in your work:
+
+The heart of our toolkit is the [GaussianProcess.hpp](gptr/include/GaussianProcess.hpp) header file which contains the abstraction of the continuous-time trajectory represented by a third-order `GaussianProcess`.
+
+The `GaussianProcess` object provides methods to create, initialize, extend,, and query information from the trajectory.
+
+
+## Publication
+
+For the theorectical foundation, please find our paper at:
+
+[arxiv](https://arxiv.org/pdf/2410.22931)
+
+If you use the source code of our work, please cite us as
+
+```
+@article{nguyen2024gptr,
+  title     = {GPTR: Gaussian Process Trajectory Representation for Continuous-Time Motion Estimation},
+  author    = {Nguyen, Thien-Minh, and Cao, Ziyu, and Li, Kailai, and Yuan, Shenghai and Xie, Lihua},
+  journal   = {arXiv preprint arXiv:2410.22931},
+  year      = {2024}
+}
+```
