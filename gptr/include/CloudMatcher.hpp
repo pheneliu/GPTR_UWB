@@ -43,7 +43,7 @@
 
 #include "utility.h"
 
-#include "PoseLocalParameterization.h"
+// #include "PoseLocalParameterization.h"
 
 #ifndef CLOUDMATCHER_HPP
 #define CLOUDMATCHER_HPP
@@ -51,6 +51,48 @@
 using namespace std;
 using namespace Eigen;
 using namespace pcl;
+
+#include <eigen3/Eigen/Dense>
+#include <ceres/ceres.h>
+#include "utility.h"
+
+class PoseLocalParameterization : public ceres::LocalParameterization
+{
+    bool Plus(const double *x, const double *delta, double *x_plus_delta) const
+    {
+        Eigen::Map<const Eigen::Vector3d> _p(x);
+        Eigen::Map<const Eigen::Quaterniond> _q(x + 3);
+
+        Eigen::Map<const Eigen::Vector3d> dp(delta);
+
+        Eigen::Quaterniond dq = Util::QExp(Eigen::Map<const Eigen::Vector3d>(delta + 3));
+
+        Eigen::Map<Eigen::Vector3d> p(x_plus_delta);
+        Eigen::Map<Eigen::Quaterniond> q(x_plus_delta + 3);
+
+        p = _p + dp;
+        q = (_q * dq).normalized();
+
+        // Eigen::Vector3d euler(Utility::R2ypr(q.toRotationMatrix()));
+        // euler.y() = 30.0*euler.y()/std::max(30.0, fabs(euler.y()));
+        // euler.z() = 30.0*euler.y()/std::max(30.0, fabs(euler.z()));
+        // q = Quaterniond(Utility::ypr2R(euler.x(), euler.y(), euler.z()));
+
+        return true;
+    }
+
+    virtual bool ComputeJacobian(const double *x, double *jacobian) const
+    {
+        Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor>> j(jacobian);
+        j.topRows<6>().setIdentity();
+        j.bottomRows<1>().setZero();
+
+        return true;
+    }
+
+    virtual int GlobalSize() const { return 7; };
+    virtual int LocalSize() const { return 6; };
+};
 
 struct IOAOptions
 {
@@ -75,7 +117,6 @@ struct IOASummary
     double process_time = 0;
     mytf final_tf;
 };
-
 
 #ifndef POINTTOPLANDISFACTOR_H
 #define POINTTOPLANDISFACTOR_H

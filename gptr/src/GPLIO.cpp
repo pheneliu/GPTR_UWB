@@ -13,34 +13,27 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include "sensor_msgs/PointCloud2.h"
-// #include "livox_ros_driver/CustomMsg.h"
 
 // Add ikdtree
 #include <ikdTree/ikd_Tree.h>
 
 // Basalt
-#include "basalt/spline/se3_spline.h"
-#include "basalt/spline/ceres_spline_helper.h"
-#include "basalt/spline/ceres_local_param.hpp"
-#include "basalt/spline/posesplinex.h"
+// #include "basalt/spline/se3_spline.h"
+// #include "basalt/spline/ceres_spline_helper.h"
+// #include "basalt/spline/ceres_local_param.hpp"
+// #include "basalt/spline/posesplinex.h"
 
 // Custom built utilities
-#include "CloudMatcher.hpp"
 #include "utility.h"
+#include "CloudMatcher.hpp"
 #include "GaussianProcess.hpp"
 #include "i2EKFLO.hpp"
 #include "GPMAPLO.hpp"
-#include "GPMLC.h"
+#include "GPLIO.hpp"
 
 // Factor for optimization
-// #include "factor/PoseAnalyticFactor.h"
-// #include "factor/ExtrinsicFactor.h"
-// #include "factor/FullExtrinsicFactor.h"
-#include "factor/GPExtrinsicFactor.h"
-#include "factor/GPMotionPriorTwoKnotsFactor.h"
-// #include "factor/GPMotionPriorTwoKnotsFactorTMN.hpp"
-// #include "factor/ExtrinsicPoseFactor.h"
-// #include "factor/GPPoseFactor.h"
+// #include "factor/GPExtrinsicFactor.h"
+// #include "factor/GPMotionPriorTwoKnotsFactor.h"
 
 using namespace std;
 namespace fs = std::filesystem;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "camera.hpp"
+#include "DoubleSphereCameraModel.hpp"
 #include "GaussNewtonUtilities.hpp"
 
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
