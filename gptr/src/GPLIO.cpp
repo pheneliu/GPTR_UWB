@@ -28,7 +28,7 @@
 #include "CloudMatcher.hpp"
 #include "GaussianProcess.hpp"
 #include "i2EKFLO.hpp"
-#include "GPMAPLO.hpp"
+#include "LOAM.hpp"
 #include "GPLIO.hpp"
 
 // Factor for optimization
@@ -113,11 +113,11 @@ bool runkf = false;
 mutex nh_mtx;
 
 // Define the posespline
-typedef std::shared_ptr<GPMAPLO> GPMAPLOPtr;
+typedef std::shared_ptr<LOAM> LOAMPtr;
 typedef std::shared_ptr<GaussianProcess> GaussianProcessPtr;
 
 // vector<i2EKFLOPtr> i2EKFLO;
-vector<GPMAPLOPtr> gpmaplo;
+vector<LOAMPtr> gpmaplo;
 
 template <typename Scalar = double, int RowSize = Dynamic, int ColSize = Dynamic>
 Matrix<Scalar, RowSize, ColSize> load_dlm(const std::string &path, string dlm, int r_start = 0, int col_start = 0)
@@ -918,10 +918,10 @@ int main(int argc, char **argv)
     
     /* #region Create the LOAM modules ------------------------------------------------------------------------------*/
 
-    gpmaplo = vector<GPMAPLOPtr>(Nlidar);
+    gpmaplo = vector<LOAMPtr>(Nlidar);
     for(int lidx = 0; lidx < Nlidar; lidx++)
         // Create the gpmaplo objects
-        gpmaplo[lidx] = GPMAPLOPtr(new GPMAPLO(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), TSTART, lidx));
+        gpmaplo[lidx] = LOAMPtr(new LOAM(nh_ptr, nh_mtx, tf_W_Li0[lidx].getSE3(), TSTART, lidx));
 
     // If there is a log, load them up
     for(int lidx = 0; lidx < Nlidar; lidx++)
@@ -944,7 +944,7 @@ int main(int argc, char **argv)
     }
  
     // Create the estimation module
-    GPMLCPtr gpmlc(new GPMLC(nh_ptr, Nlidar));
+    MLCMEPtr gpmlc(new MLCME(nh_ptr, Nlidar));
     vector<GaussianProcessPtr> trajs;
     for(auto &lo : gpmaplo)
         trajs.push_back(lo->GetTraj());
@@ -1031,7 +1031,7 @@ int main(int argc, char **argv)
 
 
                 // Deskew, Transform and Associate
-                auto ProcessCloud = [&kdTreeMap, &priormap](GPMAPLOPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
+                auto ProcessCloud = [&kdTreeMap, &priormap](LOAMPtr &gpmaplo, CloudXYZITPtr &cloudRaw, CloudXYZIPtr &cloudUndi,
                                                             CloudXYZIPtr &cloudUndiInW, vector<LidarCoef> &cloudCoeff) -> void
                 {
                     // Get the trajectory
@@ -1508,8 +1508,6 @@ int main(int argc, char **argv)
             pcl::io::savePCDFileBinary(cloud_name, *cloudMergedRaw);
         }
     }
-    
-    exit(0);
 
     /* #endregion Create some logs for visualization ----------------------------------------------------------------*/
  

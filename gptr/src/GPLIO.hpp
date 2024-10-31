@@ -20,7 +20,7 @@
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPMotionPriorTwoKnotsFactor.h"
 
-class GPMLC
+class MLCME
 {
 private:
 
@@ -70,10 +70,10 @@ protected:
 public:
 
     // Destructor
-   ~GPMLC() {};
+   ~MLCME() {};
    
     // Constructor
-    GPMLC(ros::NodeHandlePtr &nh_, int Nlidar_)
+    MLCME(ros::NodeHandlePtr &nh_, int Nlidar_)
         : nh(nh_), Nlidar(Nlidar_), R_Lx_Ly(vector<SO3d>(Nlidar_, SO3d())), P_Lx_Ly(vector<Vec3>(Nlidar_, Vec3(0, 0, 0)))
     {
         nh->getParam("fix_time_begin", fix_time_begin);
@@ -1272,4 +1272,4 @@ public:
     }
 };
 
-typedef std::shared_ptr<GPMLC> GPMLCPtr;
+typedef std::shared_ptr<MLCME> MLCMEPtr;

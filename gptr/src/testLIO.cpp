@@ -1,7 +1,7 @@
 #include "utility.h"
 #include "GaussianProcess.hpp"
 // #include "i2EKFLO.hpp"
-// #include "GPMAPLO.hpp"
+// #include "LOAM.hpp"
 
 #include "factor/GPPointToPlaneFactor.h"
 #include "factor/GPPointToPlaneFactorAutodiff.h"
