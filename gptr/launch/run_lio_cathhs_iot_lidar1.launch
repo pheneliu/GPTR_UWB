@@ -23,7 +23,7 @@
                                      0,   0,  0,   0, 0,  0 ]"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="false" pkg="gptr" type="gptr" name="gptr" output="screen"
+    <node required="false" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 

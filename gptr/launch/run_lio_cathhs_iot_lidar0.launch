@@ -23,7 +23,7 @@
                                      0.2, 0, -0.2, 0, 90, 0 ]"/>
 
     <!-- Multi-lidar motion estimation node -->
-    <node required="false" pkg="gptr" type="gptr" name="gptr" output="screen"
+    <node required="false" pkg="gptr" type="gptr_lio" name="gptr_lio" output="screen"
           launch-prefix="bash -c 'sleep 3; $0 $@' ">
           <!-- launch-prefix="gdb -ex run - -args"> -->
 
@@ -63,6 +63,10 @@
         <!-- Groundtruth for evaluation-->
         <param name="xtrz_gndtr"      value="[ 0, 0, 0, 0, 0,  0,
                                                0, 0, 0, 0, 0,  0, ]" type="yaml"/>
+
+        <!-- Transform from ground truth position estimate in xyz (m) yaw pitch roll (deg)-->
+        <param name="T_E_G"      value="[ -0.00037886633842519943, -0.011824967458688653, -0.6445255757936823, 177.41697100832081, -0.8380643201341046, -0.4324815049625096,
+                                           0.018040371221108277,   -0.005781886649251375, -0.6659410499572929, 177.8095334058065,  -0.6988913250237251, -0.4278818562418   ]" type="yaml"/>
 
         <!-- Leaf size to downsample priormap -->
         <param name="pmap_leaf_size"  value="0.1"/>
