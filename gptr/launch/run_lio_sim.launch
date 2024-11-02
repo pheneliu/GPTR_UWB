@@ -95,7 +95,7 @@
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"/>
         <param name="SW_CLOUDSTEP"    value="01"/>
-        <param name="max_lidarcoefs"  value="2000"/>
+        <param name="max_lidarcoefs"  value="4000"/>
         <param name="XTRZ_DENSITY"    value="1"/>
         <param name="min_planarity"   value="0.5"/>
         <param name="max_plane_dis"   value="0.5"/>
@@ -104,13 +104,13 @@
         <param name="max_ceres_iter"  value="50"/>
         <param name="max_outer_iter"  value="01"/>
         <param name="max_inner_iter"  value="40"/>
-        <param name="min_inner_iter"  value="20"/>
-        <param name="conv_thres"      value="20"/>
+        <param name="min_inner_iter"  value="03"/>
+        <param name="conv_thres"      value="03"/>
         <param name="dJ_conv_thres"   value="10"/>
         <param name="conv_dX_thres"   value="[ -0.05, -0.5, -1.0, -0.05, -0.5, -1.0 ]" type="yaml"/>
         <param name="change_thres"    value="[ -15.0, -0.5, -1.0, -15.0, -8.0, -2.0 ]" type="yaml"/>
 
-        <param name="fix_time_begin"  value="0.0"/>
+        <param name="fix_time_begin"  value="0.025"/>
         <param name="fix_time_end"    value="0.0"/>
         <param name="fuse_marg"       value="1"/>
         <param name="compute_cost"    value="0"/>
