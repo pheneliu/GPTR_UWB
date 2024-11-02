@@ -18,7 +18,7 @@
     <arg name="xyzypr_W_L0" value="[ 0,    0,   0.70,  43,  48, 0]"/>
 
     <!-- Direction to log the exp -->
-    <arg name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_lidar0_$(arg sequence)/"/>
+    <arg name="log_dir" value="/media/tmn/mySataSSD1/Experiments/gptr/logs/lio/sim_exp/sim_$(arg sequence)_gptr_lidar0/"/>
 
     <!-- Multi-lidar motion estimation node -->
     <node required="false" pkg="gptr" type="gptr_lo" name="gptr_lo" output="screen"
