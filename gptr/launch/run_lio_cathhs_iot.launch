@@ -102,7 +102,7 @@
 
         <!-- Extrinsic estimation -->
         <param name="SW_CLOUDNUM"     value="40"/>
-        <param name="SW_CLOUDSTEP"    value="02"/>
+        <param name="SW_CLOUDSTEP"    value="01"/>
         <param name="max_lidarcoefs"  value="8000"/>
         <param name="XTRZ_DENSITY"    value="1"/>
         <param name="min_planarity"   value="0.5"/>
