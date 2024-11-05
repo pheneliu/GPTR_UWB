@@ -60,7 +60,7 @@ Change `bag_file` and `anchor_path` in `gptr/launch/run_util_linktrack.launch` a
 roslaunch gptr run_util_linktrack.launch
 ```
 Below is an exemplary run on sequence `modified_linktrack_data_origin_static_2024-10-30-15-04-15`
-<img src="/docs/ui_video.gif" width="600"/>
+
 
 ## Testing on visual-inertial estimation and calibration
 <img src="/docs/vicalib.gif" width="600"/>
