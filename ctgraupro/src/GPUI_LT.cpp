@@ -115,7 +115,7 @@ const double NEGINF = -std::numeric_limits<double>::infinity();
 
 vector<SE3d> anc_pose;
 
-double gpDt = 0.04;
+double gpDt = 0.02;
 Matrix3d gpQr;
 Matrix3d gpQc;
 
@@ -146,9 +146,9 @@ struct UwbImuBuf
 {
     // deque<TdoaMsgPtr> tdoaBuf;
     deque<LinktrackMsgPtr> linktrackBuf0;
-    deque<LinktrackMsgPtr> linktrackBuf1;
-    deque<LinktrackMsgPtr> linktrackBuf2;
-    deque<LinktrackMsgPtr> linktrackBuf3;
+    // deque<LinktrackMsgPtr> linktrackBuf1;
+    // deque<LinktrackMsgPtr> linktrackBuf2;
+    // deque<LinktrackMsgPtr> linktrackBuf3;
     deque<TofMsgPtr>  tofBuf;
     deque<ImuMsgPtr>  imuBuf;
 
@@ -162,9 +162,9 @@ struct UwbImuBuf
 
     // vector<TDOAData> tdoa_data; 
     vector<LinktrackData> linktrack_data0;
-    vector<LinktrackData> linktrack_data1;
-    vector<LinktrackData> linktrack_data2;
-    vector<LinktrackData> linktrack_data3;
+    // vector<LinktrackData> linktrack_data1;
+    // vector<LinktrackData> linktrack_data2;
+    // vector<LinktrackData> linktrack_data3;
     vector<IMUData> imu_data;
 
     double minTime()
@@ -174,12 +174,12 @@ struct UwbImuBuf
         //     tmin = min(tmin, tdoaBuf.front()->header.stamp.toSec()); 
         if (linktrackBuf0.size() != 0 && fuse_linktrack)
             tmin = min(tmin, linktrackBuf0.front()->header.stamp.toSec());
-        if (linktrackBuf1.size() != 0 && fuse_linktrack)
-            tmin = min(tmin, linktrackBuf1.front()->header.stamp.toSec());
-        if (linktrackBuf2.size() != 0 && fuse_linktrack)
-            tmin = min(tmin, linktrackBuf2.front()->header.stamp.toSec());
-        if (linktrackBuf3.size() != 0 && fuse_linktrack)
-            tmin = min(tmin, linktrackBuf3.front()->header.stamp.toSec());
+        // if (linktrackBuf1.size() != 0 && fuse_linktrack)
+        //     tmin = min(tmin, linktrackBuf1.front()->header.stamp.toSec());
+        // if (linktrackBuf2.size() != 0 && fuse_linktrack)
+        //     tmin = min(tmin, linktrackBuf2.front()->header.stamp.toSec());
+        // if (linktrackBuf3.size() != 0 && fuse_linktrack)
+        //     tmin = min(tmin, linktrackBuf3.front()->header.stamp.toSec());
         if (tofBuf.size() != 0 && fuse_tof)
             tmin = min(tmin, tofBuf.front()->header.stamp.toSec());
         if (imuBuf.size() != 0 && fuse_imu)
@@ -196,12 +196,12 @@ struct UwbImuBuf
         //     tmax = max(tmax, tdoaBuf.back()->header.stamp.toSec());
         if (linktrackBuf0.size() != 0 && fuse_linktrack)
             tmax = max(tmax, linktrackBuf0.back()->header.stamp.toSec());
-        if (linktrackBuf1.size() != 0 && fuse_linktrack)
-            tmax = max(tmax, linktrackBuf1.back()->header.stamp.toSec());
-        if (linktrackBuf2.size() != 0 && fuse_linktrack)
-            tmax = max(tmax, linktrackBuf2.back()->header.stamp.toSec());
-        if (linktrackBuf3.size() != 0 && fuse_linktrack)
-            tmax = max(tmax, linktrackBuf3.back()->header.stamp.toSec());
+        // if (linktrackBuf1.size() != 0 && fuse_linktrack)
+        //     tmax = max(tmax, linktrackBuf1.back()->header.stamp.toSec());
+        // if (linktrackBuf2.size() != 0 && fuse_linktrack)
+        //     tmax = max(tmax, linktrackBuf2.back()->header.stamp.toSec());
+        // if (linktrackBuf3.size() != 0 && fuse_linktrack)
+        //     tmax = max(tmax, linktrackBuf3.back()->header.stamp.toSec());
         // if (linktrackBuf.size() != 0 && fuse_linktrack) {
         //     double local_time_sec = linktrackBuf.back()->local_time / 1000.0;  // 将毫秒转换为秒
 
@@ -246,9 +246,9 @@ struct UwbImuBuf
         // copy UIBuf(other buffer) to linktrackBuf, tofBuf, imuBuf
         // if (fuse_tdoa) transferDataOneBuf(tdoaBuf, other.tdoaBuf, other.tdoaBuf_mtx, tmax); 
         if (fuse_linktrack) transferDataOneBuf(linktrackBuf0, other.linktrackBuf0, other.linktrackBuf_mtx0, tmax);
-        if (fuse_linktrack) transferDataOneBuf(linktrackBuf1, other.linktrackBuf1, other.linktrackBuf_mtx1, tmax);
-        if (fuse_linktrack) transferDataOneBuf(linktrackBuf2, other.linktrackBuf2, other.linktrackBuf_mtx2, tmax);
-        if (fuse_linktrack) transferDataOneBuf(linktrackBuf3, other.linktrackBuf3, other.linktrackBuf_mtx3, tmax);
+        // if (fuse_linktrack) transferDataOneBuf(linktrackBuf1, other.linktrackBuf1, other.linktrackBuf_mtx1, tmax);
+        // if (fuse_linktrack) transferDataOneBuf(linktrackBuf2, other.linktrackBuf2, other.linktrackBuf_mtx2, tmax);
+        // if (fuse_linktrack) transferDataOneBuf(linktrackBuf3, other.linktrackBuf3, other.linktrackBuf_mtx3, tmax);
         if (fuse_tof ) transferDataOneBuf(tofBuf,  other.tofBuf,  other.tofBuf_mtx,  tmax);
         if (fuse_imu ) transferDataOneBuf(imuBuf,  other.imuBuf,  other.imuBuf_mtx,  tmax);
         // transferTDOAData(); 
@@ -270,9 +270,9 @@ struct UwbImuBuf
     void transferLinktrackData()
     {
         linktrack_data0.clear();
-        linktrack_data1.clear();
-        linktrack_data2.clear();
-        linktrack_data3.clear();
+        // linktrack_data1.clear();
+        // linktrack_data2.clear();
+        // linktrack_data3.clear();
         
         for (const auto &data : linktrackBuf0)
         {
@@ -283,33 +283,33 @@ struct UwbImuBuf
             }
             linktrack_data0.push_back(linktrack0);
         }
-        for (const auto &data : linktrackBuf1)
-        {
-            LinktrackData linktrack1(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
-            for (const auto &node : data->nodes)
-            {
-                linktrack1.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
-            }
-            linktrack_data1.push_back(linktrack1);
-        }
-        for (const auto &data : linktrackBuf2)
-        {
-            LinktrackData linktrack2(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
-            for (const auto &node : data->nodes)
-            {
-                linktrack2.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
-            }
-            linktrack_data2.push_back(linktrack2);
-        }
-        for (const auto &data : linktrackBuf3)
-        {
-            LinktrackData linktrack3(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
-            for (const auto &node : data->nodes)
-            {
-                linktrack3.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
-            }
-            linktrack_data3.push_back(linktrack3);
-        }
+        // for (const auto &data : linktrackBuf1)
+        // {
+        //     LinktrackData linktrack1(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+        //     for (const auto &node : data->nodes)
+        //     {
+        //         linktrack1.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+        //     }
+        //     linktrack_data1.push_back(linktrack1);
+        // }
+        // for (const auto &data : linktrackBuf2)
+        // {
+        //     LinktrackData linktrack2(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+        //     for (const auto &node : data->nodes)
+        //     {
+        //         linktrack2.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+        //     }
+        //     linktrack_data2.push_back(linktrack2);
+        // }
+        // for (const auto &data : linktrackBuf3)
+        // {
+        //     LinktrackData linktrack3(data->header.stamp.toSec(), data->role, data->id, data->local_time, data->system_time, data->voltage);
+        //     for (const auto &node : data->nodes)
+        //     {
+        //         linktrack3.addNode(node.role, node.id, node.dis, node.fp_rssi, node.rx_rssi);
+        //     }
+        //     linktrack_data3.push_back(linktrack3);
+        // }
     }
 
     void transferIMUData()
@@ -344,9 +344,9 @@ struct UwbImuBuf
     {
         // if (fuse_tdoa) slideForwardOneBuf(tdoaBuf, tremove); 
         if (fuse_linktrack) slideForwardOneBuf(linktrackBuf0, tremove); 
-        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf1, tremove); 
-        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf2, tremove); 
-        if (fuse_linktrack) slideForwardOneBuf(linktrackBuf3, tremove); 
+        // if (fuse_linktrack) slideForwardOneBuf(linktrackBuf1, tremove); 
+        // if (fuse_linktrack) slideForwardOneBuf(linktrackBuf2, tremove); 
+        // if (fuse_linktrack) slideForwardOneBuf(linktrackBuf3, tremove); 
         if (fuse_tof ) slideForwardOneBuf(tofBuf,  tremove);
         if (fuse_imu ) slideForwardOneBuf(imuBuf,  tremove);
     }
@@ -365,9 +365,9 @@ ros::Publisher knot_pub;
 
 // ros::Subscriber tdoaSub;    
 ros::Subscriber linktrackSub0;
-ros::Subscriber linktrackSub1;
-ros::Subscriber linktrackSub2;
-ros::Subscriber linktrackSub3;
+// ros::Subscriber linktrackSub1;
+// ros::Subscriber linktrackSub2;
+// ros::Subscriber linktrackSub3;
 ros::Subscriber tofSub ;
 ros::Subscriber imuSub ;
 ros::Subscriber gtSub  ;
@@ -376,9 +376,9 @@ Eigen::Vector3d bg = Eigen::Vector3d::Zero();
 Eigen::Vector3d ba = Eigen::Vector3d::Zero();
 Eigen::Vector3d g = Eigen::Vector3d(0, 0, 9.81);
 const Eigen::Vector3d P_I_tag0 = Eigen::Vector3d(-0.216672,0.146392,0.0102583);
-const Eigen::Vector3d P_I_tag1 = Eigen::Vector3d(-0.00,0.149459,0.0133345);
-const Eigen::Vector3d P_I_tag2 = Eigen::Vector3d(-0.00688941,-0.13412,0.0131574);
-const Eigen::Vector3d P_I_tag3 = Eigen::Vector3d(-0.222379,-0.128724,0.00885931);
+// const Eigen::Vector3d P_I_tag1 = Eigen::Vector3d(-0.00,0.149459,0.0133345);
+// const Eigen::Vector3d P_I_tag2 = Eigen::Vector3d(-0.00688941,-0.13412,0.0131574);
+// const Eigen::Vector3d P_I_tag3 = Eigen::Vector3d(-0.222379,-0.128724,0.00885931);
 
 
 
@@ -398,26 +398,26 @@ void linktrackCb0(const LinktrackMsgPtr &msg)
     // printf(KCYN "Receive linktrack\n" RESET);
 }
 
-void linktrackCb1(const LinktrackMsgPtr &msg)
-{
-    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx1);
-    UIBuf.linktrackBuf1.push_back(msg);
-    // printf(KCYN "Receive linktrack\n" RESET);
-}
+// void linktrackCb1(const LinktrackMsgPtr &msg)
+// {
+//     lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx1);
+//     UIBuf.linktrackBuf1.push_back(msg);
+//     // printf(KCYN "Receive linktrack\n" RESET);
+// }
 
-void linktrackCb2(const LinktrackMsgPtr &msg)
-{
-    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx2);
-    UIBuf.linktrackBuf2.push_back(msg);
-    // printf(KCYN "Receive linktrack\n" RESET);
-}
+// void linktrackCb2(const LinktrackMsgPtr &msg)
+// {
+//     lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx2);
+//     UIBuf.linktrackBuf2.push_back(msg);
+//     // printf(KCYN "Receive linktrack\n" RESET);
+// }
 
-void linktrackCb3(const LinktrackMsgPtr &msg)
-{
-    lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx3);
-    UIBuf.linktrackBuf3.push_back(msg);
-    // printf(KCYN "Receive linktrack\n" RESET);
-}
+// void linktrackCb3(const LinktrackMsgPtr &msg)
+// {
+//     lock_guard<mutex> lg(UIBuf.linktrackBuf_mtx3);
+//     UIBuf.linktrackBuf3.push_back(msg);
+//     // printf(KCYN "Receive linktrack\n" RESET);
+// }
 
 void tofCb(const TofMsgPtr &msg)
 {
@@ -511,9 +511,12 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         // gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.tdoa_data, swUIBuf.imu_data, 
         //                 anchor_list, P_I_tag, traj->getNumKnots() >= WINDOW_SIZE, 
         //                 w_tdoa, GYR_N, ACC_N, GYR_W, ACC_W, tdoa_loss_thres, mp_loss_thres);    
-        gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.linktrack_data0, swUIBuf.linktrack_data1, 
-                        swUIBuf.linktrack_data2, swUIBuf.linktrack_data3, swUIBuf.imu_data, 
-                        anchor_list, P_I_tag0, P_I_tag1, P_I_tag2, P_I_tag3, traj->getNumKnots() >= WINDOW_SIZE, 
+        // gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.linktrack_data0, swUIBuf.linktrack_data1, 
+        //                 swUIBuf.linktrack_data2, swUIBuf.linktrack_data3, swUIBuf.imu_data, 
+        //                 anchor_list, P_I_tag0, P_I_tag1, P_I_tag2, P_I_tag3, traj->getNumKnots() >= WINDOW_SIZE, 
+        //                 w_linktrack, GYR_N, ACC_N, GYR_W, ACC_W, linktrack_loss_thres, mp_loss_thres);
+         gpmui->Evaluate(traj, bg, ba, g, tmin, tmax, tmid, swUIBuf.linktrack_data0, swUIBuf.imu_data, 
+                        anchor_list, P_I_tag0, traj->getNumKnots() >= WINDOW_SIZE, 
                         w_linktrack, GYR_N, ACC_N, GYR_W, ACC_W, linktrack_loss_thres, mp_loss_thres);
         tt_solve.Toc();
 
@@ -522,10 +525,13 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         //         traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
                 // UIBuf.tdoaBuf.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots()); 
 
-        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d, %d, %d, %d. Num knots: %d\n",
+        // printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d, %d, %d, %d. Num knots: %d\n",
+        //         traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
+        //         UIBuf.linktrackBuf0.size(), UIBuf.linktrackBuf1.size(), UIBuf.linktrackBuf2.size(), UIBuf.linktrackBuf3.size(),
+        //         UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
+        printf("Traj: %f. Sw: %.3f -> %.3f. Buf: %d, %d, %d. Num knots: %d\n",
                 traj->getMaxTime(), swUIBuf.minTime(), swUIBuf.maxTime(),
-                UIBuf.linktrackBuf0.size(), UIBuf.linktrackBuf1.size(), UIBuf.linktrackBuf2.size(), UIBuf.linktrackBuf3.size(),
-                UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
+                UIBuf.linktrackBuf0.size(), UIBuf.tofBuf.size(), UIBuf.imuBuf.size(), traj->getNumKnots());
         // Visualize knots
         pcl::PointCloud<pcl::PointXYZ> est_knots;
         for (int i = 0; i < traj->getNumKnots(); i++) {   
@@ -572,6 +578,7 @@ void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eig
         odom_msg.pose.pose.orientation.z = est_ort.z();
         odom_pub.publish(odom_msg);             
 
+        // std::cout<< "WINDOW_SIZE: " << WINDOW_SIZE << std::endl;
         // Step 5: Slide the window forward
         if (traj->getNumKnots() >= WINDOW_SIZE)
         {
@@ -656,9 +663,9 @@ int main(int argc, char **argv)
     // Topics to subscribe to
     // string tdoa_topic; nh_ptr->getParam("tdoa_topic", tdoa_topic);
     string linktrack_topic0; nh_ptr->getParam("linktrack_topic0", linktrack_topic0);
-    string linktrack_topic1; nh_ptr->getParam("linktrack_topic1", linktrack_topic1);
-    string linktrack_topic2; nh_ptr->getParam("linktrack_topic2", linktrack_topic2);
-    string linktrack_topic3; nh_ptr->getParam("linktrack_topic3", linktrack_topic3);
+    // string linktrack_topic1; nh_ptr->getParam("linktrack_topic1", linktrack_topic1);
+    // string linktrack_topic2; nh_ptr->getParam("linktrack_topic2", linktrack_topic2);
+    // string linktrack_topic3; nh_ptr->getParam("linktrack_topic3", linktrack_topic3);
     string tof_topic;  nh_ptr->getParam("tof_topic", tof_topic);
     string imu_topic;  nh_ptr->getParam("imu_topic", imu_topic);
     string gt_topic;   nh_ptr->getParam("gt_topic", gt_topic);
@@ -670,9 +677,9 @@ int main(int argc, char **argv)
     // Subscribe to the topics
     // tdoaSub = nh_ptr->subscribe(tdoa_topic, 10, tdoaCb);
     linktrackSub0 = nh_ptr->subscribe(linktrack_topic0, 10, linktrackCb0);
-    linktrackSub1 = nh_ptr->subscribe(linktrack_topic1, 10, linktrackCb1);
-    linktrackSub2 = nh_ptr->subscribe(linktrack_topic2, 10, linktrackCb2);
-    linktrackSub3 = nh_ptr->subscribe(linktrack_topic3, 10, linktrackCb3);
+    // linktrackSub1 = nh_ptr->subscribe(linktrack_topic1, 10, linktrackCb1);
+    // linktrackSub2 = nh_ptr->subscribe(linktrack_topic2, 10, linktrackCb2);
+    // linktrackSub3 = nh_ptr->subscribe(linktrack_topic3, 10, linktrackCb3);
     tofSub  = nh_ptr->subscribe(tof_topic,  10, tofCb);
     imuSub  = nh_ptr->subscribe(imu_topic,  10, imuCb);
     gtSub   = nh_ptr->subscribe(gt_topic,   10, gtCb);
@@ -721,7 +728,10 @@ int main(int argc, char **argv)
 
         // Set initial pose
         SE3d initial_pose;
-        initial_pose.translation() = Eigen::Vector3d(1.12086, -0.50173, 0.60591); // 1.120758, -0.51873, 0.606064
+        initial_pose.translation() = Eigen::Vector3d(1.25, 0.0, 0.07);
+        // initial_pose.translation() = Eigen::Vector3d(0,0,0);
+        // 1.4056, -1.5357, 0.5967
+
         traj->setKnot(0, GPState(t0, initial_pose));
         break;
     }

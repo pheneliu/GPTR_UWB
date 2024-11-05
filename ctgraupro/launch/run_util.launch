@@ -26,7 +26,7 @@
         <param name="imu_topic"  value="/imu_data" />
         <param name="gt_topic"   value="/pose_data" />
         <param name="fuse_tdoa"  value="1"/>
-        <param name="fuse_tof"   value="1"/>
+        <param name="fuse_tof"   value="0"/>
         <param name="fuse_imu"   value="1"/>
 
         <!-- Parameters for the solver  -->
