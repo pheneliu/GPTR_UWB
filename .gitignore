@@ -1,4 +1,7 @@
 *.pcd
 *.bag
 *.pkl
+*.jpg
+*.pyc
+*/__pycache__/*
 log/*

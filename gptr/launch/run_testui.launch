@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- Launch the testui node -->
+    <node pkg="gptr" type="gptr_gpui_test" name="gptr_gpui_test" output="screen"/>
+
+</launch>

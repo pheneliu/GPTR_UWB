@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-
-    <!-- Launch the testui node -->
-    <node pkg="ctgaupro" type="ctgaupro_gpui_test" name="ctgaupro_gpui_test" output="screen">
-    </node>
-
-</launch>
