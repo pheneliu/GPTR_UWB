@@ -11,7 +11,7 @@
 #include "factor/GPMotionPriorTwoKnotsFactorUI.h"
 #include "factor/GPMotionPriorTwoKnotsFactorAutodiff.h"
 
-class GPMUI
+class GPUI
 {
 
 private:
@@ -27,10 +27,10 @@ private:
 public:
 
     // Destructor
-   ~GPMUI() {};
+   ~GPUI() {};
    
     // Constructor
-    GPMUI(ros::NodeHandlePtr &nh_) : nh(nh_) {};
+    GPUI(ros::NodeHandlePtr &nh_) : nh(nh_) {};
 
     void AddTrajParams(ceres::Problem &problem,
         GaussianProcessPtr &traj, int tidx,
@@ -875,4 +875,4 @@ public:
 
 };
 
-typedef std::shared_ptr<GPMUI> GPMUIPtr;
+typedef std::shared_ptr<GPUI> GPUIPtr;

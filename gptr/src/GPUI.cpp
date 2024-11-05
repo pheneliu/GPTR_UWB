@@ -269,7 +269,7 @@ void gtCb(const geometry_msgs::PoseWithCovarianceStampedConstPtr& gt_msg)
     gt_path_pub.publish(gt_path);          
 }
 
-void processData(GaussianProcessPtr traj, GPMUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list)
+void processData(GaussianProcessPtr traj, GPUIPtr gpmui, std::map<uint16_t, Eigen::Vector3d> anchor_list)
 {
     UwbImuBuf swUIBuf;
 
@@ -472,7 +472,7 @@ int main(int argc, char **argv)
     
     // Create the trajectory
     traj = GaussianProcessPtr(new GaussianProcess(gpDt, gpQr, gpQc, true));
-    GPMUIPtr gpmui(new GPMUI(nh_ptr));
+    GPUIPtr gpmui(new GPUI(nh_ptr));
 
     // Wait to get the initial time
     while(ros::ok())
